@@ -31,7 +31,7 @@ $changePassword = function () {
         'password' => ['required', 'confirmed', Password::defaults()],
     ]);
     auth()->user()->update(['password' => Hash::make($this->password)]);
-    $this->reset(['current_password', 'password', 'password_confirmation']);
+    $this->fill(['current_password' => '', 'password' => '', 'password_confirmation' => '']);
     $this->toast('success', 'Password changed.');
 };
 

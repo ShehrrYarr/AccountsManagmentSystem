@@ -138,8 +138,12 @@ $defaultSource = function () {
 };
 
 $resetForm = function () {
-    $this->reset(['company_id', 'vendor_id', 'amount', 'reference', 'received_by', 'item_description', 'notes',
-        'receipt', 'existingReceipt', 'newVendor', 'addingVendor', 'newAccount', 'addingAccount', 'source_account_id']);
+    $this->fill([
+        'company_id' => null, 'vendor_id' => null, 'amount' => '', 'reference' => '', 'received_by' => '',
+        'item_description' => '', 'notes' => '', 'receipt' => null, 'existingReceipt' => false,
+        'newVendor' => '', 'addingVendor' => false, 'addingAccount' => false, 'source_account_id' => null,
+        'newAccount' => ['bank_name' => '', 'account_title' => '', 'account_number' => '', 'iban' => ''],
+    ]);
     $this->disbursementId = null;
     $this->type = 'cash_payout';
     $this->date = now()->toDateString();
@@ -203,6 +207,7 @@ $fillRemaining = function (int $index) {
     $others = Money::add(...array_map(fn ($l) => is_numeric($l['amount'] ?? null) ? $l['amount'] : 0, $otherLines));
     $remaining = Money::sub($this->check['payable'] ?? 0, $others);
     $this->lines[$index]['amount'] = Money::isPositive($remaining) ? $remaining : '';
+    unset($this->total, $this->check); // computed during this request before the change
 };
 
 $addVendor = function () {
@@ -210,7 +215,7 @@ $addVendor = function () {
     $vendor = Vendor::create(['name' => trim($this->newVendor), 'is_active' => true]);
     unset($this->vendorOptions);
     $this->vendor_id = $vendor->id;
-    $this->reset(['newVendor', 'addingVendor']);
+    $this->fill(['newVendor' => '', 'addingVendor' => false]);
 };
 
 $addCompanyAccount = function () {
@@ -236,7 +241,7 @@ $addCompanyAccount = function () {
             break;
         }
     }
-    $this->reset(['newAccount', 'addingAccount']);
+    $this->fill(['newAccount' => ['bank_name' => '', 'account_title' => '', 'account_number' => '', 'iban' => ''], 'addingAccount' => false]);
     $this->toast('success', 'Company bank account added.');
 };
 

@@ -95,7 +95,8 @@ $edit = function (int $id) {
 
 $save = function () {
     $data = $this->validate()['form'];
-    $this->config['model']::updateOrCreate(['id' => $this->recordId], $data);
+    $model = $this->config['model'];
+    $this->recordId ? $model::findOrFail($this->recordId)->update($data) : $model::create($data);
     $this->toast('success', $this->config['singular'].' saved.');
     $this->hideModal('simpleCrudModal-'.$this->entity);
     unset($this->records);

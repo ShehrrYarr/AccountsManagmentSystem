@@ -43,7 +43,7 @@ on(['transaction-updated' => function () {
 $create = function (string $type = 'bank') {
     abort_unless(auth()->user()->isAdmin(), 403);
     $this->resetErrorBag();
-    $this->reset(['name', 'bank_name', 'branch', 'account_title', 'account_number', 'iban', 'opening_balance', 'is_active']);
+    $this->fill(['name' => '', 'bank_name' => '', 'branch' => '', 'account_title' => '', 'account_number' => '', 'iban' => '', 'opening_balance' => '0', 'is_active' => true]);
     $this->accountId = null;
     $this->type = $type === 'cash' ? 'cash' : 'bank';
     if ($this->type === 'cash') {

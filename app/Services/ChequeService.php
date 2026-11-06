@@ -300,6 +300,9 @@ class ChequeService
         return [
             'company_id' => $cheque->company_id,
             'cheque_number' => $cheque->cheque_number,
+            // The business amount is the cheque face value, not the sum of all journal lines
+            // (clearing lines include the memo reversal, which would double it).
+            'amount' => $cheque->amount,
         ];
     }
 

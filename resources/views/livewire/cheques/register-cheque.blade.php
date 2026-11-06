@@ -72,8 +72,11 @@ $expiry = computed(function () {
 });
 
 $resetForm = function () {
-    $this->reset(['company_id', 'government_department_id', 'cheque_number', 'issuing_bank', 'issuing_branch',
-        'amount', 'notes', 'scan', 'existingScan', 'newDepartment', 'addingDepartment']);
+    $this->fill([
+        'company_id' => null, 'government_department_id' => null, 'cheque_number' => '', 'issuing_bank' => '',
+        'issuing_branch' => '', 'amount' => '', 'notes' => '', 'scan' => null, 'existingScan' => false,
+        'newDepartment' => '', 'addingDepartment' => false,
+    ]);
     $this->chequeId = null;
     $this->cheque_date = now()->toDateString();
     $this->received_date = now()->toDateString();

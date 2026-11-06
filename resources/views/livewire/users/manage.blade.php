@@ -32,7 +32,7 @@ $users = computed(fn () => User::orderBy('role')->orderBy('name')->get());
 
 $create = function () {
     $this->resetErrorBag();
-    $this->reset(['name', 'email', 'phone', 'role', 'is_active', 'password', 'password_confirmation']);
+    $this->fill(['name' => '', 'email' => '', 'phone' => '', 'role' => 'staff', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
     $this->userId = null;
     $this->showModal('userModal');
 };
@@ -60,7 +60,13 @@ $save = function () {
     }
     unset($data['password_confirmation']);
 
-    $user = User::updateOrCreate(['id' => $this->userId], $data + ($this->userId ? [] : ['email_verified_at' => now()]));
+    if ($this->userId) {
+        $user = User::findOrFail($this->userId);
+        $user->update($data);
+    } else {
+        $user = User::create($data);
+        $user->forceFill(['email_verified_at' => now()])->save();
+    }
     $this->toast('success', "{$user->name} saved.");
     $this->hideModal('userModal');
     unset($this->users);

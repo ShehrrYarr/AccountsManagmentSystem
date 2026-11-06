@@ -48,7 +48,7 @@ on(['transaction-updated' => function () {
 
 $create = function () {
     $this->resetErrorBag();
-    $this->reset(['company_id', 'amount', 'bank_account_id', 'reason']);
+    $this->fill(['company_id' => null, 'amount' => '', 'bank_account_id' => null, 'reason' => '']);
     $this->adjustmentId = null;
     $this->kind = 'receivable_charge';
     $this->date = now()->toDateString();

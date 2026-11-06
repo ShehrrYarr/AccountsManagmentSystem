@@ -55,7 +55,7 @@ on(['transaction-updated' => function () {
 
 $create = function () {
     $this->resetErrorBag();
-    $this->reset(['from_account_id', 'to_account_id', 'amount', 'reference', 'notes']);
+    $this->fill(['from_account_id' => null, 'to_account_id' => null, 'amount' => '', 'reference' => '', 'notes' => '']);
     $this->transferId = null;
     $this->date = now()->toDateString();
     $this->showModal('transferModal');

@@ -85,7 +85,7 @@ $preview = computed(function () {
 
 on(['cheque-clear' => function (int $id) {
     $this->resetErrorBag();
-    $this->reset(['commission_type', 'commission_rate', 'bank_charges', 'clearing_reference', 'cleared_into_account_id']);
+    $this->fill(['commission_type' => '', 'commission_rate' => '', 'bank_charges' => '', 'clearing_reference' => '', 'cleared_into_account_id' => null]);
     $this->chequeId = $id;
     $this->clearing_method = 'deposit';
     $this->cleared_date = now()->toDateString();

@@ -92,7 +92,8 @@ on(['transaction-updated' => function () {
 }]);
 
 $clearFilters = function () {
-    $this->reset(['search', 'from', 'to', 'filterCompany', 'account', 'type']);
+    // Volt state has no class defaults, so set them explicitly instead of reset().
+    $this->fill(['search' => '', 'from' => '', 'to' => '', 'filterCompany' => null, 'account' => null, 'type' => '']);
     $this->status = 'posted';
     $this->resetPage('txPage');
 };

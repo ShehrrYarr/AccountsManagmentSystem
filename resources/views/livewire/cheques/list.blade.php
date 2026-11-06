@@ -95,7 +95,7 @@ $delete = function (int $id) {
 };
 
 $clearFilters = function () {
-    $this->reset(['search', 'filterCompany', 'from', 'to']);
+    $this->fill(['search' => '', 'filterCompany' => null, 'from' => '', 'to' => '']);
     $this->status = 'all';
     $this->resetPage('chequesPage');
 };

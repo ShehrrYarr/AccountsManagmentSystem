@@ -71,7 +71,10 @@ on(['transaction-updated' => function () {
 
 $create = function () {
     $this->resetErrorBag();
-    $this->reset(['name', 'registration_no', 'ntn', 'contact_person', 'phone', 'email', 'address', 'opening_payable', 'opening_receivable', 'notes', 'is_active']);
+    $this->fill([
+        'name' => '', 'registration_no' => '', 'ntn' => '', 'contact_person' => '', 'phone' => '', 'email' => '',
+        'address' => '', 'opening_payable' => '0', 'opening_receivable' => '0', 'notes' => '', 'is_active' => true,
+    ]);
     $this->companyId = null;
     $this->showModal('companyModal');
 };

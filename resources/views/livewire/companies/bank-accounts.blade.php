@@ -43,7 +43,7 @@ on(['company-accounts' => function (int $companyId) {
 
 $cancel = function () {
     $this->resetErrorBag();
-    $this->reset(['bank_name', 'branch', 'account_title', 'account_number', 'iban', 'is_default', 'is_active', 'editing']);
+    $this->fill(['bank_name' => '', 'branch' => '', 'account_title' => '', 'account_number' => '', 'iban' => '', 'is_default' => false, 'is_active' => true, 'editing' => false]);
     $this->accountId = null;
 };
 
@@ -68,7 +68,9 @@ $save = function () {
         if ($data['is_default']) {
             CompanyBankAccount::where('company_id', $this->companyId)->update(['is_default' => false]);
         }
-        CompanyBankAccount::updateOrCreate(['id' => $this->accountId], array_merge($data, ['company_id' => $this->companyId]));
+        $this->accountId
+            ? CompanyBankAccount::where('company_id', $this->companyId)->findOrFail($this->accountId)->update($data)
+            : CompanyBankAccount::create(array_merge($data, ['company_id' => $this->companyId]));
     });
 
     $this->toast('success', 'Bank account saved.');

@@ -93,7 +93,7 @@ $delete = function (int $id) {
 };
 
 $clearFilters = function () {
-    $this->reset(['search', 'type', 'status', 'filterCompany', 'from', 'to']);
+    $this->fill(['search' => '', 'type' => '', 'status' => '', 'filterCompany' => null, 'from' => '', 'to' => '']);
     $this->resetPage('payoutsPage');
 };
 
