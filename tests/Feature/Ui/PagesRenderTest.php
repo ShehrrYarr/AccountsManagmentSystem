@@ -60,6 +60,26 @@ class PagesRenderTest extends TestCase
         $this->actingAs($this->staff)->get("/companies/{$this->company->id}/statement.pdf")->assertOk()->assertHeader('content-type', 'application/pdf');
     }
 
+    public function test_redirects_stay_inside_a_sub_path_install(): void
+    {
+        // Simulate http://host/ams/... (app served from a sub-folder, as on the server).
+        $get = function (string $path) {
+            $request = \Illuminate\Http\Request::create('http://localhost/ams'.$path, 'GET', [], [], [], [
+                'SCRIPT_NAME' => '/ams/index.php',
+                'SCRIPT_FILENAME' => public_path('index.php'),
+                'PHP_SELF' => '/ams/index.php',
+            ]);
+
+            return app(\Illuminate\Contracts\Http\Kernel::class)->handle($request);
+        };
+
+        \Illuminate\Support\Facades\Auth::guard('web')->setUser($this->admin);
+        $this->assertSame('http://localhost/ams/dashboard', $get('/')->headers->get('Location'));
+
+        \Illuminate\Support\Facades\Auth::guard('web')->logout();
+        $this->assertSame('http://localhost/ams/login', $get('/dashboard')->headers->get('Location'));
+    }
+
     public function test_guests_are_sent_to_login(): void
     {
         auth()->logout();

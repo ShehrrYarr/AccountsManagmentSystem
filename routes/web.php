@@ -25,7 +25,9 @@ Route::middleware('guest')->group(function () {
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-    Route::redirect('/', '/dashboard');
+    // Named-route redirect keeps the sub-path (/ams) — Route::redirect('/', '/dashboard')
+    // emits a bare "/dashboard" and would leave the app.
+    Route::get('/', fn () => redirect()->route('dashboard'))->name('home');
     Route::view('/dashboard', 'ams.dashboard')->name('dashboard');
     Route::view('/profile', 'ams.profile')->name('profile');
 
