@@ -1,0 +1,187 @@
+//
+// _sidebar-two-column.scss
+//
+
+:root {
+  &[data-main-layout="two-column"] {
+    --#{$prefix}app-sidebar-width: 80px;
+
+    .app-sidebar-logo {
+      position: absolute;
+      top: 0;
+      height: var(--#{$prefix}app-header-height);
+      width: calc(var(--#{$prefix}app-sidebar-width) + var(--#{$prefix}app-sidebar-slide-menu-width));
+      background-color: var(--#{$prefix}header-bg);
+
+      .app-sidebar-logo-default {
+        display: block;
+      }
+
+      .app-sidebar-logo-minimize {
+        display: none;
+      }
+    }
+
+    .app-sidebar-menu {
+      top: var(--#{$prefix}app-header-height);
+    }
+
+    .menu-title {
+      display: none;
+    }
+
+    .main-menu {
+      font-size: 12px;
+      padding: 12px 0;
+    }
+
+    .side-menu__item {
+      padding: 6px 0;
+      justify-content: center;
+
+      .side_menu_icon {
+        font-size: 18px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        width: 42px;
+        height: 42px;
+        transition: color .15s ease-in-out, background-color .15s ease-in-out, border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+        border-radius: 0.5rem;
+      }
+
+      .side-menu__angle {
+        display: none;
+      }
+
+      .side-menu__label {
+        display: none;
+      }
+
+      &::before {
+        display: none;
+      }
+
+      &::after {
+        display: none;
+      }
+    }
+
+    .slide {
+      position: relative;
+
+      .side-menu__item {
+        &.active {
+          .side_menu_icon {
+            color: var(--#{$prefix}app-sidebar-menu-item-color);
+          }
+        }
+      }
+
+      &.open-menu {
+        .side_menu_icon {
+          border: 1px solid var(--#{$prefix}primary);
+          background-color: rgba(var(--#{$prefix}primary-rgb), 0.1);
+          color: var(--#{$prefix}primary) !important;
+        }
+      }
+    }
+
+    .slide-menu {
+      position: fixed;
+      width: var(--#{$prefix}app-sidebar-slide-menu-width);
+      overflow-y: auto;
+      padding: 16px 14px;
+      top: var(--#{$prefix}app-header-height);
+      left: var(--#{$prefix}app-sidebar-width);
+      background-color: var(--#{$prefix}app-sidebar-bg);
+      border-right: 1px solid var(--#{$prefix}app-sidebar-border-color);
+      height: calc(100vh - 10px);
+
+      &::after {
+        display: none;
+      }
+
+      &::before {
+        left: var(--#{$prefix}app-sidebar-menu-item-padding-left);
+      }
+
+      .side-menu__item {
+        padding: var(--#{$prefix}app-sidebar-menu-item-padding-top) var(--#{$prefix}app-sidebar-menu-item-padding-right) var(--#{$prefix}app-sidebar-menu-item-padding-bottom) var(--#{$prefix}app-sidebar-menu-item-padding-left);
+        justify-content: start;
+        font-size: $font-size-base;
+        font-weight: $font-weight-medium;
+        background-color: var(--#{$prefix}gray-100);
+        border-radius: var(--#{$prefix}border-radius-lg);
+        margin-bottom: 4px;
+
+        .side-menu__label {
+          display: block;
+        }
+
+        .side-menu__angle {
+          display: block;
+        }
+
+        &.active,
+        &:hover {
+          background-color: rgba(var(--#{$prefix}primary-rgb), 0.1);
+        }
+      }
+
+      .slide-menu {
+        position: relative;
+        left: 0;
+        top: 0;
+        padding: 0;
+        height: max-content;
+        width: auto;
+        border-right: none;
+      }
+    }
+
+    .footer,
+    .app-header,
+    .app-wrapper {
+      margin-inline-start: calc(var(--#{$prefix}app-sidebar-width) + var(--#{$prefix}app-sidebar-slide-menu-width));
+    }
+
+    .app-header {
+      border-left: 1px solid var(--#{$prefix}border-color);
+      width: calc(100% - calc(var(--#{$prefix}app-sidebar-width) + var(--#{$prefix}app-sidebar-slide-menu-width)));
+    }
+
+    &[data-sidebar="dark-sidebar"] {
+      .app-sidebar-logo {
+        background-color: var(--#{$prefix}app-sidebar-bg);
+      }
+
+      .slide-menu {
+        .side-menu__item:not(.active) {
+          background-color: rgba(var(--#{$prefix}tertiary-bg-rgb), 0.02);
+        }
+      }
+    }
+
+    &[data-sidebar="gradient-sidebar"] {
+      .app-sidebar-logo {
+        background: var(--#{$prefix}app-sidebar-bg-gradient);
+      }
+
+      .slide-menu {
+        background: var(--#{$prefix}app-sidebar-bg-gradient);
+
+        .side-menu__item:not(.active) {
+          background-color: transparent;
+        }
+      }
+    }
+
+    // Remove Container option for this view
+    .two-column-hidden {
+      display: none;
+    }
+  }
+}

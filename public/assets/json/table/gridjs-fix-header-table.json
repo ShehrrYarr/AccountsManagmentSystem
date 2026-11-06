@@ -1,0 +1,72 @@
+[
+    {
+        "Item": "Gaming Laptop",
+        "Type": "Electronics",
+        "Cost": "$1,299.99",
+        "Available": "Yes",
+        "Vendor": "Gamer Supplies Co."
+    },
+    {
+        "Item": "Smartwatch",
+        "Type": "Wearables",
+        "Cost": "$199.99",
+        "Available": "Yes",
+        "Vendor": "Wearable Tech Inc."
+    },
+    {
+        "Item": "Office Desk",
+        "Type": "Furniture",
+        "Cost": "$249.99",
+        "Available": "Yes",
+        "Vendor": "Home Office Solutions"
+    },
+    {
+        "Item": "Blender",
+        "Type": "Appliances",
+        "Cost": "$49.99",
+        "Available": "No",
+        "Vendor": "Kitchen Innovations"
+    },
+    {
+        "Item": "Sticky Notes",
+        "Type": "Stationery",
+        "Cost": "$3.99",
+        "Available": "Yes",
+        "Vendor": "Office Essentials"
+    },
+    {
+        "Item": "Wireless Mouse",
+        "Type": "Electronics",
+        "Cost": "$29.99",
+        "Available": "Yes",
+        "Vendor": "Tech Gear"
+    },
+    {
+        "Item": "Tablet",
+        "Type": "Electronics",
+        "Cost": "$499.99",
+        "Available": "Yes",
+        "Vendor": "Gadgets R Us"
+    },
+    {
+        "Item": "Bookshelf",
+        "Type": "Furniture",
+        "Cost": "$89.99",
+        "Available": "No",
+        "Vendor": "Furniture Warehouse"
+    },
+    {
+        "Item": "Toaster",
+        "Type": "Appliances",
+        "Cost": "$29.99",
+        "Available": "Yes",
+        "Vendor": "Home Kitchen"
+    },
+    {
+        "Item": "Printer Paper",
+        "Type": "Stationery",
+        "Cost": "$7.99",
+        "Available": "Yes",
+        "Vendor": "Paper Supply Co."
+    }
+]

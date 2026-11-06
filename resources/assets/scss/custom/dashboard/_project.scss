@@ -1,0 +1,56 @@
+//
+// _project.scss
+//
+
+.project-dashboard {
+    .custom-verti-nav-pills {
+        .nav-link {
+            --#{$prefix}nav-link-padding-y: #{map-get($spacers, 1)};
+            --#{$prefix}nav-link-padding-x: #{map-get($spacers, 2)};
+            border: 1px dashed transparent;
+
+            &.active {
+                font-weight: inherit;
+                color: var(--#{$prefix}primary);
+                border: 1px dashed var(--#{$prefix}primary);
+                background-color: rgba(var(--#{$prefix}primary-rgb), 0.1);
+
+                i {
+                    color: inherit !important;
+                }
+
+                &::after {
+                    border: none;
+                }
+            }
+        }
+    }
+
+    @include media-breakpoint-down(lg) {
+        .project-stat {
+            min-width: 240px;
+        }
+    }
+
+    .timeline-box {
+        .timeline-section {
+            padding-bottom: #{map-get($spacers, 5)};
+        }
+    }
+
+    .project-chat-container {
+        height: 238px;
+    }
+}
+
+.assigned-task {
+    max-height: 330px;
+}
+
+.upcoming-task-scroll {
+    max-height: 275px;
+}
+
+.recent-activity-scroll {
+    max-height: 675px;
+}

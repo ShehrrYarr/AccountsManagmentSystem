@@ -1,0 +1,107 @@
+//
+// forms-input-spin.scss
+//
+
+.qty-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    input {
+        border: 1px solid $input-border-color;
+        background: $input-bg;
+        color: $input-color;
+        border-radius: $btn-border-radius;
+        font-size: $input-btn-font-size;
+        width: 85px;
+        line-height: 21px;
+        padding: $input-btn-padding-y $input-btn-padding-x;
+        text-align: center;
+
+        &:focus-visible {
+            outline: 0;
+        }
+    }
+
+    button {
+        font-weight: 600;
+        padding: $input-btn-padding-y $input-btn-padding-x;
+        background: var(--#{$prefix}light-bg-subtle);
+        color: var(--#{$prefix}body-color);
+        font-size: $input-btn-font-size;
+        line-height: 21px;
+        border: none;
+        border-radius: $btn-border-radius;
+
+        &:hover {
+            opacity: 0.9;
+        }
+
+        i {
+            line-height: 20px;
+        }
+    }
+
+    &-sm {
+        gap: 4px;
+
+        input {
+            width: 55px;
+            padding: $input-btn-padding-y-sm $input-btn-padding-x-sm;
+            font-size: $input-btn-font-size-sm;
+            line-height: 18px;
+        }
+
+        button {
+            padding: $input-btn-padding-y-sm $input-btn-padding-x-sm;
+            font-size: $input-btn-font-size-sm;
+            line-height: 20px;
+        }
+    }
+
+    &-outline {
+        button {
+            background-color: transparent;
+            border: 1px solid $input-border-color;
+        }
+    }
+
+    &-rounded {
+        input {
+            border-radius: $border-radius-pill;
+        }
+
+        button {
+            border-radius: $border-radius-pill;
+        }
+    }
+}
+
+@each $color, $value in $theme-colors {
+    .qty-input {
+        &-#{$color} {
+            button {
+                background-color: var(--#{$prefix}#{$color});
+                color: #{color-contrast($value)};
+            }
+
+            input {
+                border: 1px solid var(--#{$prefix}#{$color});
+            }
+
+            &.qty-input-outline {
+                button {
+                    background-color: transparent;
+                    color: var(--#{$prefix}#{$color});
+                    border: 1px solid var(--#{$prefix}#{$color});
+
+                    &:hover {
+                        background-color: var(--#{$prefix}#{$color}-bg-subtle);
+                        ;
+                    }
+                }
+            }
+        }
+
+    }
+}

@@ -1,0 +1,59 @@
+// 
+// _modal.scss
+// 
+
+.modal {
+  &.scale-in {
+    animation: scaleIn 0.5s forwards;
+  }
+
+  &.slide-in-right {
+    animation: slideInRight 0.5s forwards;
+  }
+
+  &.slide-in-bottom {
+    animation: slideInBottom 0.5s forwards;
+  }
+
+  &.flip-horizontal {
+    animation: flipHorizontal 0.5s forwards;
+  }
+
+  &.flip-vertical {
+    animation: flipVertical 0.5s forwards;
+  }
+
+  &.zoom-in {
+    animation: zoomIn 0.4s forwards;
+  }
+
+  &.slide-in-left {
+    animation: slideInLeft 0.4s forwards;
+  }
+
+  &.slide-in-top {
+    animation: slideInTop 0.4s forwards;
+  }
+
+  &.rotate-in {
+    animation: rotateIn 0.4s forwards;
+  }
+
+  &.shake {
+    animation: shake 0.5s forwards;
+  }
+
+  &.swing {
+    animation: swing 0.5s forwards;
+  }
+
+  &.zoom-out {
+    animation: zoomOut 0.4s forwards;
+  }
+}
+
+.modal-header {
+  .icon-btn-sm {
+    margin: calc(-0.5 * var(--#{$prefix}modal-header-padding-y)) calc(-0.5 * var(--#{$prefix}modal-header-padding-x)) calc(-0.5 * var(--#{$prefix}modal-header-padding-y)) auto;
+  }
+}

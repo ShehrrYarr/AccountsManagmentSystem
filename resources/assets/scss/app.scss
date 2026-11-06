@@ -1,0 +1,116 @@
+/*
+Template Name: Herozi - Admin & Dashboard Template
+Author: SRBThemes
+Version: 1.0.0
+File: Main Css File
+*/
+
+//Fonts
+@import "custom/fonts/fonts";
+
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+@import "variables";
+@import "variables-dark";
+@import "custom-variables";
+@import "bootstrap/scss/maps";
+@import "bootstrap/scss/mixins";
+@import "bootstrap/scss/utilities";
+@import 'custom/components/mixin';
+@import 'custom/components/utilities';
+
+// Import structure
+@import './custom/structure/switcher';
+@import './custom/structure/header';
+@import './custom/structure/sidebar';
+@import './custom/structure/sidebar-small-icon';
+@import './custom/structure/sidebar-two-column';
+@import './custom/structure/sidebar-semi-box';
+@import './custom/structure/sidebar-horizontal';
+@import './custom/structure/sidebar-compact';
+@import './custom/structure/footer';
+@import './custom/structure/main';
+
+// Import Components
+@import './custom/components/helper';
+@import './custom/components/animation';
+@import './custom/components/forms-input-spin';
+@import './custom/components/preloader';
+@import './custom/components/placeholders';
+@import './custom/components/stepper';
+@import './custom/components/separator';
+@import './custom/components/scroll-top';
+@import './custom/components/icons';
+
+// Import Bootstrap Components
+@import './custom/components/root';
+@import './custom/components/reboot';
+@import './custom/components/accordion';
+@import './custom/components/alert';
+@import './custom/components/avatar';
+@import './custom/components/badge';
+@import './custom/components/buttons';
+@import './custom/components/breadcrumb';
+@import './custom/components/card';
+@import './custom/components/carousel';
+@import './custom/components/dropdown';
+@import './custom/components/forms';
+@import './custom/components/form-check';
+@import './custom/components/list';
+@import './custom/components/nav';
+@import './custom/components/modal';
+@import './custom/components/pagination';
+@import './custom/components/progress';
+@import './custom/components/tooltip';
+@import './custom/components/table';
+
+// Plugins
+@import './custom/plugins/simplebar';
+@import './custom/plugins/treeview';
+@import './custom/plugins/sweetalert2';
+@import './custom/plugins/chartjs';
+@import './custom/plugins/echart';
+@import './custom/plugins/apexcharts';
+@import './custom/plugins/choice';
+@import './custom/plugins/listjs';
+@import './custom/plugins/datatable';
+@import './custom/plugins/dual-listboxes';
+@import './custom/plugins/file-upload';
+@import './custom/plugins/file-editor';
+@import './custom/plugins/form-range';
+@import './custom/plugins/fullcalendar';
+@import './custom/plugins/air-datepicker';
+@import './custom/plugins/gridjs';
+@import './custom/plugins/player';
+@import './custom/plugins/swiper';
+@import './custom/plugins/tagify';
+@import './custom/plugins/rating';
+@import './custom/plugins/vector-maps';
+@import './custom/plugins/google-map';
+@import './custom/plugins/leaflet-maps';
+
+// Pages
+@import "./custom/pages/chat";
+@import "./custom/pages/coming-soon";
+@import "./custom/pages/timeline";
+@import "./custom/pages/gallery";
+@import "./custom/pages/mail";
+@import "./custom/pages/authentication";
+@import "./custom/components/print";
+@import "./custom/pages/privacy-policy";
+@import "./custom/pages/search-result";
+
+// Apps
+@import "./custom/apps/file-manager";
+@import "./custom/apps/social-media";
+@import "./custom/apps/invoice";
+@import "./custom/apps/apps-todo";
+@import "./custom/apps/apps-kanban";
+@import "./custom/apps/apps-products";
+@import "./custom/apps/apps-products-details";
+
+// Dashboards
+@import "./custom/dashboard/ecommerce";
+@import "./custom/dashboard/project";
+@import "./custom/dashboard/online-course";
+

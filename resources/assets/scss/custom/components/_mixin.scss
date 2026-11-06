@@ -1,0 +1,128 @@
+//
+// _mixin.scss
+//
+
+//flex alignments
+@mixin flex-align($display: flex, $direction: null, $align-items: null, $justify-content: null) {
+  display: $display;
+
+  @if $align-items !=null {
+    align-items: $align-items;
+  }
+
+  @if $direction !=null {
+    flex-direction: $direction;
+  }
+
+  @if $justify-content !=null {
+    justify-content: $justify-content;
+  }
+}
+
+//position alignments
+@mixin position-align($position-values,
+  $position-top: null,
+  $position-right: null,
+  $position-bottom: null,
+  $position-left: null) {
+  position: $position-values;
+
+  @if $position-top !=null {
+    top: $position-top;
+  }
+
+  @if $position-right !=null {
+    right: $position-right;
+  }
+
+  @if $position-bottom !=null {
+    bottom: $position-bottom;
+  }
+
+  @if $position-left !=null {
+    left: $position-left;
+  }
+}
+
+// keyframes
+@mixin keyframes($name) {
+  @-webkit-keyframes #{$name} {
+    @content;
+  }
+
+  @-moz-keyframes #{$name} {
+    @content;
+  }
+
+  @-ms-keyframes #{$name} {
+    @content;
+  }
+
+  @keyframes #{$name} {
+    @content;
+  }
+}
+
+//Transition
+@mixin transition($time) {
+  -webkit-transition: all $time ease-out 0s;
+  -moz-transition: all $time ease-out 0s;
+  -ms-transition: all $time ease-out 0s;
+  -o-transition: all $time ease-out 0s;
+  transition: all $time ease-out 0s;
+}
+
+@mixin aspect-ratio($width, $height) {
+  position: relative;
+  width: 100%;
+  padding-top: ($height / $width) * 100%;
+
+  >* {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+  }
+}
+
+// Dark
+@mixin dark {
+  [data-bs-theme="dark"] & {
+    @content;
+  }
+}
+
+// Define the animation mixin
+@mixin animation($name, $duration: 0.2s, $fill-mode: both) {
+  // Standard animation properties
+  animation-name: $name;
+  animation-duration: $duration;
+  animation-fill-mode: $fill-mode;
+
+  // Vendor prefixes for older browsers
+  @supports (-webkit-animation: none) {
+    -webkit-animation-name: $name;
+    -webkit-animation-duration: $duration;
+    -webkit-animation-fill-mode: $fill-mode;
+  }
+
+  @supports (-moz-animation: none) {
+    -moz-animation-name: $name;
+    -moz-animation-duration: $duration;
+    -moz-animation-fill-mode: $fill-mode;
+  }
+
+  @supports (-ms-animation: none) {
+    -ms-animation-name: $name;
+    -ms-animation-duration: $duration;
+    -ms-animation-fill-mode: $fill-mode;
+  }
+}
+
+@mixin line-clamp($lines) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

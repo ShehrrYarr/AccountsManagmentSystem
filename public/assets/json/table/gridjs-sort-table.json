@@ -1,0 +1,37 @@
+[
+    {
+        "Service Name": "Website Development",
+        "Category": "Web Services",
+        "Price": "$3,000.00",
+        "Availability": "Available",
+        "Provider": "Agency X"
+    },
+    {
+        "Service Name": "Mobile App Development",
+        "Category": "Mobile Services",
+        "Price": "$5,000.00",
+        "Availability": "Available",
+        "Provider": "Tech Solutions"
+    },
+    {
+        "Service Name": "UI/UX Design",
+        "Category": "Design Services",
+        "Price": "$1,500.00",
+        "Availability": "Not Available",
+        "Provider": "Creative Studio"
+    },
+    {
+        "Service Name": "SEO Optimization",
+        "Category": "Digital Marketing",
+        "Price": "$1,200.00",
+        "Availability": "Available",
+        "Provider": "Marketing Masters"
+    },
+    {
+        "Service Name": "Cloud Hosting Solutions",
+        "Category": "Infrastructure",
+        "Price": "$500.00",
+        "Availability": "Available",
+        "Provider": "CloudPro"
+    }
+]

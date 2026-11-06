@@ -1,0 +1,20 @@
+//
+// _coming-soon.scss
+//
+
+.subscribe-btn {
+    input {
+        padding-inline-end: 115px;
+    }
+
+    button {
+        top: 8px;
+        right: 8px;
+    }
+}
+
+#countdown {
+    .list-inline-item {
+        background-color: var(--#{$prefix}gray-200);
+    }
+}

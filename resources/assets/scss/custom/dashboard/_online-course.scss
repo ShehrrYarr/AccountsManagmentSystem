@@ -1,0 +1,29 @@
+//
+// _online-course.scss
+//
+
+.chart-small-text {
+    .apexcharts-datalabel-value {
+        font-size: $font-size-base;
+        font-weight: $font-weight-semibold;
+    }
+}
+
+.event-classes {
+    max-height: 320px;
+}
+
+.online-course-scroll {
+    max-height: 482px;
+}
+
+.full-picker-scrollable {
+    min-height: 320px;
+}
+
+@include media-breakpoint-up(md) {
+    .sticky-teacher {
+        position: sticky;
+        top: 200px;
+    }
+}

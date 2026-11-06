@@ -1,0 +1,57 @@
+//
+// separator.scss
+//
+
+hr {
+    border-color: $hr-border-color;
+}
+
+.center-hr {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border: 0;
+    text-align: center;
+
+    &::before,
+    &::after {
+        content: " ";
+        width: 50%;
+        border-bottom: 1px solid;
+        border-color: $hr-border-color;
+    }
+
+    @each $name, $color in $theme-colors {
+        &.border-#{$name} {
+
+            &::before,
+            &::after {
+                border-color: $color; // Set border color based on the class
+            }
+        }
+    }
+
+    &.border-dotted {
+
+        &::before,
+        &::after {
+            border-bottom-style: dotted;
+        }
+    }
+
+    &.border-dashed {
+
+        &::before,
+        &::after {
+            border-bottom-style: dashed;
+        }
+    }
+
+    &::before {
+        margin-right: 1.25rem;
+    }
+
+    &::after {
+        margin-left: 1.25rem;
+    }
+}

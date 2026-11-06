@@ -1,0 +1,9 @@
+//
+// _apps-kanban.scss
+//
+
+.apps-kanban {
+    .kanban-list-items {
+        height: calc(100vh - calc(var(--#{$prefix}app-header-height) + var(--#{$prefix}app-footer-height) + calc($container-padding-x * 2) + 250px));
+    }
+}

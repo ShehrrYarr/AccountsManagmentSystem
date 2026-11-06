@@ -1,0 +1,17 @@
+//
+// _file-manager.scss
+//
+
+.file-manager-sidebar {
+    .list-group-item {
+        a {
+            color: var(--#{$prefix}emphasis-color);
+        }
+
+        &.active {
+            a {
+                color: var(--#{$prefix}white);
+            }
+        }
+    }
+}

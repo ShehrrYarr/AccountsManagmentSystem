@@ -1,0 +1,220 @@
+{
+  "data": [
+    {
+      "id": 4477,
+      "dateIssued": "12/13/2020",
+      "fullName": "Roxy Floodgate",
+      "serviceType": "Software Development",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "Paid",
+      "contactEmail": "roxy724@gmail.com"
+    },
+    {
+      "id": 5020,
+      "dateIssued": "07/17/2020",
+      "fullName": "Roy Southerell",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-2.jpg",
+      "status": "Pending",
+      "contactEmail": "roy20@gmail.com"
+    },
+    {
+      "id": 4506,
+      "dateIssued": "10/19/2020",
+      "fullName": "Briny Undrell",
+      "serviceType": "Unlimited Extended License",
+      "avatarImage": "assets/images/avatar/avatar-3.jpg",
+      "status": "Paid",
+      "contactEmail": "briny45@gmail.com"
+    },
+    {
+      "id": 4515,
+      "dateIssued": "03/06/2021",
+      "fullName": "Kendell Longstreeth",
+      "serviceType": "Software Development",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "Sent",
+      "contactEmail": "kendell15@gmail.com"
+    },
+    {
+      "id": 4831,
+      "dateIssued": "02/08/2021",
+      "fullName": "Dorris Grigoriev",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "Draft",
+      "contactEmail": "dorris48@gmail.com"
+    },
+    {
+      "id": 4881,
+      "dateIssued": "08/26/2020",
+      "fullName": "Zeb Kenningham",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Paid",
+      "contactEmail": "zeb48@gmail.com"
+    },
+    {
+      "id": 4877,
+      "dateIssued": "09/17/2020",
+      "fullName": "Tudor Pereira",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "Draft",
+      "contactEmail": "tudor77@gmail.com"
+    },
+    {
+      "id": 4687,
+      "dateIssued": "02/11/2021",
+      "fullName": "Peggy Viccary",
+      "serviceType": "Template Customization",
+      "avatarImage": "assets/images/avatar/avatar-8.jpg",
+      "status": "Paid",
+      "contactEmail": "peggy87@gmail.com"
+    },
+    {
+      "id": 4917,
+      "dateIssued": "01/26/2021",
+      "fullName": "Charo Praill",
+      "serviceType": "Software Development",
+      "avatarImage": "assets/images/avatar/avatar-9.jpg",
+      "status": "Pending",
+      "contactEmail": "charo17@gmail.com"
+    },
+    {
+      "id": 4921,
+      "dateIssued": "03/15/2021",
+      "fullName": "Clara Lingen",
+      "serviceType": "SEO Optimization",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "Paid",
+      "contactEmail": "clara77@gmail.com"
+    },
+    {
+      "id": 4928,
+      "dateIssued": "05/02/2021",
+      "fullName": "Jameson Roke",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "Sent",
+      "contactEmail": "jameson80@gmail.com"
+    },
+    {
+      "id": 4932,
+      "dateIssued": "04/05/2021",
+      "fullName": "Linette Gorham",
+      "serviceType": "Website Development",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Pending",
+      "contactEmail": "linette21@gmail.com"
+    },
+    {
+      "id": 4936,
+      "dateIssued": "09/02/2021",
+      "fullName": "Howard Kibble",
+      "serviceType": "Content Creation",
+      "avatarImage": "assets/images/avatar/avatar-9.jpg",
+      "status": "Paid",
+      "contactEmail": "howard72@gmail.com"
+    },
+    {
+      "id": 4945,
+      "dateIssued": "06/10/2021",
+      "fullName": "Mark Linton",
+      "serviceType": "Social Media Management",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "Sent",
+      "contactEmail": "mark57@gmail.com"
+    },
+    {
+      "id": 4951,
+      "dateIssued": "07/12/2021",
+      "fullName": "Kirsten McReynolds",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Draft",
+      "contactEmail": "kirsten44@gmail.com"
+    },
+    {
+      "id": 4957,
+      "dateIssued": "08/15/2021",
+      "fullName": "Victor Hitchens",
+      "serviceType": "Software Development",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "Paid",
+      "contactEmail": "victor82@gmail.com"
+    },
+    {
+      "id": 4963,
+      "dateIssued": "09/05/2021",
+      "fullName": "Elena Carpenter",
+      "serviceType": "Content Creation",
+      "avatarImage": "assets/images/avatar/avatar-2.jpg",
+      "status": "Pending",
+      "contactEmail": "elena95@gmail.com"
+    },
+    {
+      "id": 4970,
+      "dateIssued": "10/10/2021",
+      "fullName": "Rachel Fields",
+      "serviceType": "SEO Optimization",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "Draft",
+      "contactEmail": "rachel65@gmail.com"
+    },
+    {
+      "id": 4978,
+      "dateIssued": "02/20/2022",
+      "fullName": "Oliver Wells",
+      "serviceType": "Website Development",
+      "avatarImage": "assets/images/avatar/avatar-3.jpg",
+      "status": "Sent",
+      "contactEmail": "oliverwells@gmail.com"
+    },
+    {
+      "id": 4982,
+      "dateIssued": "03/18/2022",
+      "fullName": "Emma Stokers",
+      "serviceType": "Social Media Management",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "Paid",
+      "contactEmail": "emma57@gmail.com"
+    },
+    {
+      "id": 4989,
+      "dateIssued": "05/22/2022",
+      "fullName": "Theo Jordan",
+      "serviceType": "UI/UX Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "Pending",
+      "contactEmail": "theo74@gmail.com"
+    },
+    {
+      "id": 4995,
+      "dateIssued": "07/01/2022",
+      "fullName": "Madeline Sharpe",
+      "serviceType": "Content Creation",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Paid",
+      "contactEmail": "madeline34@gmail.com"
+    },
+    {
+      "id": 5000,
+      "dateIssued": "08/03/2022",
+      "fullName": "Aiden Thatcher",
+      "serviceType": "SEO Optimization",
+      "avatarImage": "assets/images/avatar/avatar-9.jpg",
+      "status": "Sent",
+      "contactEmail": "aiden32@gmail.com"
+    },
+    {
+      "id": 5005,
+      "dateIssued": "09/10/2022",
+      "fullName": "Leah Reynolds",
+      "serviceType": "Website Development",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "Draft",
+      "contactEmail": "leahreynolds@gmail.com"
+    }
+  ]
+}

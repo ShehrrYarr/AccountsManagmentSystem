@@ -1,0 +1,23 @@
+//
+// _ecommerce.scss
+//
+
+.e-commerce-dashboard {
+    .table {
+        td:has(> table) {
+            padding: 0;
+        }
+
+        table {
+            tr:last-child {
+                td {
+                    border-bottom: none;
+                }
+            }
+        }
+    }
+}
+
+.top-product-scroll {
+    max-height: 505px;
+}

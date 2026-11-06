@@ -1,0 +1,80 @@
+//
+// _gallery.scss
+//
+
+.masonry-grid {
+    .masonry-column {
+        columns: 250px;
+        column-gap: 10px;
+
+        figure {
+            break-inside: avoid-column;
+
+            a {
+                >img.scale-up {
+                    transform: scale3d(1.2, 1.2, 1.2);
+                    transition: transform .5s;
+                    height: 100%;
+                }
+
+                &:after {
+                    background-color: rgba(var(--#{$prefix}black-rgb), 0.5);
+                    content: "";
+                    cursor: pointer;
+                    z-index: 0;
+                    display: block;
+                    position: absolute;
+                    top: 0;
+                    height: 100%;
+                    width: 100%;
+                    opacity: 0;
+                }
+            }
+
+            >figcaption {
+                opacity: 0;
+                position: absolute;
+                top: 0;
+                align-items: center;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                width: 100%;
+                height: 100%;
+            }
+
+            &:hover {
+                a>img.scale-up {
+                    transform: scale3d(1, 1, 1);
+                }
+
+                a::after {
+                    opacity: 1;
+                    transition: opacity .15s linear .1s;
+                }
+
+                >figcaption {
+                    opacity: 1;
+                    transition: opacity .15s linear .1s;
+
+                    >.hover-fadeInLeft {
+                        animation-duration: 500ms;
+                        animation-fill-mode: both;
+                        animation-name: slideInLeft;
+                    }
+
+                    >.hover-fadeInRight {
+                        animation-duration: 500ms;
+                        animation-fill-mode: both;
+                        animation-name: slideInRight;
+                    }
+                }
+            }
+        }
+
+        .card {
+            break-inside: avoid-column;
+        }
+    }
+}

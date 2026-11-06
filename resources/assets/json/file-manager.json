@@ -1,0 +1,193 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "fullName": "Roxy Floodgate",
+      "lastModified": "12/13/2020",
+      "fileSize": "1.2 GB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 2,
+      "fullName": "Mason Blackburn",
+      "lastModified": "12/13/2020",
+      "fileSize": "1.2 GB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 3,
+      "fullName": "Lily Harrison",
+      "lastModified": "12/13/2020",
+      "fileSize": "1.2 GB",
+      "fileType": ".png"
+    },
+    {
+      "id": 4,
+      "fullName": "Daniel Carter",
+      "lastModified": "12/13/2020",
+      "fileSize": "1.2 GB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 5,
+      "fullName": "Alice Greenhill",
+      "lastModified": "01/20/2021",
+      "fileSize": "2.3 GB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 6,
+      "fullName": "Ethan Marshall",
+      "lastModified": "01/20/2021",
+      "fileSize": "2.3 GB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 7,
+      "fullName": "Charlotte Benson",
+      "lastModified": "01/20/2021",
+      "fileSize": "2.3 GB",
+      "fileType": ".png"
+    },
+    {
+      "id": 8,
+      "fullName": "Lucas Dunbar",
+      "lastModified": "01/20/2021",
+      "fileSize": "2.3 GB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 9,
+      "fullName": "James Mackenzie",
+      "lastModified": "02/15/2021",
+      "fileSize": "500 MB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 10,
+      "fullName": "Isla Davidson",
+      "lastModified": "02/15/2021",
+      "fileSize": "500 MB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 11,
+      "fullName": "Zachary Walker",
+      "lastModified": "02/15/2021",
+      "fileSize": "500 MB",
+      "fileType": ".png"
+    },
+    {
+      "id": 12,
+      "fullName": "Maya Thompson",
+      "lastModified": "02/15/2021",
+      "fileSize": "500 MB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 13,
+      "fullName": "Sophia Williams",
+      "lastModified": "03/05/2021",
+      "fileSize": "750 MB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 14,
+      "fullName": "David Lyle",
+      "lastModified": "03/05/2021",
+      "fileSize": "750 MB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 15,
+      "fullName": "Olivia Carter",
+      "lastModified": "03/05/2021",
+      "fileSize": "750 MB",
+      "fileType": ".png"
+    },
+    {
+      "id": 16,
+      "fullName": "Jacob O’Connor",
+      "lastModified": "03/05/2021",
+      "fileSize": "750 MB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 17,
+      "fullName": "David Blackwell",
+      "lastModified": "04/10/2021",
+      "fileSize": "1.5 GB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 18,
+      "fullName": "Ella Richardson",
+      "lastModified": "04/10/2021",
+      "fileSize": "1.5 GB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 19,
+      "fullName": "Henry Stevens",
+      "lastModified": "04/10/2021",
+      "fileSize": "1.5 GB",
+      "fileType": ".png"
+    },
+    {
+      "id": 20,
+      "fullName": "Grace Harrison",
+      "lastModified": "04/10/2021",
+      "fileSize": "1.5 GB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 21,
+      "fullName": "Olivia Bennett",
+      "lastModified": "05/22/2021",
+      "fileSize": "1.8 GB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 22,
+      "fullName": "Ryan Woods",
+      "lastModified": "05/22/2021",
+      "fileSize": "1.8 GB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 23,
+      "fullName": "Megan Matthews",
+      "lastModified": "05/22/2021",
+      "fileSize": "1.8 GB",
+      "fileType": ".png"
+    },
+    {
+      "id": 24,
+      "fullName": "Ethan Hall",
+      "lastModified": "05/22/2021",
+      "fileSize": "1.8 GB",
+      "fileType": ".jpg"
+    },
+    {
+      "id": 25,
+      "fullName": "Benjamin Pierce",
+      "lastModified": "06/30/2021",
+      "fileSize": "3.0 GB",
+      "fileType": ".pdf"
+    },
+    {
+      "id": 26,
+      "fullName": "Sophia Turner",
+      "lastModified": "06/30/2021",
+      "fileSize": "3.0 GB",
+      "fileType": ".zip"
+    },
+    {
+      "id": 27,
+      "fullName": "Charlotte Price",
+      "lastModified": "06/30/2021",
+      "fileSize": "3.0 GB",
+      "fileType": ".png"
+    }
+  ]
+}

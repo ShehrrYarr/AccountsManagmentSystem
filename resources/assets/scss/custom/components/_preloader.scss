@@ -1,0 +1,25 @@
+// 
+// preloader.scss
+//
+
+#preloader {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--#{$prefix}secondary-bg);
+    z-index: 9999;
+    display: flex;
+
+    &.hidden {
+        opacity: 0;
+        visibility: hidden;
+        display: none;
+    }
+}
+
+[data-page-loader="hidden"] #preloader {
+    opacity: 0;
+    visibility: hidden;
+}

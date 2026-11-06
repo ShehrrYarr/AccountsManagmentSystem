@@ -1,0 +1,292 @@
+{
+  "all": [
+    {
+      "id": 1,
+      "image": "assets/images/product/product-1.jpg",
+      "name": "AirMax Pro Sneakers",
+      "sku": "98765",
+      "price": 159.99,
+      "category": "Footwear",
+      "tags": [
+        "Limited Edition",
+        "Exclusive"
+      ],
+      "qty": 100,
+      "rating": 823,
+      "vendor": "Nike",
+      "published": false
+    },
+    {
+      "id": 2,
+      "image": "assets/images/product/product-2.jpg",
+      "name": "Gabrielle Chanel Perfume",
+      "sku": "98766",
+      "price": 89.99,
+      "category": "Beauty",
+      "tags": [
+        "Top Rated",
+        "Award-Winning"
+      ],
+      "qty": 200,
+      "rating": 1124,
+      "vendor": "Chanel",
+      "published": false
+    },
+    {
+      "id": 3,
+      "image": "assets/images/product/product-3.jpg",
+      "name": "SoundMaster Wireless Headphones",
+      "sku": "98767",
+      "price": 219.99,
+      "category": "Electronics",
+      "tags": [
+        "New",
+        "Top Seller"
+      ],
+      "qty": 50,
+      "rating": 674,
+      "vendor": "Bose",
+      "published": true
+    },
+    {
+      "id": 4,
+      "image": "assets/images/product/product-4.jpg",
+      "name": "Cocooil Body Oil",
+      "sku": "98768",
+      "price": 102.45,
+      "category": "Beauty",
+      "tags": [
+        "Hot Item",
+        "Limited Edition"
+      ],
+      "qty": 60,
+      "rating": 320,
+      "vendor": "NaturaCo",
+      "published": true
+    },
+    {
+      "id": 5,
+      "image": "assets/images/product/product-5.jpg",
+      "name": "Wireless Earbuds",
+      "sku": "98769",
+      "price": 89.99,
+      "category": "Electronics",
+      "tags": [
+        "Sale",
+        "Limited Edition"
+      ],
+      "qty": 150,
+      "rating": 420,
+      "vendor": "ElectroGear",
+      "published": true
+    },
+    {
+      "id": 6,
+      "image": "assets/images/product/product-6.jpg",
+      "name": "Luxury Sunglasses",
+      "sku": "98770",
+      "price": 149.99,
+      "category": "Accessories",
+      "tags": [
+        "Special Offer",
+        "Discounted"
+      ],
+      "qty": 80,
+      "rating": 300,
+      "vendor": "LuxOptics",
+      "published": true
+    },
+    {
+      "id": 7,
+      "image": "assets/images/product/product-7.jpg",
+      "name": "Leather Wallet",
+      "sku": "98771",
+      "price": 89.99,
+      "category": "Accessories",
+      "tags": [
+        "Hot Deal",
+        "Clearance"
+      ],
+      "qty": 90,
+      "rating": 350,
+      "vendor": "UrbanStyle",
+      "published": true
+    },
+    {
+      "id": 8,
+      "image": "assets/images/product/product-8.jpg",
+      "name": "JBL Pulse 3 Bluetooth Speaker",
+      "sku": "98772",
+      "price": 179.99,
+      "category": "Electronics",
+      "tags": [
+        "Best Seller",
+        "Discounted"
+      ],
+      "qty": 120,
+      "rating": 980,
+      "vendor": "JBL",
+      "published": true
+    },
+    {
+      "id": 9,
+      "image": "assets/images/product/product-9.jpg",
+      "name": "Stylish Leather Backpack",
+      "sku": "98773",
+      "price": 99.99,
+      "category": "Accessories",
+      "tags": [
+        "On Sale",
+        "Discounted"
+      ],
+      "qty": 150,
+      "rating": 412,
+      "vendor": "Nomad",
+      "published": true
+    },
+    {
+      "id": 10,
+      "image": "assets/images/product/product-back-1.jpg",
+      "name": "Velocity Sneakers",
+      "sku": "12345",
+      "price": 129.99,
+      "category": "Footwear",
+      "tags": [
+        "Exclusive Edition",
+        "Limited Release"
+      ],
+      "qty": 120,
+      "rating": 890,
+      "vendor": "Adidas",
+      "published": true
+    },
+    {
+      "id": 11,
+      "image": "assets/images/product/product-back-2.jpg",
+      "name": "Noir Essence Perfume",
+      "sku": "12346",
+      "price": 95.99,
+      "category": "Beauty",
+      "tags": [
+        "Luxury",
+        "Top Choice"
+      ],
+      "qty": 250,
+      "rating": 1345,
+      "vendor": "Dior",
+      "published": false
+    },
+    {
+      "id": 12,
+      "image": "assets/images/product/product-back-3.jpg",
+      "name": "Xtreme Sound Wireless Headphones",
+      "sku": "12347",
+      "price": 249.99,
+      "category": "Electronics",
+      "tags": [
+        "Premium",
+        "Best Seller"
+      ],
+      "qty": 70,
+      "rating": 890,
+      "vendor": "Sony",
+      "published": true
+    },
+    {
+      "id": 13,
+      "image": "assets/images/product/product-back-4.jpg",
+      "name": "Revive Glow Body Oil",
+      "sku": "12348",
+      "price": 115.50,
+      "category": "Beauty",
+      "tags": [
+        "Top Rated",
+        "Limited Edition"
+      ],
+      "qty": 80,
+      "rating": 400,
+      "vendor": "GlowCo",
+      "published": false
+    },
+    {
+      "id": 14,
+      "image": "assets/images/product/product-back-5.jpg",
+      "name": "VibePro Bluetooth Headphones",
+      "sku": "12349",
+      "price": 69.99,
+      "category": "Electronics",
+      "tags": [
+        "Clearance",
+        "Best Value"
+      ],
+      "qty": 180,
+      "rating": 530,
+      "vendor": "SoundTech",
+      "published": true
+    },
+    {
+      "id": 15,
+      "image": "assets/images/product/product-back-6.jpg",
+      "name": "Elite Sunglasses",
+      "sku": "12350",
+      "price": 159.99,
+      "category": "Accessories",
+      "tags": [
+        "Exclusive Offer",
+        "Discounted"
+      ],
+      "qty": 110,
+      "rating": 420,
+      "vendor": "VisionPro",
+      "published": false
+    },
+    {
+      "id": 16,
+      "image": "assets/images/product/product-back-7.jpg",
+      "name": "Urban Leather Wallet",
+      "sku": "12351",
+      "price": 75.99,
+      "category": "Accessories",
+      "tags": [
+        "Hot Deal",
+        "Sale"
+      ],
+      "qty": 100,
+      "rating": 370,
+      "vendor": "UrbanTrend",
+      "published": true
+    },
+    {
+      "id": 17,
+      "image": "assets/images/product/product-back-8.jpg",
+      "name": "Sonic Bluetooth Speaker",
+      "sku": "12352",
+      "price": 159.99,
+      "category": "Electronics",
+      "tags": [
+        "Top Seller",
+        "Discounted"
+      ],
+      "qty": 150,
+      "rating": 1040,
+      "vendor": "Bose",
+      "published": false
+    },
+    {
+      "id": 18,
+      "image": "assets/images/product/product-back-9.jpg",
+      "name": "Nomad Leather Backpack",
+      "sku": "12353",
+      "price": 129.99,
+      "category": "Accessories",
+      "tags": [
+        "On Sale",
+        "Discounted"
+      ],
+      "qty": 180,
+      "rating": 500,
+      "vendor": "NomadGear",
+      "published": true
+    }
+  ]
+}

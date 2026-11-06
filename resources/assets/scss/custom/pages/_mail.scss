@@ -1,0 +1,63 @@
+//
+// Email
+//
+
+.email-wrapper {
+    $app-chat-sidebar-width: 340px !default;
+    --#{$prefix}app-chat-sidebar-width: #{$app-chat-sidebar-width};
+    display: flex;
+    gap: $container-padding-x;
+    height: 100%;
+
+    @include media-breakpoint-down(lg) {
+        flex-direction: column;
+    }
+
+    .email-left {
+        width: 100%;
+        min-width: 100%;
+        background-color: $card-bg;
+        padding: 1rem;
+        border: 1px solid $card-border-color;
+
+        @include media-breakpoint-up(lg) {
+            width: var(--#{$prefix}app-chat-sidebar-width);
+            min-width: var(--#{$prefix}app-chat-sidebar-width);
+        }
+
+        .list-group-item {
+            padding: 0.5rem 0.625rem;
+            cursor: pointer;
+        }
+    }
+
+    .email-right {
+        width: 100%;
+        background-color: $card-bg;
+        border: 1px solid $card-border-color;
+
+        @include media-breakpoint-up(lg) {
+            width: calc(100% - var(--#{$prefix}app-chat-sidebar-width));
+        }
+    }
+}
+
+.composeTo {
+    input {
+        padding-inline-end: 91px;
+    }
+
+    .composeToBtn {
+        top: 5px;
+        right: 5px;
+    }
+}
+
+.dataTable {
+    tbody {
+        tr.selected {
+            box-shadow: inset 3px 0 0 var(--#{$prefix}primary);
+            background-color: rgba(var(--#{$prefix}primary-rgb), 0.1);
+        }
+    }
+}

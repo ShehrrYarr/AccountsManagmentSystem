@@ -1,0 +1,312 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "dateOfJoin": "25 Mar 2024",
+      "fullName": "Roxy Floodgate",
+      "serviceType": "B.Com, M.Com",
+      "subject": "Physics",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "Active",
+      "contactEmail": "roxy724@gmail.com",
+      "phoneNumber": "+91 82392 37359"
+    },
+    {
+      "id": 2,
+      "dateOfJoin": "28 Mar 2024",
+      "fullName": "Roy Southerell",
+      "serviceType": "B.A, B.C.A",
+      "subject": "Computer",
+      "avatarImage": "assets/images/avatar/avatar-2.jpg",
+      "status": "In Active",
+      "contactEmail": "roy20@gmail.com",
+      "phoneNumber": "+91 82392 37359"
+    },
+    {
+      "id": 3,
+      "dateOfJoin": "11 Apr 2024",
+      "fullName": "Briny Undrell",
+      "serviceType": "Unlimited Extended License",
+      "subject": "Computer",
+      "avatarImage": "assets/images/avatar/avatar-3.jpg",
+      "status": "Active",
+      "contactEmail": "briny45@gmail.com",
+      "phoneNumber": "+91 82392 37359"
+    },
+    {
+      "id": 4,
+      "dateOfJoin": "12 May 2024",
+      "fullName": "Kendell Longstreeth",
+      "serviceType": "Software Development",
+      "subject": "Computer",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "Active",
+      "contactEmail": "kendell15@gmail.com",
+      "phoneNumber": "+91 82392 37359"
+    },
+    {
+      "id": 5,
+      "dateOfJoin": "20 May 2024",
+      "fullName": "Dorris Grigoriev",
+      "serviceType": "UI/UX Design & Development",
+      "subject": "Computer",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "In Active",
+      "contactEmail": "dorris48@gmail.com",
+      "phoneNumber": "+91 82392 37359"
+    },
+    {
+      "id": 6,
+      "dateOfJoin": "25 Jun 2024",
+      "fullName": "Ella Perez",
+      "serviceType": "B.Tech in Digital Systems",
+      "subject": "IoT Development",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Active",
+      "contactEmail": "ella.perez@example.com",
+      "phoneNumber": "+91 92923 22334"
+    },
+    {
+      "id": 7,
+      "dateOfJoin": "15 Jul 2024",
+      "fullName": "Daniel Lewis",
+      "serviceType": "B.Sc. in Software Engineering",
+      "subject": "Game Development",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "In Active",
+      "contactEmail": "daniel.lewis@example.com",
+      "phoneNumber": "+91 95544 33445"
+    },
+    {
+      "id": 8,
+      "dateOfJoin": "30 Jul 2024",
+      "fullName": "Zoe Wilson",
+      "serviceType": "M.Sc. in Cybersecurity",
+      "subject": "Penetration Testing",
+      "avatarImage": "assets/images/avatar/avatar-8.jpg",
+      "status": "Active",
+      "contactEmail": "zoe.wilson@example.com",
+      "phoneNumber": "+91 99321 44567"
+    },
+    {
+      "id": 9,
+      "dateOfJoin": "10 Aug 2024",
+      "fullName": "Samuel Martin",
+      "serviceType": "B.Tech in Software Development",
+      "subject": "DevOps & Automation",
+      "avatarImage": "assets/images/avatar/avatar-9.jpg",
+      "status": "In Active",
+      "contactEmail": "samuel.martin@example.com",
+      "phoneNumber": "+91 94433 55678"
+    },
+    {
+      "id": 10,
+      "dateOfJoin": "25 Aug 2024",
+      "fullName": "Emily Davis",
+      "serviceType": "B.A. in Graphic Design",
+      "subject": "Web Design & Development",
+      "avatarImage": "assets/images/avatar/avatar-10.jpg",
+      "status": "Active",
+      "contactEmail": "emily.davis@example.com",
+      "phoneNumber": "+91 98766 11234"
+    },
+    {
+      "id": 11,
+      "dateOfJoin": "15 Sep 2024",
+      "fullName": "James Taylor",
+      "serviceType": "M.Sc. in AI & Robotics",
+      "subject": "Autonomous Systems",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "In Active",
+      "contactEmail": "james.taylor@example.com",
+      "phoneNumber": "+91 91923 44567"
+    },
+    {
+      "id": 12,
+      "dateOfJoin": "25 Sep 2024",
+      "fullName": "Aidan Perez",
+      "serviceType": "B.Tech in Computer Science",
+      "subject": "Network Security",
+      "avatarImage": "assets/images/avatar/avatar-2.jpg",
+      "status": "Active",
+      "contactEmail": "aidan.perez@example.com",
+      "phoneNumber": "+91 94001 12234"
+    },
+    {
+      "id": 13,
+      "dateOfJoin": "10 Oct 2024",
+      "fullName": "Ella Watson",
+      "serviceType": "M.Tech in Cloud Computing",
+      "subject": "Cloud Solutions Architect",
+      "avatarImage": "assets/images/avatar/avatar-3.jpg",
+      "status": "In Active",
+      "contactEmail": "ella.watson@example.com",
+      "phoneNumber": "+91 92323 55678"
+    },
+    {
+      "id": 14,
+      "dateOfJoin": "20 Oct 2024",
+      "fullName": "Lily Walker",
+      "serviceType": "B.Sc. in Data Science",
+      "subject": "Machine Learning Engineering",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "Active",
+      "contactEmail": "lily.walker@example.com",
+      "phoneNumber": "+91 95500 22334"
+    },
+    {
+      "id": 15,
+      "dateOfJoin": "30 Oct 2024",
+      "fullName": "Gabriel Taylor",
+      "serviceType": "M.Sc. in Artificial Intelligence",
+      "subject": "Deep Learning",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "In Active",
+      "contactEmail": "gabriel.taylor@example.com",
+      "phoneNumber": "+91 96661 55678"
+    },
+    {
+      "id": 16,
+      "dateOfJoin": "15 Nov 2024",
+      "fullName": "Chloe Hill",
+      "serviceType": "B.Tech in IoT",
+      "subject": "Embedded Systems",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "Active",
+      "contactEmail": "chloe.hill@example.com",
+      "phoneNumber": "+91 99000 11223"
+    },
+    {
+      "id": 17,
+      "dateOfJoin": "25 Nov 2024",
+      "fullName": "Ryan Lee",
+      "serviceType": "M.Sc. in Data Science",
+      "subject": "Data Visualization",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "In Active",
+      "contactEmail": "ryan.lee@example.com",
+      "phoneNumber": "+91 92233 44567"
+    },
+    {
+      "id": 18,
+      "dateOfJoin": "10 Dec 2024",
+      "fullName": "Charlotte Johnson",
+      "serviceType": "B.Tech in Information Systems",
+      "subject": "Database Management Systems",
+      "avatarImage": "assets/images/avatar/avatar-8.jpg",
+      "status": "Active",
+      "contactEmail": "charlotte.johnson@example.com",
+      "phoneNumber": "+91 94001 22334"
+    },
+    {
+      "id": 19,
+      "dateOfJoin": "25 Dec 2024",
+      "fullName": "Mason Davis",
+      "serviceType": "M.Tech in Software Engineering",
+      "subject": "Agile Development",
+      "avatarImage": "assets/images/avatar/avatar-9.jpg",
+      "status": "In Active",
+      "contactEmail": "mason.davis@example.com",
+      "phoneNumber": "+91 98888 44567"
+    },
+    {
+      "id": 20,
+      "dateOfJoin": "5 Jan 2025",
+      "fullName": "Sophia Hall",
+      "serviceType": "B.A. in Web Development",
+      "subject": "Frontend Development",
+      "avatarImage": "assets/images/avatar/avatar-10.jpg",
+      "status": "Active",
+      "contactEmail": "sophia.hall@example.com",
+      "phoneNumber": "+91 99323 33445"
+    },
+    {
+      "id": 21,
+      "dateOfJoin": "15 Jan 2024",
+      "fullName": "Toby Davis",
+      "serviceType": "M.Sc. in Big Data",
+      "subject": "Data Analytics",
+      "avatarImage": "assets/images/avatar/avatar-1.jpg",
+      "status": "Active",
+      "contactEmail": "toby.davis@example.com",
+      "phoneNumber": "+91 92323 11234"
+    },
+    {
+      "id": 22,
+      "dateOfJoin": "25 Jan 2024",
+      "fullName": "Rebecca Morgan",
+      "serviceType": "B.Tech in AI & Machine Learning",
+      "subject": "AI Algorithms",
+      "avatarImage": "assets/images/avatar/avatar-2.jpg",
+      "status": "In Active",
+      "contactEmail": "rebecca.morgan@example.com",
+      "phoneNumber": "+91 90001 55678"
+    },
+    {
+      "id": 23,
+      "dateOfJoin": "10 Feb 2024",
+      "fullName": "Maya Scott",
+      "serviceType": "M.Tech in Robotics",
+      "subject": "Robotics Engineering",
+      "avatarImage": "assets/images/avatar/avatar-3.jpg",
+      "status": "Active",
+      "contactEmail": "maya.scott@example.com",
+      "phoneNumber": "+91 94444 11234"
+    },
+    {
+      "id": 24,
+      "dateOfJoin": "20 Feb 2024",
+      "fullName": "Oliver Green",
+      "serviceType": "B.Sc. in Data Science",
+      "subject": "Data Structures & Algorithms",
+      "avatarImage": "assets/images/avatar/avatar-4.jpg",
+      "status": "In Active",
+      "contactEmail": "oliver.green@example.com",
+      "phoneNumber": "+91 90001 22334"
+    },
+    {
+      "id": 25,
+      "dateOfJoin": "28 Feb 2024",
+      "fullName": "Logan Carter",
+      "serviceType": "B.A. in Software Development",
+      "subject": "Web Development",
+      "avatarImage": "assets/images/avatar/avatar-5.jpg",
+      "status": "Active",
+      "contactEmail": "logan.carter@example.com",
+      "phoneNumber": "+91 99666 55678"
+    },
+    {
+      "id": 26,
+      "dateOfJoin": "5 Mar 2024",
+      "fullName": "Jameson Miller",
+      "serviceType": "M.Sc. in Data Analytics",
+      "subject": "Big Data",
+      "avatarImage": "assets/images/avatar/avatar-6.jpg",
+      "status": "In Active",
+      "contactEmail": "jameson.miller@example.com",
+      "phoneNumber": "+91 92001 22334"
+    },
+    {
+      "id": 27,
+      "dateOfJoin": "15 Mar 2024",
+      "fullName": "Chloe Harris",
+      "serviceType": "B.Tech in Cloud Computing",
+      "subject": "Cloud Engineering",
+      "avatarImage": "assets/images/avatar/avatar-7.jpg",
+      "status": "Active",
+      "contactEmail": "chloe.harris@example.com",
+      "phoneNumber": "+91 96000 55678"
+    },
+    {
+      "id": 28,
+      "dateOfJoin": "25 Mar 2022024",
+      "fullName": "Dylan Wilson",
+      "serviceType": "M.Tech in Software Systems",
+      "subject": "Software Architecture",
+      "avatarImage": "assets/images/avatar/avatar-8.jpg",
+      "status": "In Active",
+      "contactEmail": "dylan.wilson@example.com",
+      "phoneNumber": "+91 99323 33445"
+    }
+  ]
+}

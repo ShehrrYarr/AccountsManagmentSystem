@@ -1,0 +1,107 @@
+//
+// _datatable.scss
+//
+
+table.dataTable {
+    margin: 0 !important;
+
+    >thead {
+
+        // Checkbox
+        .dt-checkboxes-select-all {
+
+            &::before,
+            &::after {
+                display: none;
+            }
+        }
+
+        // Sorting
+        .sorting {
+
+            &::before,
+            &::after {
+                top: 60%;
+                transform: translateY(-50%);
+                bottom: auto;
+            }
+
+            &::before {
+                right: .5em;
+                font-family: var(--#{$prefix}font-family-remix);
+                content: "\ea4e";
+            }
+
+            &::after {
+                font-family: var(--#{$prefix}font-family-remix);
+                content: "\ea78";
+                margin-top: -8px;
+            }
+        }
+
+    }
+}
+
+div.dataTables_wrapper {
+
+    // Filter
+    div.dataTables_filter {
+        label {
+            margin-bottom: 0;
+        }
+    }
+
+    div.dataTables_info {
+        padding-top: 0;
+    }
+
+    .dataTables_length {
+        label {
+            margin-bottom: 0;
+        }
+    }
+
+    .dt-head {
+        @include media-breakpoint-down(sm) {
+            .dataTables_filter {
+                width: 100%;
+
+                label {
+                    width: 100%;
+
+                    input {
+                        margin-left: 0px;
+                        width: 100%;
+                    }
+                }
+            }
+
+            .invoice_status {
+                width: 100%;
+            }
+        }
+
+    }
+}
+
+[dir="rtl"] {
+    .dataTables_wrapper {
+        .paginate_button {
+            &.page-item {
+
+                &.next,
+                &.previous {
+                    transform: rotate(180deg);
+                }
+            }
+        }
+    }
+
+    table.dataTable>thead .sorting {
+
+        &::before,
+        &::after {
+            left: 0.5em;
+        }
+    }
+}

@@ -1,0 +1,94 @@
+// 
+// _card.scss
+// 
+
+.card {
+  box-shadow: $box-shadow-sm;
+  margin-bottom: $grid-gutter-width;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+
+  .card-header {
+    border-bottom: var(--#{$prefix}border-width) solid var(--#{$prefix}border-color);
+
+    .card-actions a {
+      font-size: 16px;
+      color: inherit;
+      font-weight: 500;
+
+      .ri-drag-move-2-fill {
+        cursor: move;
+      }
+
+      .ri-close-line {
+        font-size: 18px;
+      }
+    }
+  }
+
+  .card-subtitle {
+    font-weight: 500;
+  }
+
+  .card-text {
+    color: $text-muted;
+  }
+
+  &.card-h-100 {
+    height: calc(100% - $card-spacer-y);
+  }
+
+  &.card-hover {
+    transition: all 0.4s;
+
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
+
+}
+
+@each $color, $value in $theme-colors {
+  .text-bg-#{$color} {
+
+    .card-title,
+    .card-text {
+      color: inherit;
+    }
+  }
+}
+
+// Mixin for Block UI Overlay
+@mixin overlay($bg-color: rgba($white, 0.5), $text-color: $black, $z-index: $zindex-modal) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: $bg-color;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  z-index: $z-index;
+  color: $text-color;
+}
+
+// Applying the mixins in your styles
+.card-overlay {
+  @include overlay(); // Default overlay styles
+}
+
+.custom-overlay {
+  @include overlay(rgba($black, 0.3), $primary); // Custom overlay with primary color
+}
+
+.fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1050; // Ensure it's above other content
+  overflow: auto;
+  background-color: var(--#{$prefix}white); // Optional: Background color for fullscreen mode
+}

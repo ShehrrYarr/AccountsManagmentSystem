@@ -1,0 +1,37 @@
+[
+    {
+        "User Name": "John Doe",
+        "Email": "john.doe@example.com",
+        "Phone": "+1 234 567 890",
+        "Status": "Active",
+        "Role": "Admin"
+    },
+    {
+        "User Name": "Jane Smith",
+        "Email": "jane.smith@example.com",
+        "Phone": "+1 234 567 891",
+        "Status": "Inactive",
+        "Role": "User"
+    },
+    {
+        "User Name": "Alice Johnson",
+        "Email": "alice.j@example.com",
+        "Phone": "+1 234 567 892",
+        "Status": "Active",
+        "Role": "User"
+    },
+    {
+        "User Name": "Bob Brown",
+        "Email": "bob.brown@example.com",
+        "Phone": "+1 234 567 893",
+        "Status": "Active",
+        "Role": "Moderator"
+    },
+    {
+        "User Name": "Charlie Davis",
+        "Email": "charlie.d@example.com",
+        "Phone": "+1 234 567 894",
+        "Status": "Inactive",
+        "Role": "User"
+    }
+]

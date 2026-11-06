@@ -1,0 +1,199 @@
+//
+// _buttons.scss
+//
+
+.btn {
+  i {
+    line-height: 20px;
+  }
+}
+
+// // Loop through theme colors to generate button classes
+@each $name, $color in $theme-colors {
+
+  // Button with solid background
+  .btn-#{$name} {
+    box-shadow: 0 .125rem .375rem 0 rgba($color, 0.4);
+  }
+
+  // light Buttons
+  .btn-light-#{$name} {
+    $color-active: color-contrast($color);
+    --#{$prefix}btn-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-bg: var(--#{$prefix}#{$name}-bg-subtle);
+    --#{$prefix}btn-border-color: transparent;
+    --#{$prefix}btn-hover-color: #{$color-active};
+    --#{$prefix}btn-hover-bg: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-hover-border-color: transparent;
+    --#{$prefix}btn-focus-shadow-rgb: var(--#{$prefix}#{$name}-rgb);
+    --#{$prefix}btn-active-color: #{$color-active};
+    --#{$prefix}btn-active-bg: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-active-border-color: transparent;
+  }
+
+  // outline
+  .btn-outline-#{$name} {
+    $color-active: color-contrast($color);
+    --#{$prefix}btn-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-bg: transparent;
+    --#{$prefix}btn-border-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-hover-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-hover-bg: rgba(var(--#{$prefix}#{$name}-rgb), 0.2);
+    --#{$prefix}btn-hover-border-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-focus-shadow-rgb: var(--#{$prefix}#{$name}-rgb);
+    --#{$prefix}btn-active-color: #{$color-active};
+    --#{$prefix}btn-active-bg: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-active-border-color: var(--#{$prefix}#{$name});
+  }
+
+  // Text button
+  .btn-text-#{$name} {
+    --#{$prefix}btn-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-bg: transparent;
+    --#{$prefix}btn-border-color: transparent;
+    --#{$prefix}btn-hover-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-hover-bg: var(--#{$prefix}#{$name}-bg-subtle);
+    --#{$prefix}btn-hover-border-color: transparent;
+    --#{$prefix}btn-focus-shadow-rgb: var(--#{$prefix}#{$name}-rgb);
+    --#{$prefix}btn-active-color: var(--#{$prefix}#{$name});
+    --#{$prefix}btn-active-bg: var(--#{$prefix}#{$name}-bg-subtle);
+    --#{$prefix}btn-active-border-color: transparent;
+  }
+
+  .btn-#{$name},
+  .btn-light-#{$name} {
+    @if $name =="light" {
+      --#{$prefix}btn-color: #{color-contrast($color)};
+    }
+  }
+}
+
+.btn-light {
+  @include dark {
+    --#{$prefix}btn-bg: var(--#{$prefix}gray-100);
+    --#{$prefix}btn-border-color: var(--#{$prefix}light-border-subtle);
+    --#{$prefix}btn-color: var(--#{$prefix}light-text-emphasis);
+    --#{$prefix}btn-hover-bg: var(--#{$prefix}light-bg-subtle);
+    --#{$prefix}btn-hover-border-color: var(--#{$prefix}light-border-subtle);
+    --#{$prefix}btn-hover-color: var(--#{$prefix}light-text-emphasis);
+    --#{$prefix}btn-active-bg: var(--#{$prefix}light-bg-subtle);
+    --#{$prefix}btn-active-border-color: var(--#{$prefix}light-border-subtle);
+    --#{$prefix}btn-active-color: var(--#{$prefix}light-text-emphasis);
+    box-shadow: none;
+  }
+}
+
+// Small Icon Button
+.icon-btn-sm {
+  padding: $input-btn-padding-y-sm $input-btn-padding-y-sm;
+  font-size: $input-btn-font-size-sm;
+  line-height: 18px;
+  width: 30px;
+}
+
+// Medium Icon Button (Default)
+.icon-btn {
+  padding: $input-btn-padding-y $input-btn-padding-y;
+  font-size: $input-btn-font-size;
+  width: 40px;
+}
+
+// Large Icon Button
+.icon-btn-lg {
+  padding: $input-btn-padding-y-lg $input-btn-padding-y-lg;
+  font-size: $input-btn-font-size-lg;
+  width: 50px;
+}
+
+// Social colors
+@each $name, $colors in $social-colors {
+
+  .btn.btn-#{$name},
+  .btn.btn-#{$name}:active {
+    color: var(--#{$prefix}white);
+    border-color: map-get($colors, base);
+    background-color: map-get($colors, base);
+
+    &:hover {
+      background-color: map-get($colors, dark);
+    }
+  }
+
+  .btn.btn-text-#{$name},
+  .btn.btn-text-#{$name}:active {
+    color: map-get($colors, base);
+
+    &:hover {
+      color: var(--#{$prefix}white);
+      background-color: map-get($colors, base);
+    }
+  }
+
+  .btn.btn-light-#{$name},
+  .btn.btn-light-#{$name}:active {
+    color: map-get($colors, base);
+    background-color: map-get($colors, light);
+
+    &:hover {
+      color: var(--#{$prefix}white);
+      background-color: map-get($colors, base);
+    }
+  }
+
+  .btn.btn-outline-#{$name},
+  .btn.btn-outline-#{$name}:active {
+    color: map-get($colors, base);
+    border: 1px solid map-get($colors, base);
+
+    &:hover {
+      border: 1px solid map-get($colors, base);
+      color: var(--#{$prefix}white);
+      background-color: map-get($colors, base);
+    }
+  }
+}
+
+.btn-loader {
+  .indicator-progress {
+    display: none;
+  }
+
+  &.loading {
+    .indicator-progress {
+      display: flex;
+    }
+  }
+
+  i {
+    animation: loader 1500ms infinite linear;
+    display: inline-block;
+    transform: rotate(0deg);
+  }
+}
+
+// Loader Button animation
+@keyframes loader {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.custom-toggle {
+  .icon-on {
+    display: none; // Hidden by default
+  }
+
+  .icon-off {
+    display: inline-flex; // Visible by default
+  }
+
+  &.active {
+    .icon-on {
+      display: inline-flex; // Show when active
+    }
+
+    .icon-off {
+      display: none; // Hide when active
+    }
+  }
+}

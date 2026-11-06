@@ -1,0 +1,314 @@
+{
+  "primary": [
+    {
+      "id": 1,
+      "fullName": "Chandler Bing",
+      "mailTitle": "Chandler Bing",
+      "mailDescription": "Focused impactful open issues from the project of GitHub",
+      "mailTime": "08:40 AM"
+    },
+    {
+      "id": 2,
+      "fullName": "Web Support Dennis (7)",
+      "mailTitle": "Re: New mail settings",
+      "mailDescription": "Will you answer him asap?",
+      "mailTime": "Yesterday"
+    },
+    {
+      "id": 3,
+      "fullName": "Miller, me (5)",
+      "mailTitle": "Family - Last pic over my village",
+      "mailDescription": "Yeah i'd like that! Do you remember the video you showed me of your train ride between Colombo and Kandy? The one with the mountain view? I would love to see that one again!",
+      "mailTime": "Yesterday"
+    },
+    {
+      "id": 4,
+      "fullName": "Sarah Lee",
+      "mailTitle": "Important - Your account details",
+      "mailDescription": "Please check your account details and update your contact information.",
+      "mailTime": "2 hours ago"
+    },
+    {
+      "id": 5,
+      "fullName": "Jonathan Cox",
+      "mailTitle": "Meeting update",
+      "mailDescription": "Your meeting is rescheduled to 10:00 AM tomorrow.",
+      "mailTime": "3 hours ago"
+    },
+    {
+      "id": 6,
+      "fullName": "Jessica Parker",
+      "mailTitle": "Document Review",
+      "mailDescription": "Please review the attached document before 5:00 PM today.",
+      "mailTime": "4 hours ago"
+    },
+    {
+      "id": 7,
+      "fullName": "Ethan Harris",
+      "mailTitle": "Weekly report",
+      "mailDescription": "I’ve attached the weekly report for your review.",
+      "mailTime": "5 hours ago"
+    },
+    {
+      "id": 8,
+      "fullName": "Rachel Green",
+      "mailTitle": "Re: Event Invitation",
+      "mailDescription": "Can you confirm your availability for the upcoming event?",
+      "mailTime": "1 day ago"
+    },
+    {
+      "id": 9,
+      "fullName": "Phoebe Buffay",
+      "mailTitle": "Gift for you!",
+      "mailDescription": "I just bought something for you, check it out when you get a chance.",
+      "mailTime": "1 day ago"
+    },
+    {
+      "id": 10,
+      "fullName": "Monica Geller",
+      "mailTitle": "Dinner plans",
+      "mailDescription": "I’ve made reservations for dinner at 7:00 PM tonight.",
+      "mailTime": "2 days ago"
+    },
+    {
+      "id": 11,
+      "fullName": "David Schwimmer",
+      "mailTitle": "Conference reminder",
+      "mailDescription": "Don’t forget the conference call at 3:00 PM today.",
+      "mailTime": "2 days ago"
+    },
+    {
+      "id": 12,
+      "fullName": "Tom Green",
+      "mailTitle": "Project Feedback",
+      "mailDescription": "Can you provide your feedback on the current project? We need it ASAP.",
+      "mailTime": "3 days ago"
+    },
+    {
+      "id": 13,
+      "fullName": "Emma Roberts",
+      "mailTitle": "Job application update",
+      "mailDescription": "We’re reviewing your application and will get back to you soon.",
+      "mailTime": "3 days ago"
+    },
+    {
+      "id": 14,
+      "fullName": "George Smith",
+      "mailTitle": "Meeting canceled",
+      "mailDescription": "The meeting scheduled for today has been canceled.",
+      "mailTime": "4 days ago"
+    },
+    {
+      "id": 15,
+      "fullName": "Linda Johnson",
+      "mailTitle": "Invitation to collaborate",
+      "mailDescription": "I would like to discuss collaboration opportunities. Let me know your thoughts.",
+      "mailTime": "5 days ago"
+    },
+    {
+      "id": 16,
+      "fullName": "Kyle Thomas",
+      "mailTitle": "Re: Sales report",
+      "mailDescription": "I’ve attached the updated sales report for you to review.",
+      "mailTime": "6 days ago"
+    },
+    {
+      "id": 17,
+      "fullName": "Susan Harris",
+      "mailTitle": "Urgent: Action required",
+      "mailDescription": "Immediate action required on the financial statements.",
+      "mailTime": "1 week ago"
+    },
+    {
+      "id": 18,
+      "fullName": "Oscar Wilde",
+      "mailTitle": "Event photos",
+      "mailDescription": "Here are the photos from the event you attended last week.",
+      "mailTime": "1 week ago"
+    },
+    {
+      "id": 19,
+      "fullName": "Zara Bens",
+      "mailTitle": "Confirmation needed",
+      "mailDescription": "Can you confirm your attendance for the meeting tomorrow?",
+      "mailTime": "1 week ago"
+    },
+    {
+      "id": 20,
+      "fullName": "William Acker",
+      "mailTitle": "Software Update",
+      "mailDescription": "Your software update is available. Please install it at your earliest convenience.",
+      "mailTime": "1 week ago"
+    },
+    {
+      "id": 21,
+      "fullName": "Oliver Stone",
+      "mailTitle": "New offer: 50% off!",
+      "mailDescription": "Get 50% off on your next purchase. Don't miss out!",
+      "mailTime": "2 weeks ago"
+    },
+    {
+      "id": 22,
+      "fullName": "Isabella Clark",
+      "mailTitle": "Meeting agenda",
+      "mailDescription": "Here’s the agenda for the upcoming meeting.",
+      "mailTime": "2 weeks ago"
+    }
+  ],
+  "promotions": [
+    {
+      "id": 1,
+      "fullName": "Alice Cooper",
+      "mailTitle": "Summer sale - 50% off",
+      "mailDescription": "Hurry up! Get 50% off on all items in our summer collection.",
+      "mailTime": "2:00 PM"
+    },
+    {
+      "id": 2,
+      "fullName": "Bob Marley",
+      "mailTitle": "Winter clearance event",
+      "mailDescription": "Take advantage of our winter clearance event. Limited time only!",
+      "mailTime": "1:30 PM"
+    },
+    {
+      "id": 3,
+      "fullName": "James Brown",
+      "mailTitle": "New year, new products!",
+      "mailDescription": "Check out our latest product lineup for the new year!",
+      "mailTime": "11:00 AM"
+    },
+    {
+      "id": 4,
+      "fullName": "Elton John",
+      "mailTitle": "Black Friday Deals",
+      "mailDescription": "Get massive discounts on electronics this Black Friday!",
+      "mailTime": "9:00 AM"
+    },
+    {
+      "id": 5,
+      "fullName": "David Bowie",
+      "mailTitle": "Cyber Monday Sale",
+      "mailDescription": "Cyber Monday is here! Don’t miss out on exclusive online deals.",
+      "mailTime": "8:30 AM"
+    },
+    {
+      "id": 6,
+      "fullName": "Adele",
+      "mailTitle": "Valentine's Day Gifts - 20% off",
+      "mailDescription": "Find the perfect gift for your loved one and enjoy 20% off.",
+      "mailTime": "Yesterday"
+    },
+    {
+      "id": 7,
+      "fullName": "Lady Gaga",
+      "mailTitle": "50% off on all shoes!",
+      "mailDescription": "Get 50% off on all shoes for a limited time only!",
+      "mailTime": "Yesterday"
+    },
+    {
+      "id": 8,
+      "fullName": "Shakira",
+      "mailTitle": "Exclusive Members Offer",
+      "mailDescription": "Sign up for our VIP club and get access to exclusive offers.",
+      "mailTime": "Yesterday"
+    },
+    {
+      "id": 9,
+      "fullName": "Justin Timberlake",
+      "mailTitle": "New Collection Launch",
+      "mailDescription": "Our new collection is live now. Take a look and shop the latest trends!",
+      "mailTime": "1 day ago"
+    },
+    {
+      "id": 10,
+      "fullName": "Miley Cyrus",
+      "mailTitle": "Limited Edition Items Available",
+      "mailDescription": "Get your hands on limited edition items before they’re sold out!",
+      "mailTime": "2 days ago"
+    },
+    {
+      "id": 11,
+      "fullName": "Drake",
+      "mailTitle": "Spring Sale - 40% off",
+      "mailDescription": "Get ready for our spring sale with 40% off selected items.",
+      "mailTime": "3 days ago"
+    },
+    {
+      "id": 12,
+      "fullName": "Taylor Swift",
+      "mailTitle": "End of season clearance",
+      "mailDescription": "Don’t miss out on clearance items at unbeatable prices.",
+      "mailTime": "4 days ago"
+    },
+    {
+      "id": 13,
+      "fullName": "Katy Perry",
+      "mailTitle": "Buy one, get one free!",
+      "mailDescription": "Take advantage of our buy one, get one free offer on selected items.",
+      "mailTime": "5 days ago"
+    },
+    {
+      "id": 14,
+      "fullName": "Rihanna",
+      "mailTitle": "Mega Sale - Up to 70% off",
+      "mailDescription": "Our biggest sale yet! Get up to 70% off on all products.",
+      "mailTime": "1 week ago"
+    },
+    {
+      "id": 15,
+      "fullName": "Beyoncé",
+      "mailTitle": "Exclusive Deals for You",
+      "mailDescription": "Access exclusive deals just for you on select items.",
+      "mailTime": "2 weeks ago"
+    },
+    {
+      "id": 16,
+      "fullName": "Ariana Grande",
+      "mailTitle": "Flash Sale - 24 hours only",
+      "mailDescription": "Flash sale happening now! 24 hours only for great discounts.",
+      "mailTime": "2 weeks ago"
+    },
+    {
+      "id": 17,
+      "fullName": "Kanye West",
+      "mailTitle": "Big Discounts - Get Yours Today!",
+      "mailDescription": "Massive discounts available today only. Don’t miss out!",
+      "mailTime": "2 weeks ago"
+    },
+    {
+      "id": 18,
+      "fullName": "Drake",
+      "mailTitle": "Summer Collection Now Available",
+      "mailDescription": "Check out our summer collection with new arrivals and great offers.",
+      "mailTime": "2 weeks ago"
+    },
+    {
+      "id": 19,
+      "fullName": "Billie Eilish",
+      "mailTitle": "Seasonal Sale - 50% off everything",
+      "mailDescription": "Enjoy 50% off everything in store this season.",
+      "mailTime": "3 weeks ago"
+    },
+    {
+      "id": 20,
+      "fullName": "Post Malone",
+      "mailTitle": "Last Chance for Discount",
+      "mailDescription": "This is your last chance to grab amazing discounts before prices go back up.",
+      "mailTime": "3 weeks ago"
+    },
+    {
+      "id": 21,
+      "fullName": "The Weeknd",
+      "mailTitle": "Clearance Sale - Up to 60% off",
+      "mailDescription": "Shop our clearance sale for up to 60% off select items.",
+      "mailTime": "3 weeks ago"
+    },
+    {
+      "id": 22,
+      "fullName": "Nicki Minaj",
+      "mailTitle": "Exclusive Offers for You",
+      "mailDescription": "Exclusive offers tailored just for you. Don’t miss out on great deals!",
+      "mailTime": "4 weeks ago"
+    }
+  ]
+}

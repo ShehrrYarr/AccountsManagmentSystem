@@ -1,0 +1,122 @@
+//
+// _nav.scss
+//
+
+.nav-tabs,
+.nav-pills {
+  >li {
+    >a {
+      color: var(--#{$prefix}emphasis-color);
+    }
+  }
+}
+
+.nav-pills {
+  >a {
+    color: var(--#{$prefix}emphasis-color);
+    font-weight: $font-weight-medium;
+  }
+}
+
+.arrow-pills {
+  margin-bottom: 16px;
+
+  .nav-link {
+    position: relative;
+
+    &.active {
+      &::before {
+        content: "";
+        @include position-align(absolute, null, null, -12px, 50%);
+        border: 6px solid transparent;
+        transform: translateX(-50%);
+        transition: $nav-link-transition;
+        border-top-color: var(--#{$prefix}nav-pills-link-active-bg);
+      }
+    }
+  }
+}
+
+.custom-verti-nav-pills {
+  .nav-link {
+    position: relative;
+    overflow: hidden;
+    border: 1px dashed var(--#{$prefix}border-color);
+    border-radius: $border-radius-lg;
+    color: var(--#{$prefix}body-color);
+
+    &.active {
+      color: var(--#{$prefix}primary);
+      border: 1px dashed var(--#{$prefix}primary);
+
+      i {
+        color: var(--#{$prefix}primary);
+      }
+    }
+  }
+}
+
+.nav-tabs-bordered {
+  border-bottom: var(--#{$prefix}border-width) solid var(--#{$prefix}border-color);
+
+  .nav-link {
+    position: relative;
+    color: var(--#{$prefix}body-color);
+
+    &::after {
+      content: "";
+      @include position-align(absolute, null, null, -1px, 0);
+      height: 2px;
+      width: 100%;
+      transition: all 350ms ease 0s;
+      transform: scale(0);
+    }
+
+    &.active {
+      color: var(--#{$prefix}primary);
+
+      &::after {
+        transform: scale(1);
+        background-color: var(--#{$prefix}primary);
+      }
+    }
+  }
+}
+
+// vertical nav
+.vertical-nav {
+  .nav {
+    .nav-link {
+      padding: 24px 16px;
+      text-align: center;
+      margin-bottom: 8px;
+
+      .nav-icon {
+        font-size: 24px;
+      }
+    }
+  }
+}
+
+.navbar {
+  .navbar-nav {
+    .nav-item {
+      .nav-link {
+        &.active {
+          font-weight: 600;
+          color: var(--#{$prefix}primary);
+        }
+      }
+    }
+  }
+}
+
+// Contextual active state colors
+@each $name, $value in $theme-colors {
+  .active-#{$name} {
+    --#{$prefix}nav-pills-link-active-color: #{color-contrast($value)};
+    --#{$prefix}nav-pills-link-active-bg: var(--#{$prefix}#{$name});
+    --#{$prefix}nav-link-hover-color: var(--#{$prefix}#{$name});
+    --#{$prefix}nav-link-color: contrast(var(--#{$prefix}#{$name}));
+  }
+}

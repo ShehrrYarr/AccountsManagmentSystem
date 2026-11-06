@@ -1,0 +1,141 @@
+//
+// avatar.scss
+//
+
+// Define Avatar Sizes
+$avatar-sizes: (
+  xs: 20px,
+  sm: 24px,
+  md: 36px,
+  lg: 48px,
+  xl: 76px,
+);
+
+// Mixin for Avatar Size
+@mixin avatar-size($size) {
+  height: map-get($avatar-sizes, $size);
+  width: map-get($avatar-sizes, $size);
+  min-width: map-get($avatar-sizes, $size);
+  min-height: map-get($avatar-sizes, $size);
+  border-radius: 50%;
+}
+
+.avatar-item {
+  align-items: center;
+  background-color: var(--#{$prefix}primary);
+  color: $white;
+  display: flex;
+  font-weight: $font-weight-medium;
+  justify-content: center;
+  border: var(--#{$prefix}border-width) solid var(--#{$prefix}secondary-bg);
+  position: relative;
+  border-radius: 50%;
+
+  img {
+    overflow: hidden;
+    object-fit: cover;
+  }
+}
+
+.avatar-badge {
+  position: absolute;
+  inset-block-start: -6px;
+  inset-inline-end: -0.375rem;
+  width: 18px;
+  height: 18px;
+  font-size: 8px;
+  border: 2px solid $white;
+  border-radius: 50% !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.avatar-online::before {
+  position: absolute;
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  inset-inline-end: 0;
+  inset-block-end: 0;
+  border: 2px solid $white;
+  background-color: var(--#{$prefix}success);
+}
+
+// Avatar Group
+.avatar-group {
+  padding-left: 12px;
+  display: flex;
+  flex-wrap: wrap;
+
+  .avatar-item {
+    margin-left: -12px;
+    transition: all 0.2s;
+
+    &:hover {
+      position: relative;
+      transform: translateY(-2px);
+      z-index: 1;
+    }
+  }
+}
+
+// Apply Styles Using Mixin
+.avatar-xs {
+  @include avatar-size(xs);
+}
+
+.avatar-sm {
+  @include avatar-size(sm);
+  font-size: 0.625rem;
+}
+
+.avatar {
+  @include avatar-size(md);
+}
+
+.avatar-lg {
+  @include avatar-size(lg);
+}
+
+.avatar-xl {
+  @include avatar-size(xl);
+}
+
+// Mixin to set aspect ratio using padding
+@mixin aspect-ratio($ratio) {
+  padding-top: $ratio;
+}
+
+// Image wrapper styles
+.image-wrapper {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    @include position-align(absolute, 0, null, null, 0);
+  }
+}
+
+// Aspect ratios
+.image-1x1 {
+  @include aspect-ratio(100%);
+}
+
+.image-4x3 {
+  @include aspect-ratio(75%);
+}
+
+.image-3x2 {
+  @include aspect-ratio(66.67%);
+}
+
+.image-16x9 {
+  @include aspect-ratio(56.25%);
+}

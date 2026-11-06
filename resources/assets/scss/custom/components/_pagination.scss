@@ -1,0 +1,87 @@
+// 
+// _pagination.scss
+// 
+
+// Define Pagination Sizes
+$pagination-sizes: (
+    sm: 29px,
+    md: 38px,
+    lg: 48px,
+);
+
+// Mixin for Pagination Size
+@mixin pagination-size($size) {
+    $size-value: map-get($pagination-sizes, $size);
+    height: $size-value;
+    width: $size-value;
+    line-height: $size-value;
+}
+
+// base
+.pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+
+    .page-link {
+        padding: 0;
+        text-align: center;
+    }
+}
+
+// Apply Styles Using Mixin for size
+.pagination {
+    .page-link {
+        @include pagination-size(md);
+    }
+
+    &-sm .page-link {
+        @include pagination-size(sm);
+    }
+
+    &-lg .page-link {
+        @include pagination-size(lg);
+    }
+}
+
+// Pagination rounded (Custom)
+.pagination-rounded {
+    .page-link {
+        border-radius: 30px !important;
+    }
+}
+
+// Loop through the theme colors
+@each $name, $color in $theme-colors {
+    .pagination-#{$name} {
+        --#{$prefix}pagination-active-bg: var(--#{$prefix}#{$name});
+        --#{$prefix}pagination-focus-bg: var(--#{$prefix}#{$name});
+
+        @if $name =='light' {
+            --#{$prefix}pagination-active-color: var(--#{$prefix}secondary-color);
+            --#{$prefix}pagination-focus-color: var(--#{$prefix}secondary-color);
+        }
+    }
+
+    .pagination-#{$name}-light {
+        --#{$prefix}pagination-active-color: var(--#{$prefix}#{$name});
+        --#{$prefix}pagination-focus-color: var(--#{$prefix}#{$name});
+        --#{$prefix}pagination-active-border-color: var(--#{$prefix}#{$name});
+
+        .page-link:focus {
+            --#{$prefix}pagination-border-color: var(--#{$prefix}#{$name});
+        }
+    }
+}
+
+// Loop through the theme colors
+@each $name, $color in $theme-colors-bg-subtle {
+    .pagination-#{$name}-light {
+        --#{$prefix}pagination-active-bg: var(--#{$prefix}#{$name}-bg-subtle);
+        --#{$prefix}pagination-focus-bg: var(--#{$prefix}#{$name}-bg-subtle);
+
+        @if $name =='light' {
+            --#{$prefix}pagination-active-color: var(--#{$prefix}secondary-color);
+            --#{$prefix}pagination-focus-color: var(--#{$prefix}secondary-color);
+        }
+    }
+}

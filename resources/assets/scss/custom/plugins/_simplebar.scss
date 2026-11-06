@@ -1,0 +1,14 @@
+//
+// simplebar.scss
+//
+
+.simplebar-scrollbar {
+    right: 3px;
+    width: 5px;
+}
+
+.simplebar-scrollbar:before {
+    background: var(--#{$prefix}secondary-color);
+    left: 0;
+    right: 0;
+}

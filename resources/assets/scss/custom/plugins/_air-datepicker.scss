@@ -1,0 +1,106 @@
+//
+// _air-datepicker.scss
+//
+
+.air-datepicker {
+    --adp-font-family: #{$font-family-base};
+    --adp-font-size: #{$font-size-base};
+    --adp-width: 280px; // Day cell width will be equal to 34px
+    --adp-z-index: 1055;
+    --adp-padding: 0.5rem;
+    --adp-background-color: #{$dropdown-bg};
+    --adp-background-color-hover: rgba(var(--#{$prefix}light-rgb), 0.3);
+    --adp-background-color-active: rgba(var(--#{$prefix}light-rgb), 0.5);
+    --adp-background-color-selected-other-month-focused: var(--#{$prefix}primary);
+    --adp-color: var(--#{$prefix}gray-600);
+    --adp-color-secondary: var(--#{$prefix}secondary-color);
+    --adp-accent-color: var(--#{$prefix}white);
+    --adp-color-current-date: var(--adp-accent-color);
+    --adp-color-other-month: var(--#{$prefix}gray-400);
+    --adp-border-color: var(--#{$prefix}border-color);
+    --adp-border-color-inner: var(--#{$prefix}border-color);
+    --adp-border-radius: var(--#{$prefix}border-radius);
+    --adp-border-color-inline: var(--#{$prefix}border-color);
+    --adp-nav-height: 32px;
+    --adp-nav-arrow-color: var(--adp-color-secondary);
+    --adp-nav-action-size: 32px;
+    --adp-nav-color-secondary: var(--adp-color-secondary);
+    --adp-day-name-color: var(--#{$prefix}emphasis-color);
+    --adp-day-cell-height: 36px;
+    --adp-year-cell-height: 36px;
+    --adp-cell-border-radius: var(--#{$prefix}border-radius);
+    --adp-cell-background-color-hover: var(--adp-background-color-hover);
+    --adp-cell-background-color-selected: var(--#{$prefix}primary);
+    --adp-cell-background-color-selected-hover: rgba(var(--#{$prefix}primary-rgb), .9);
+    --adp-cell-background-color-in-range: rgba(var(--#{$prefix}primary-rgb), .1);
+    --adp-cell-background-color-in-range-hover: rgba(var(--#{$prefix}primary-rgb), .2);
+    --adp-cell-border-color-in-range: var(--adp-cell-background-color-selected);
+    --adp-mobile-font-size: 16px;
+    --adp-mobile-nav-height: 40px;
+    --adp-mobile-width: 320px;
+    --adp-mobile-day-cell-height: 38px;
+    --adp-mobile-month-cell-height: 48px;
+    --adp-mobile-year-cell-height: 64px;
+}
+
+.air-datepicker-overlay {
+    --adp-overlay-background-color: rgba(0, 0, 0, .3);
+    --adp-overlay-z-index: #{$zindex-sticky};
+}
+
+.air-datepicker-nav--title {
+    background-color: var(--#{$prefix}body-bg);
+
+    &:hover {
+        background-color: var(--#{$prefix}gray-100);
+    }
+}
+
+.air-datepicker-body--day-name {
+    font-size: $font-size-sm;
+    font-weight: $font-weight-semibold;
+}
+
+.air-datepicker-cell.-current- {
+    background-color: var(--adp-cell-background-color-selected);
+
+    &.-focus- {
+        color: var(--#{$prefix}white);
+    }
+}
+
+.air-datepicker--content {
+    padding: 0.5rem 1rem;
+}
+
+.air-datepicker {
+    &.-is-mobile- {
+        .air-datepicker--content {
+            padding: 1rem;
+        }
+    }
+
+    &.-inline- {
+        --adp-z-index: auto;
+    }
+}
+
+.air-datepicker-cell.-current- {
+    color: var(--adp-color-current-date)
+}
+
+.air-datepicker--pointer {
+    &::after {
+        background: #{$dropdown-bg};
+    }
+}
+
+.air-datepicker-body--day-names {
+    margin: 8px 0 8px;
+}
+
+.full-picker {
+    .air-datepicker {
+        --adp-width: 100%;
+    }
+}

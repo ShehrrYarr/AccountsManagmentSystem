@@ -1,0 +1,12 @@
+//
+// _main.scss
+//
+
+.app-wrapper {
+  margin-inline-start: var(--#{$prefix}app-sidebar-width);
+  transition: margin-left 0.3s ease, margin-right 0.3s ease;
+  overflow-y: auto;
+  padding: $container-padding-x;
+  margin-block-start: var(--#{$prefix}app-header-height);
+  min-height: calc(100vh - calc(var(--#{$prefix}app-header-height) + var(--#{$prefix}app-footer-height)));
+}

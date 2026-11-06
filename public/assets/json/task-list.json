@@ -1,0 +1,346 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "dueDate": "09/11/2024",
+      "taskName": "Create API Endpoints for New Feature",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg"
+      ],
+      "status": "Todo",
+      "priority": "High"
+    },
+    {
+      "id": 2,
+      "dueDate": "10/11/2024",
+      "taskName": "Design Client Dashboard Interface",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-3.jpg"
+      ],
+      "status": "Done",
+      "priority": "High"
+    },
+    {
+      "id": 3,
+      "dueDate": "11/11/2024",
+      "taskName": "Test API for Unit Errors",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "Bug",
+      "priority": "Medium"
+    },
+    {
+      "id": 4,
+      "dueDate": "12/11/2024",
+      "taskName": "Collect Client Feedback on UI",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "Done",
+      "priority": "Low"
+    },
+    {
+      "id": 5,
+      "dueDate": "13/11/2024",
+      "taskName": "Fix Bugs in API Endpoints",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "OnHold",
+      "priority": "High"
+    },
+    {
+      "id": 6,
+      "dueDate": "14/11/2024",
+      "taskName": "Upgrade Authentication Flow",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "OnHold",
+      "priority": "High"
+    },
+    {
+      "id": 7,
+      "dueDate": "15/11/2024",
+      "taskName": "Deploy Staging Version for Client Testing",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-8.jpg",
+        "assets/images/avatar/avatar-9.jpg"
+      ],
+      "status": "Done",
+      "priority": "Medium"
+    },
+    {
+      "id": 8,
+      "dueDate": "16/11/2024",
+      "taskName": "Prepare Release Notes for Product Launch",
+      "avatarImages": [
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-1.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Low"
+    },
+    {
+      "id": 9,
+      "dueDate": "17/11/2024",
+      "taskName": "Arrange Marketing Team Meeting",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-4.jpg"
+      ],
+      "status": "OnHold",
+      "priority": "Medium"
+    },
+    {
+      "id": 10,
+      "dueDate": "18/11/2024",
+      "taskName": "Monitor Server Logs for Performance Issues",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Low"
+    },
+    {
+      "id": 11,
+      "dueDate": "19/11/2024",
+      "taskName": "Create Database Schema Migration Scripts",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-3.jpg"
+      ],
+      "status": "InProgress",
+      "priority": "High"
+    },
+    {
+      "id": 12,
+      "dueDate": "20/11/2024",
+      "taskName": "Send Project Progress Update to Client",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-8.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 13,
+      "dueDate": "21/11/2024",
+      "taskName": "Review and Merge Pull Requests for API",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "InProgress",
+      "priority": "Medium"
+    },
+    {
+      "id": 14,
+      "dueDate": "22/11/2024",
+      "taskName": "Backup All Important Data Files",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg",
+        "assets/images/avatar/avatar-9.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Low"
+    },
+    {
+      "id": 15,
+      "dueDate": "23/11/2024",
+      "taskName": "Fix Client-Reported UI Issues",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "Bug",
+      "priority": "High"
+    },
+    {
+      "id": 16,
+      "dueDate": "24/11/2024",
+      "taskName": "Conduct Sprint Review and Planning Meeting",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-9.jpg",
+        "assets/images/avatar/avatar-10.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 17,
+      "dueDate": "25/11/2024",
+      "taskName": "Write Documentation for New API Feature",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 18,
+      "dueDate": "26/11/2024",
+      "taskName": "Conduct Load Testing on New API Endpoints",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-6.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "InProgress",
+      "priority": "High"
+    },
+    {
+      "id": 19,
+      "dueDate": "27/11/2024",
+      "taskName": "Monitor Database Performance for Optimizations",
+      "avatarImages": [
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-8.jpg",
+        "assets/images/avatar/avatar-9.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Low"
+    },
+    {
+      "id": 20,
+      "dueDate": "28/11/2024",
+      "taskName": "Plan and Organize Upcoming Sprint Tasks",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-4.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 21,
+      "dueDate": "29/11/2024",
+      "taskName": "Optimize API Performance for Scalability",
+      "avatarImages": [
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "Bug",
+      "priority": "High"
+    },
+    {
+      "id": 22,
+      "dueDate": "30/11/2024",
+      "taskName": "Update Frontend Based on New Client Feedback",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-2.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Low"
+    },
+    {
+      "id": 23,
+      "dueDate": "01/12/2024",
+      "taskName": "Write API Test Cases for Regression Testing",
+      "avatarImages": [
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-6.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 24,
+      "dueDate": "02/12/2024",
+      "taskName": "Update Project Roadmap with New Features",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-7.jpg"
+      ],
+      "status": "Bug",
+      "priority": "Low"
+    },
+    {
+      "id": 25,
+      "dueDate": "03/12/2024",
+      "taskName": "Create Feature Branch for New Project Features",
+      "avatarImages": [
+        "assets/images/avatar/avatar-1.jpg",
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-3.jpg"
+      ],
+      "status": "Todo",
+      "priority": "High"
+    },
+    {
+      "id": 26,
+      "dueDate": "04/12/2024",
+      "taskName": "Review and Update Security Protocols",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "Todo",
+      "priority": "Medium"
+    },
+    {
+      "id": 27,
+      "dueDate": "05/12/2024",
+      "taskName": "Document API Endpoints for Developer Use",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-7.jpg",
+        "assets/images/avatar/avatar-10.jpg"
+      ],
+      "status": "InProgress",
+      "priority": "Medium"
+    },
+    {
+      "id": 28,
+      "dueDate": "06/12/2024",
+      "taskName": "Deploy Application Code to Production Server",
+      "avatarImages": [
+        "assets/images/avatar/avatar-4.jpg",
+        "assets/images/avatar/avatar-8.jpg",
+        "assets/images/avatar/avatar-5.jpg"
+      ],
+      "status": "Todo",
+      "priority": "High"
+    },
+    {
+      "id": 29,
+      "dueDate": "07/12/2024",
+      "taskName": "Prepare for Client Demo and Presentation",
+      "avatarImages": [
+        "assets/images/avatar/avatar-2.jpg",
+        "assets/images/avatar/avatar-5.jpg",
+        "assets/images/avatar/avatar-9.jpg"
+      ],
+      "status": "InProgress",
+      "priority": "Medium"
+    },
+    {
+      "id": 30,
+      "dueDate": "08/12/2024",
+      "taskName": "Attend Client Feedback and Review Meeting",
+      "avatarImages": [
+        "assets/images/avatar/avatar-3.jpg",
+        "assets/images/avatar/avatar-10.jpg"
+      ],
+      "status": "Todo",
+      "priority": "High"
+    }
+  ]
+}

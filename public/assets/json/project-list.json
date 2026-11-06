@@ -1,0 +1,557 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "dueDate": "18/11/2024",
+      "projectName": "Hospital Administration",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "name": "Jane Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 10,
+      "status": "Todo",
+      "updated": "Updated 1 hour ago"
+    },
+    {
+      "id": 2,
+      "dueDate": "20/11/2024",
+      "projectName": "Redesign Dashboard UI for Clients",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "userName": "Lucy Brown"
+        },
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "userName": "Mike Taylor"
+        }
+      ],
+      "completion": 100,
+      "status": "Completed",
+      "updated": "Updated 30 minutes ago"
+    },
+    {
+      "id": 3,
+      "dueDate": "22/11/2024",
+      "projectName": "Startup - OnePage Business Corporate Template",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "name": "Mike Taylor"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 50,
+      "status": "In Progress",
+      "updated": "Updated 1 week ago"
+    },
+    {
+      "id": 4,
+      "dueDate": "25/11/2024",
+      "projectName": "Chat Application",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "name": "Lucy Brown"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "userName": "Jane Doe"
+        },
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 80,
+      "status": "In Progress",
+      "updated": "Updated 2 days ago"
+    },
+    {
+      "id": 5,
+      "dueDate": "30/11/2024",
+      "projectName": "Ecommerce app",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-1.jpg",
+          "userName": "John Doe"
+        },
+        {
+          "image": "assets/images/avatar/avatar-9.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 30,
+      "status": "In Progress",
+      "updated": "Updated 10 minutes ago"
+    },
+    {
+      "id": 6,
+      "dueDate": "03/12/2024",
+      "projectName": "Multipurpose landing template",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "name": "Jane Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "userName": "Mike Taylor"
+        },
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "userName": "Lucy Brown"
+        },
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 70,
+      "status": "Todo",
+      "updated": "Updated 3 hours ago"
+    },
+    {
+      "id": 7,
+      "dueDate": "15/12/2024",
+      "projectName": "Product Launch Planning",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-1.jpg",
+          "name": "John Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "userName": "Lucy Brown"
+        }
+      ],
+      "completion": 40,
+      "status": "In Progress",
+      "updated": "Updated 1 day ago"
+    },
+    {
+      "id": 8,
+      "dueDate": "22/12/2024",
+      "projectName": "Website Redesign for Client X",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "name": "Rachel Green"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-9.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 20,
+      "status": "Todo",
+      "updated": "Updated 2 hours ago"
+    },
+    {
+      "id": 9,
+      "dueDate": "12/01/2025",
+      "projectName": "Mobile App - Version 2",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "name": "Mike Taylor"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 0,
+      "status": "Todo",
+      "updated": "Updated 3 hours ago"
+    },
+    {
+      "id": 10,
+      "dueDate": "18/01/2025",
+      "projectName": "API Integration for Services",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "name": "Lucy Brown"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "userName": "Jane Doe"
+        },
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 25,
+      "status": "In Progress",
+      "updated": "Updated 5 hours ago"
+    },
+    {
+      "id": 11,
+      "dueDate": "25/01/2025",
+      "projectName": "Landing Page for Marketing Campaign",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 60,
+      "status": "In Progress",
+      "updated": "Updated 1 hour ago"
+    },
+    {
+      "id": 12,
+      "dueDate": "01/02/2025",
+      "projectName": "SEO Optimization for Blog",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "name": "Mike Taylor"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-9.jpg",
+          "userName": "Lucy Brown"
+        }
+      ],
+      "completion": 90,
+      "status": "In Progress",
+      "updated": "Updated 30 minutes ago"
+    },
+    {
+      "id": 13,
+      "dueDate": "14/02/2025",
+      "projectName": "Client Website Migration",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "name": "Jane Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "userName": "Mike Taylor"
+        }
+      ],
+      "completion": 50,
+      "status": "Todo",
+      "updated": "Updated 1 week ago"
+    },
+    {
+      "id": 14,
+      "dueDate": "20/02/2025",
+      "projectName": "Email Marketing Campaign",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "name": "Lucy Brown"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-1.jpg",
+          "userName": "John Doe"
+        }
+      ],
+      "completion": 30,
+      "status": "In Progress",
+      "updated": "Updated 2 days ago"
+    },
+    {
+      "id": 15,
+      "dueDate": "28/02/2025",
+      "projectName": "Mobile App UI Update",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "userName": "Mike Taylor"
+        }
+      ],
+      "completion": 100,
+      "status": "Completed",
+      "updated": "Updated 4 hours ago"
+    },
+    {
+      "id": 16,
+      "dueDate": "10/03/2025",
+      "projectName": "Data Security Audit",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "name": "Lucy Brown"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "userName": "Jane Doe"
+        }
+      ],
+      "completion": 40,
+      "status": "In Progress",
+      "updated": "Updated 1 day ago"
+    },
+    {
+      "id": 17,
+      "dueDate": "17/03/2025",
+      "projectName": "Customer Feedback System",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "name": "Mike Taylor"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 10,
+      "status": "Todo",
+      "updated": "Updated 3 hours ago"
+    },
+    {
+      "id": 18,
+      "dueDate": "25/03/2025",
+      "projectName": "Cloud Storage Integration",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "name": "Lucy Brown"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 55,
+      "status": "In Progress",
+      "updated": "Updated 2 days ago"
+    },
+    {
+      "id": 19,
+      "dueDate": "05/04/2025",
+      "projectName": "AI Chatbot Development",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-1.jpg",
+          "name": "John Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "userName": "Lucy Brown"
+        }
+      ],
+      "completion": 20,
+      "status": "Todo",
+      "updated": "Updated 10 minutes ago"
+    },
+    {
+      "id": 20,
+      "dueDate": "20/04/2025",
+      "projectName": "CRM System Integration",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "name": "Rachel Green"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-9.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 65,
+      "status": "In Progress",
+      "updated": "Updated 1 hour ago"
+    },
+    {
+      "id": 21,
+      "dueDate": "05/05/2025",
+      "projectName": "Customer Portal Redesign",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "name": "Rachel Green"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-2.jpg",
+          "userName": "Jane Doe"
+        },
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "userName": "Mike Taylor"
+        }
+      ],
+      "completion": 15,
+      "status": "Todo",
+      "updated": "Updated 3 hours ago"
+    },
+    {
+      "id": 22,
+      "dueDate": "12/05/2025",
+      "projectName": "Automated Email Notifications Setup",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-9.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-5.jpg",
+          "userName": "Lucy Brown"
+        }
+      ],
+      "completion": 40,
+      "status": "In Progress",
+      "updated": "Updated 1 day ago"
+    },
+    {
+      "id": 23,
+      "dueDate": "18/05/2025",
+      "projectName": "AI-Based Chatbot Integration",
+      "priority": "High",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-1.jpg",
+          "name": "John Doe"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-6.jpg",
+          "userName": "Lucy Brown"
+        }
+      ],
+      "completion": 50,
+      "status": "In Progress",
+      "updated": "Updated 5 hours ago"
+    },
+    {
+      "id": 24,
+      "dueDate": "25/05/2025",
+      "projectName": "Blockchain Integration Research",
+      "priority": "Low",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-3.jpg",
+          "name": "Sam Smith"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-7.jpg",
+          "userName": "Rachel Green"
+        }
+      ],
+      "completion": 30,
+      "status": "Todo",
+      "updated": "Updated 2 hours ago"
+    },
+    {
+      "id": 25,
+      "dueDate": "01/06/2025",
+      "projectName": "Mobile App Bug Fixes",
+      "priority": "Medium",
+      "leader": [
+        {
+          "image": "assets/images/avatar/avatar-4.jpg",
+          "name": "Mike Taylor"
+        }
+      ],
+      "team": [
+        {
+          "image": "assets/images/avatar/avatar-8.jpg",
+          "userName": "Sam Smith"
+        }
+      ],
+      "completion": 10,
+      "status": "Todo",
+      "updated": "Updated 30 minutes ago"
+    }
+  ]
+}

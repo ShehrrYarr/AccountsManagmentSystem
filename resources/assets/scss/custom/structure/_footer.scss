@@ -1,0 +1,16 @@
+//
+// _footer.scss
+//
+
+.footer {
+    margin-inline-start: var(--#{$prefix}app-sidebar-width);
+    min-height: var(--#{$prefix}app-footer-height);
+    background-color: var(--#{$prefix}footer-bg);
+    padding: 0 $grid-gutter-width 0 calc(#{$grid-gutter-width} * 0.5)
+    /*rtl: 0 0 0 calc(#{$grid-gutter-width} / 2) */
+    ;
+
+    // >div {
+    //     line-height: var(--#{$prefix}app-footer-height);
+    // }
+}

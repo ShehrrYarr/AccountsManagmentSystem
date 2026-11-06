@@ -1,0 +1,37 @@
+[
+    {
+        "Full Name": "Michael Scott",
+        "Contact Email": "michael.scott@dundermifflin.com",
+        "Phone Number": "+1 234 567 890",
+        "Account Status": "Active",
+        "User Type": "Manager"
+    },
+    {
+        "Full Name": "Pam Beesly",
+        "Contact Email": "pam.beesly@dundermifflin.com",
+        "Phone Number": "+1 234 567 891",
+        "Account Status": "Inactive",
+        "User Type": "Receptionist"
+    },
+    {
+        "Full Name": "Jim Halpert",
+        "Contact Email": "jim.halpert@dundermifflin.com",
+        "Phone Number": "+1 234 567 892",
+        "Account Status": "Active",
+        "User Type": "Sales"
+    },
+    {
+        "Full Name": "Dwight Schrute",
+        "Contact Email": "dwight.schrute@dundermifflin.com",
+        "Phone Number": "+1 234 567 893",
+        "Account Status": "Active",
+        "User Type": "Assistant to the Regional Manager"
+    },
+    {
+        "Full Name": "Angela Martin",
+        "Contact Email": "angela.martin@dundermifflin.com",
+        "Phone Number": "+1 234 567 894",
+        "Account Status": "Inactive",
+        "User Type": "Head of Accounting"
+    }
+]

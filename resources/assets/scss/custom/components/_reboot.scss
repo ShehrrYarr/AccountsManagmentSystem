@@ -1,0 +1,49 @@
+/* =============
+   General
+============= */
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+// Icons
+i {
+
+  &.bi,
+  &[class^="fonticon-"],
+  &[class*=" fonticon-"],
+  &[class^="fa-"],
+  &[class*=" fa-"],
+  &[class^="la-"],
+  &[class*=" la-"] {
+    line-height: 1;
+    font-size: 1rem;
+    color: var(--#{$prefix}text-muted);
+  }
+}
+
+b,
+strong {
+  font-weight: $font-weight-semibold;
+}
+
+// blockquote
+.blockquote {
+  padding: 10px 20px;
+  border: 1px solid;
+  border-inline-start: 4px solid;
+  position: relative;
+
+  &.blockquote-right {
+    border-inline-start: 1px solid;
+    border-inline-end: 4px solid;
+  }
+}
+
+// row
+.row {
+  >* {
+    position: relative;
+  }
+}

@@ -1,0 +1,163 @@
+//
+// _apps-products.scss
+//
+
+.product-card {
+    overflow: hidden;
+
+    .product-img {
+        border-radius: $border-radius;
+
+        img {
+            transition: all 0.3s ease 0s;
+            height: 250px;
+        }
+
+        .back-img {
+            width: 100%;
+            height: 100%;
+            transform: translateX(-101%);
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: all 0.3s ease 0s;
+        }
+    }
+
+    .product-hover-overlay {
+        margin-inline-end: -70px;
+        transition: margin-inline-end .2s ease-in-out;
+    }
+
+    .card-img-overlay div {
+        z-index: 2;
+        position: relative;
+    }
+
+    &:hover {
+        .product-hover-overlay {
+            display: flex;
+            margin-inline-end: 0;
+        }
+
+        .front-img {
+            transform: translateX(100%);
+        }
+
+        .back-img {
+            transform: translateX(0);
+        }
+
+    }
+}
+
+.product-sidebar {
+    .accordion {
+        --#{$prefix}accordion-btn-bg: transparent;
+        --#{$prefix}accordion-active-bg: transparent;
+        --#{$prefix}accordion-bg: transparent;
+        --#{$prefix}accordion-border-width: 0;
+        --#{$prefix}accordion-btn-color: var(--#{$prefix}secondary-color);
+
+        &.accordion-border-box {
+            .accordion-item:not(:first-of-type) {
+                margin-top: 0;
+            }
+
+            .accordion-item {
+                border-top: none;
+                border-radius: 0;
+                border-bottom: var(--#{$prefix}border-width) solid var(--#{$prefix}border-color);
+                margin-bottom: 12px;
+
+                &:last-child {
+                    margin-bottom: 0;
+                    border-bottom: none;
+                }
+
+                .accordion-body {
+                    padding-top: 0;
+                }
+            }
+        }
+    }
+
+    .list-group {
+        --#{$prefix}list-group-bg: transparent;
+
+        .list-group-item:is(.list-hover-arrow) {
+            transition: all ease .3s;
+            overflow: hidden;
+            cursor: pointer;
+
+            &::before {
+                font-family: var(--#{$prefix}font-family-remix);
+                content: "\ea64";
+                position: absolute;
+                font-size: 1.1rem;
+                vertical-align: middle;
+                line-height: 0.8;
+                left: -1rem;
+                top: 50%;
+                transform: translateY(-50%);
+                transition: all ease .3s;
+                opacity: 0;
+            }
+
+            &:hover {
+                padding-inline-start: 1rem;
+
+                &::before {
+                    left: -0.25rem;
+                    opacity: 1;
+                }
+            }
+        }
+    }
+
+    .color-checkbox {
+        position: relative;
+        padding: 0;
+        margin: 0;
+        height: 30px;
+        width: 30px;
+        cursor: pointer;
+
+        .form-check-input {
+            margin: 0;
+            position: absolute;
+            top: 0;
+            z-index: 5;
+            height: 100%;
+            width: 100%;
+            opacity: 0;
+
+            &:checked {
+                ~i::after {
+                    content: '\eb7b';
+                    font-family: var(--#{$prefix}font-family-remix);
+                    line-height: 1;
+                    font-size: 16px;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    position: absolute;
+                    top: 6px;
+                    left: -1px;
+                    color: var(--#{$prefix}white);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+            }
+        }
+
+        i {
+            font-size: 28px;
+        }
+    }
+}
+
+.product-cart-scrollbar {
+    max-height: calc(100vh - calc(var(--#{$prefix}app-header-height) + var(--#{$prefix}app-footer-height) + calc($container-padding-x * 2) + 245px));
+}

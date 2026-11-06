@@ -1,0 +1,58 @@
+//
+// Custom Variables
+//
+
+$font-family-remix:                              'remixicon', sans-serif; // Use Remix font family;
+$input-bg-custom:                                $body-secondary-bg;
+
+// header & footer
+$app-header-base-height:                         74px;
+$header-bg:                                      $white;
+$app-header-border-color:                        var(--#{$prefix}border-color);
+$app-footer-height:                              60px;
+$footer-bg:                                      $white;
+
+// sidebar
+$app-sidebar-base-width:                         240px;
+$app-sidebar-small-width:                        120px;
+$app-sidebar-title-color:                       #3e4853;
+$app-sidebar-bg:                                 $white;
+$header-submenu-bg:                              $app-sidebar-bg;
+$app-sidebar-bg-gradient:                        linear-gradient(to right, $purple-800, $purple-700);
+$app-sidebar-border-color:                       #{$app-header-border-color};
+$app-sidebar-slide-menu-width:                    224px;
+
+// sidebar menu
+$app-sidebar-menu-item-color:                    #5b6b79;
+$app-sidebar-menu-item-active-color:             var(--#{$prefix}primary);
+$app-sidebar-menu-item-hover-color:              #{$app-sidebar-menu-item-active-color};
+$app-sidebar-menu-item-active-font-weight:       500;
+
+// sidebar menu item
+$app-sidebar-menu-item-gap:                      12px;
+$app-sidebar-menu-item-padding-top:              12px;
+$app-sidebar-menu-item-padding-right:            16px;
+$app-sidebar-menu-item-padding-bottom:           12px;
+$app-sidebar-menu-item-padding-left:             16px;
+
+$app-sidebar-menu-item-padding-left-level-1:     44px;
+$app-sidebar-menu-item-padding-left-level-2:     15px;
+$app-sidebar-menu-item-padding-left-level-3:     15px;
+
+// sidebar left border
+$app-sidebar-menu-left-line-spacing:             23px;
+$app-sidebar-menu-left-line-spacing-level-1:     23px;
+$app-sidebar-menu-left-line-spacing-level-2:     15px;
+$app-sidebar-menu-left-line-border-width:        1px;
+$app-sidebar-menu-left-line-border-style:        solid;
+$app-sidebar-menu-left-line-border-color:        var(--#{$prefix}border-color);
+
+// sidebar left dot
+$app-sidebar-menu-left-dot-bg:                   #dbe0e5;
+$app-sidebar-menu-left-dot-size:                   5px;
+$app-sidebar-menu-left-dot-left-level-1:           44px;
+$app-sidebar-menu-left-dot-left-level-2:           15px;
+$app-sidebar-menu-left-dot-left-level-3:           15px;
+
+// horizontal menu
+$horizontal-sidebar-menu-compact-height:         44px;

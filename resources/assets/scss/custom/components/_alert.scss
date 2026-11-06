@@ -1,0 +1,43 @@
+//
+// Alert
+//
+
+.alert {
+    transition: $transition-base;
+
+    hr {
+        border-color: inherit;
+    }
+}
+
+.alert-dismissible {
+    .btn-close {
+        padding: 0.86rem 1rem;
+        background: none;
+        color: var(--#{$prefix}alert-link-color);
+
+        &::after {
+            position: absolute;
+            inset: 0;
+            padding: 0.55rem 1rem;
+            font-size: 20px;
+            font-family: $font-family-remix;
+            content: "\eb99";
+            transition: all 0.5s ease;
+        }
+    }
+}
+
+// Apply the mixin to each theme color
+@each $name, $color in $theme-colors {
+    .alert-outline-#{$name} {
+        --#{$prefix}alert-color: var(--#{$prefix}#{$name}-text-emphasis);
+        --#{$prefix}alert-border-color: var(--#{$prefix}#{$name}-border-subtle);
+        background-color: var(--#{$prefix}secondary-bg);
+    }
+
+    .alert-border-#{$name} {
+        --#{$prefix}alert-border-color: var(--#{$prefix}#{$name}-border-subtle);
+        border-left: 4px solid var(--#{$prefix}#{$name}-border-subtle);
+    }
+}

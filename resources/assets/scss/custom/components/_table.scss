@@ -1,0 +1,15 @@
+//
+// _table.scss
+//
+
+.table>:not(:first-child) {
+    border-top: 0;
+}
+
+.table-nowrap {
+
+    th,
+    td {
+        white-space: nowrap;
+    }
+}

@@ -1,0 +1,52 @@
+//
+// _switcher.scss
+//
+
+.switcher {
+  .switcher-icon {
+    position: fixed;
+    bottom: 25px;
+    z-index: 8;
+    right: 25px;
+  }
+
+  .offcanvas {
+    --#{$prefix}offcanvas-width: 450px;
+  }
+}
+
+.switcher-card {
+  >span {
+    box-shadow: 0 1px 2px rgba(56, 65, 74, 0.15);
+  }
+
+  &.active {
+    >span {
+      border-color: var(--#{$prefix}primary) !important;
+      box-shadow: 0 1px 2px rgba(var(--#{$prefix}primary-rgb), 0.15);
+    }
+
+    >div {
+      color: var(--#{$prefix}primary);
+    }
+  }
+}
+
+.template-customizer {
+  --#{$prefix}list-group-active-bg: var(--#{$prefix}secondary-bg);
+  --#{$prefix}list-group-active-color: var(--#{$prefix}primary);
+
+  .list-group-item+.list-group-item {
+    border-top-width: 1px;
+  }
+
+  .list-group-item {
+    .form-check-input {
+      display: none;
+    }
+  }
+
+  .list-group-item.active {
+    border: 1px solid var(--#{$prefix}list-group-active-border-color);
+  }
+}

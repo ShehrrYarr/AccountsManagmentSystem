@@ -1,0 +1,140 @@
+{
+  "data": [
+    {
+      "id": 1,
+      "categoryImage": "assets/images/product/product-back-9.jpg",
+      "categoryName": "Urban Backpacks",
+      "categoryDesc": "Nomad Leather Backpack",
+      "totalProduct": 599,
+      "status": true
+    },
+    {
+      "id": 2,
+      "categoryImage": "assets/images/product/product-1.jpg",
+      "categoryName": "Athletic Gear",
+      "categoryDesc": "AirMax Pro Sneakers",
+      "totalProduct": 2056,
+      "status": true
+    },
+    {
+      "id": 3,
+      "categoryImage": "assets/images/product/product-3.jpg",
+      "categoryName": "Tech Gadgets",
+      "categoryDesc": "SoundMaster Wireless Headphones",
+      "totalProduct": 4500,
+      "status": false
+    },
+    {
+      "id": 4,
+      "categoryImage": "assets/images/product/product-4.jpg",
+      "categoryName": "Personal Care",
+      "categoryDesc": "Cocooil Body Oil",
+      "totalProduct": 1287,
+      "status": true
+    },
+    {
+      "id": 5,
+      "categoryImage": "assets/images/product/product-5.jpg",
+      "categoryName": "Wireless Devices",
+      "categoryDesc": "Wireless Earbuds",
+      "totalProduct": 1563,
+      "status": false
+    },
+    {
+      "id": 6,
+      "categoryImage": "assets/images/product/product-6.jpg",
+      "categoryName": "Premium Accessories",
+      "categoryDesc": "Luxury Sunglasses",
+      "totalProduct": 3200,
+      "status": true
+    },
+    {
+      "id": 7,
+      "categoryImage": "assets/images/product/product-7.jpg",
+      "categoryName": "Wallets & Bags",
+      "categoryDesc": "Leather Wallet",
+      "totalProduct": 2201,
+      "status": true
+    },
+    {
+      "id": 8,
+      "categoryImage": "assets/images/product/product-8.jpg",
+      "categoryName": "Smart Audio",
+      "categoryDesc": "JBL Pulse 3 Bluetooth Speaker",
+      "totalProduct": 350,
+      "status": false
+    },
+    {
+      "id": 9,
+      "categoryImage": "assets/images/product/product-9.jpg",
+      "categoryName": "Backpacks & Travel",
+      "categoryDesc": "Stylish Leather Backpack",
+      "totalProduct": 810,
+      "status": true
+    },
+    {
+      "id": 10,
+      "categoryImage": "assets/images/product/product-back-1.jpg",
+      "categoryName": "Running Shoes",
+      "categoryDesc": "Velocity Sneakers",
+      "totalProduct": 1825,
+      "status": false
+    },
+    {
+      "id": 11,
+      "categoryImage": "assets/images/product/product-back-2.jpg",
+      "categoryName": "Fragrances & Perfumes",
+      "categoryDesc": "Noir Essence Perfume",
+      "totalProduct": 2540,
+      "status": true
+    },
+    {
+      "id": 12,
+      "categoryImage": "assets/images/product/product-back-3.jpg",
+      "categoryName": "Wireless Sound",
+      "categoryDesc": "Xtreme Sound Wireless Headphones",
+      "totalProduct": 1348,
+      "status": true
+    },
+    {
+      "id": 13,
+      "categoryImage": "assets/images/product/product-back-4.jpg",
+      "categoryName": "Natural Beauty",
+      "categoryDesc": "Revive Glow Body Oil",
+      "totalProduct": 1245,
+      "status": true
+    },
+    {
+      "id": 14,
+      "categoryImage": "assets/images/product/product-back-5.jpg",
+      "categoryName": "Portable Audio",
+      "categoryDesc": "VibePro Bluetooth Headphones",
+      "totalProduct": 962,
+      "status": true
+    },
+    {
+      "id": 15,
+      "categoryImage": "assets/images/product/product-back-6.jpg",
+      "categoryName": "Sunglasses Collection",
+      "categoryDesc": "Elite Sunglasses",
+      "totalProduct": 784,
+      "status": false
+    },
+    {
+      "id": 16,
+      "categoryImage": "assets/images/product/product-back-7.jpg",
+      "categoryName": "Luxury Leather Goods",
+      "categoryDesc": "Urban Leather Wallet",
+      "totalProduct": 2350,
+      "status": true
+    },
+    {
+      "id": 17,
+      "categoryImage": "assets/images/product/product-back-8.jpg",
+      "categoryName": "Bluetooth Devices",
+      "categoryDesc": "Sonic Bluetooth Speaker",
+      "totalProduct": 599,
+      "status": true
+    }
+  ]
+}

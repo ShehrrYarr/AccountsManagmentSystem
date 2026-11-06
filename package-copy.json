@@ -1,0 +1,33 @@
+{
+  "packagesToCopy": [
+    "apexcharts",
+    "air-datepicker",
+    "bootstrap",
+    "chart.js",
+    "choices.js",
+    "cleave.js",
+    "fullcalendar",
+    "dropzone",
+    "dual-listbox",
+    "echarts",
+    "gridjs",
+    "list.js",
+    "glightbox",
+    "nouislider",
+    "plyr",
+    "quill",
+    "remixicon",
+    "simplebar",
+    "sortablejs",
+    "star-rating.js",
+    "wNumb",
+    "@yaireo/tagify",
+    "swiper",
+    "sweetalert2",
+    "countup.js",
+    "gmaps",
+    "jsvectormap",
+    "leaflet",
+    "shepherd.js"
+  ]
+}
