@@ -23,7 +23,7 @@
 @section('content')
     <livewire:companies.summary :company-id="$company->id" />
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
+    <ul class="nav nav-tabs mb-3 flex-nowrap overflow-x-auto overflow-y-hidden text-nowrap" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-statement" type="button">Statement</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-cheques" type="button">Cheques</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-payouts" type="button">Disbursements</button></li>

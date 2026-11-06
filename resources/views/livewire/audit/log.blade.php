@@ -75,7 +75,7 @@ $toggle = fn (int $id) => $this->open = $this->open === $id ? null : $id;
                             <td class="text-end"><button class="btn btn-sm btn-light icon-btn-sm" wire:click="toggle({{ $log->id }})"><i class="{{ $open === $log->id ? 'ri-subtract-line' : 'ri-add-line' }}"></i></button></td>
                         </tr>
                         @if ($open === $log->id)
-                            <tr wire:key="log-d-{{ $log->id }}" class="bg-light-subtle">
+                            <tr wire:key="log-d-{{ $log->id }}" class="bg-body-tertiary">
                                 <td colspan="6">
                                     <table class="table table-sm mb-0 fs-12">
                                         <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>

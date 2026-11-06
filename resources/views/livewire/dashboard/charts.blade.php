@@ -25,7 +25,10 @@ $chartData = computed(function () {
     // Group in PHP so this works the same on MySQL and SQLite.
     $flows = Transaction::query()
         ->where('status', TransactionStatus::Posted)
-        ->whereIn('type', [...TransactionType::inflows(), ...TransactionType::outflows()])
+        ->where(fn ($q) => $q
+            ->whereIn('type', [...TransactionType::inflows(), ...TransactionType::outflows()])
+            // A bounce of a cleared cheque (has a source account) takes the money back out.
+            ->orWhere(fn ($q) => $q->where('type', TransactionType::ChequeBounce)->whereNotNull('source_account_id')))
         ->whereDate('date', '>=', $start)
         ->get(['date', 'type', 'amount']);
 
@@ -35,7 +38,8 @@ $chartData = computed(function () {
         $key = $month->format('Y-m');
         $labels[] = $month->format('M y');
         $monthRows = $flows->filter(fn ($t) => $t->date->format('Y-m') === $key);
-        $in[] = round((float) $monthRows->filter(fn ($t) => in_array($t->type, TransactionType::inflows(), true))->sum('amount'), 2);
+        $in[] = round((float) $monthRows->filter(fn ($t) => in_array($t->type, TransactionType::inflows(), true))->sum('amount')
+            - (float) $monthRows->filter(fn ($t) => $t->type === TransactionType::ChequeBounce)->sum('amount'), 2);
         $out[] = round((float) $monthRows->filter(fn ($t) => in_array($t->type, TransactionType::outflows(), true))->sum('amount'), 2);
     }
 

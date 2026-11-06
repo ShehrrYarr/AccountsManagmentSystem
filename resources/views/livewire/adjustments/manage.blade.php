@@ -99,7 +99,7 @@ $delete = function (int $id) {
 
     <div class="card">
         <div class="card-header d-flex align-items-center gap-2">
-            <div style="min-width:240px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" /></div>
+            <div style="min-width:240px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
             <button type="button" class="btn btn-sm btn-primary ms-auto" wire:click="create"><i class="ri-add-line me-1"></i>New Adjustment</button>
         </div>
         <div class="card-body p-0">
@@ -143,7 +143,7 @@ $delete = function (int $id) {
                     </div>
                     <div class="col-md-5">
                         <label class="form-label">Current position</label>
-                        <div class="form-control bg-light-subtle fs-13">
+                        <div class="form-control bg-body-tertiary fs-13">
                             @if ($this->company)
                                 Payable <strong>{{ money($this->company->payable_balance) }}</strong> · Receivable <strong>{{ money($this->company->receivable_balance) }}</strong>
                             @else <span class="text-muted">—</span> @endif

@@ -34,7 +34,9 @@
 }
 .ams-select.drop-up .ams-select-menu { inset: auto 0 calc(100% + 4px) 0; }
 .ams-select .ams-select-options { overflow-y: auto; }
-.ams-select .ams-select-option { padding: .45rem .75rem; cursor: pointer; display: flex; justify-content: space-between; gap: .75rem; }
+.ams-select .ams-select-option { padding: .45rem .75rem; cursor: pointer; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; column-gap: .75rem; }
+.ams-select .ams-select-option > span { flex: 1 1 auto; min-width: 0; }
+.ams-select .ams-select-option > small { margin-left: auto; }
 .ams-select .ams-select-option:hover,
 .ams-select .ams-select-option.highlighted { background: var(--bs-tertiary-bg); }
 .ams-select .ams-select-option.selected { font-weight: 600; color: var(--bs-primary); }
@@ -53,6 +55,14 @@
 .ams-table th.sortable.sorted i { opacity: 1; }
 .ams-table td.money, .ams-table th.money { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ams-loading { opacity: .55; transition: opacity .15s; pointer-events: none; }
+.ams-desc-cell { max-width: 320px; }
+
+/* Phones: tables fold secondary columns into the first cell, so let text wrap there. */
+@media (max-width: 767.98px) {
+    .ams-desc-cell { max-width: none; min-width: 180px; }
+    .ams-table .ams-wrap-sm { white-space: normal; overflow: visible; }
+    .ams-table td, .ams-table th { padding-left: .5rem; padding-right: .5rem; }
+}
 
 /* Balance pill shown inside forms */
 .ams-balance { font-variant-numeric: tabular-nums; }

@@ -113,7 +113,7 @@ $clearFilters = function () {
                 @endif
             @endforeach
             <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Purchases / awaiting approval" :value="money($this->totals['byType']['vendor_purchase'] ?? 0)" icon="ri-shopping-bag-3-line" color="warning"
+                <x-stat-card label="Direct purchases" :value="money($this->totals['byType']['vendor_purchase'] ?? 0)" icon="ri-shopping-bag-3-line" color="warning"
                     :hint="$this->totals['pending'].' payout(s) awaiting approval'" />
             </div>
         </div>
@@ -138,7 +138,7 @@ $clearFilters = function () {
             </select>
             @unless ($companyId)
                 <div style="min-width:200px">
-                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" />
+                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" />
                 </div>
             @endunless
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="From">
@@ -152,12 +152,12 @@ $clearFilters = function () {
                     <thead class="table-light">
                         <tr>
                             <x-sort-th field="date" :sort="$sortField" :dir="$sortDir">Date</x-sort-th>
-                            <x-sort-th field="type" :sort="$sortField" :dir="$sortDir">Type</x-sort-th>
-                            @unless ($companyId)<th>Company</th>@endunless
-                            <th>Details</th>
-                            <th>From</th>
-                            <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money">Amount</x-sort-th>
-                            <x-sort-th field="status" :sort="$sortField" :dir="$sortDir">Status</x-sort-th>
+                            <x-sort-th field="type" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Type</x-sort-th>
+                            @unless ($companyId)<th class="d-none d-md-table-cell">Company</th>@endunless
+                            <th class="d-none d-md-table-cell">Details</th>
+                            <th class="d-none d-md-table-cell">From</th>
+                            <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money d-none d-md-table-cell">Amount</x-sort-th>
+                            <x-sort-th field="status" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Status</x-sort-th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -165,12 +165,21 @@ $clearFilters = function () {
                         @forelse ($this->rows as $d)
                             @php($pendingReq = $d->approvalRequests->first())
                             <tr wire:key="disb-{{ $d->id }}">
-                                <td class="fs-13 text-nowrap">{{ $d->date->format('d M Y') }}</td>
-                                <td><span class="badge bg-light text-body"><i class="{{ $d->type->icon() }} me-1"></i>{{ $d->type->label() }}</span></td>
+                                <td class="fs-13">
+                                    <span class="text-nowrap">{{ $d->date->format('d M Y') }}</span>
+                                    {{-- Phones: type, company, amount and status folded into this cell --}}
+                                    <div class="d-md-none mt-1">
+                                        <span class="badge bg-light text-body"><i class="{{ $d->type->icon() }} me-1"></i>{{ $d->type->label() }}</span>
+                                        @unless ($companyId)<div class="fw-medium mt-1">{{ $d->company->name }}</div>@endunless
+                                        <div class="fw-semibold">{{ money($d->amount) }} <span class="fw-normal text-muted">from {{ $d->sourceAccount->name }}</span></div>
+                                        <span class="badge {{ $d->status->badge() }}">{{ $d->status->label() }}</span>
+                                    </div>
+                                </td>
+                                <td class="d-none d-md-table-cell"><span class="badge bg-light text-body"><i class="{{ $d->type->icon() }} me-1"></i>{{ $d->type->label() }}</span></td>
                                 @unless ($companyId)
-                                    <td><a href="{{ route('companies.show', $d->company_id) }}" class="text-body fw-medium">{{ $d->company->name }}</a></td>
+                                    <td class="d-none d-md-table-cell"><a href="{{ route('companies.show', $d->company_id) }}" class="text-body fw-medium">{{ $d->company->name }}</a></td>
                                 @endunless
-                                <td class="fs-13" style="max-width:280px">
+                                <td class="fs-13 d-none d-md-table-cell" style="max-width:280px">
                                     @switch($d->type)
                                         @case(DisbursementType::CashPayout)
                                             {{ $d->received_by ? 'Received by '.$d->received_by : 'Cash handed over' }}
@@ -187,9 +196,9 @@ $clearFilters = function () {
                                     @endswitch
                                     @if ($d->reference)<div class="fs-11 text-muted">Ref: {{ $d->reference }}</div>@endif
                                 </td>
-                                <td class="fs-13">{{ $d->sourceAccount->name }}</td>
-                                <td class="money fw-semibold">{{ money($d->amount) }}</td>
-                                <td>
+                                <td class="fs-13 d-none d-md-table-cell">{{ $d->sourceAccount->name }}</td>
+                                <td class="money fw-semibold d-none d-md-table-cell">{{ money($d->amount) }}</td>
+                                <td class="d-none d-md-table-cell">
                                     <span class="badge {{ $d->status->badge() }}">{{ $d->status->label() }}</span>
                                     <div class="fs-11 text-muted mt-1">by {{ $d->creator?->name ?? '—' }}</div>
                                     @if ($pendingReq && $pendingReq->action !== \App\Enums\ApprovalAction::PostDisbursement)

@@ -317,11 +317,13 @@ class ChequeService
     private function postClearing(Cheque $cheque): void
     {
         $type = $cheque->clearing_method->transactionType();
+        $account = BankAccount::withTrashed()->find($cheque->cleared_into_account_id);
+        $verb = $cheque->clearing_method === ClearingMethod::Encashment ? 'encashed into' : 'deposited into';
         $this->ledger->post($type, $cheque->cleared_date, $this->clearingLines($cheque), array_merge(
             $this->baseAttributes($cheque),
             [
                 'destination_account_id' => $cheque->cleared_into_account_id,
-                'description' => "Cheque #{$cheque->cheque_number} {$type->label()}"
+                'description' => "Cheque #{$cheque->cheque_number} {$verb} {$account?->name}"
                     .(Money::isPositive($cheque->commission_amount) ? ' (commission '.money($cheque->commission_amount).')' : ''),
                 'notes' => $cheque->clearing_reference,
             ]
@@ -342,7 +344,11 @@ class ChequeService
             $this->baseAttributes($cheque),
             [
                 'source_account_id' => $wasCleared ? $cheque->cleared_into_account_id : null,
-                'description' => "Cheque #{$cheque->cheque_number} {$type->label()}",
+                'description' => "Cheque #{$cheque->cheque_number} ".match (true) {
+                    $type === TransactionType::ChequeCancel => 'cancelled',
+                    $wasCleared => 'bounced — clearing reversed',
+                    default => 'bounced before clearing',
+                },
                 'notes' => $cheque->closed_reason,
             ]
         ), $cheque);

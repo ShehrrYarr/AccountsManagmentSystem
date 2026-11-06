@@ -37,18 +37,27 @@
             value: null,
             open: false,
             dropUp: false,
+            menuMax: 280,
             search: '',
             hi: 0,
+            init() {
+                // Typing filters the list, so the highlighted row must restart at the top.
+                this.$watch('search', () => { this.hi = 0; });
+            },
             // Open upwards when the scroll area (modal body or window) has more room above.
             placeMenu() {
                 const box = this.$el.getBoundingClientRect();
                 const area = this.$el.closest('.modal-body, .table-responsive');
                 const limits = area ? area.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+                // The menu may still be mid-transition (height 0), so estimate from the option count.
                 const menu = this.$el.querySelector('.ams-select-menu');
-                const needed = (menu && menu.offsetHeight) || 290;
+                const estimate = Math.min(290, 60 + Math.max(1, this.filtered().length) * 40);
+                const needed = (menu && menu.offsetHeight) || estimate;
                 const below = limits.bottom - box.bottom;
                 const above = box.top - limits.top;
                 this.dropUp = needed > below && above > below;
+                // Shrink the list to the room on the chosen side; it scrolls internally.
+                this.menuMax = Math.max(150, Math.min(280, (this.dropUp ? above : below) - 8));
             },
             selected() {
                 return this.options.find(o => String(o.value) === String(this.value)) || null;
@@ -81,7 +90,8 @@
                 this.open = false;
             },
             chooseHighlighted() {
-                const opt = this.filtered()[this.hi];
+                const list = this.filtered();
+                const opt = list[Math.min(this.hi, list.length - 1)];
                 if (opt) this.choose(opt);
             },
             clear() {
@@ -177,7 +187,22 @@
         }));
     });
 
+    // Link every .form-label to the field that follows it, so clicking the label focuses
+    // the field and screen readers announce it. Re-applied after each Livewire morph.
+    window.amsLinkLabels = (root = document) => {
+        root.querySelectorAll('label.form-label:not([for])').forEach((label) => {
+            const control = label.parentElement?.querySelector(
+                'input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, .ams-select-toggle'
+            );
+            if (!control) return;
+            if (!control.id) control.id = 'ams-f-' + Math.random().toString(36).slice(2, 10);
+            label.htmlFor = control.id;
+        });
+    };
+    document.addEventListener('DOMContentLoaded', () => window.amsLinkLabels());
+
     document.addEventListener('livewire:init', () => {
+        Livewire.hook('morphed', ({ el }) => window.amsLinkLabels(el));
         Livewire.on('toast', (e) => window.amsToast(e.type, e.message));
 
         Livewire.on('modal-show', (e) => {

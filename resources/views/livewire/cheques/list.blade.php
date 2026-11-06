@@ -123,9 +123,9 @@ $clearFilters = function () {
     <div class="card">
         <div class="card-header d-flex flex-wrap gap-2 align-items-center">
             <div class="flex-grow-1" style="min-width:220px">
-                <div class="position-relative">
-                    <input type="search" class="form-control form-control-sm ps-5" placeholder="Search cheque #, bank, company, department…" wire:model.live.debounce.350ms="search">
-                    <i class="ri-search-line position-absolute top-50 translate-middle-y ms-3 text-muted" style="left:0"></i>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-transparent"><i class="ri-search-line text-muted"></i></span>
+                    <input type="search" class="form-control" placeholder="Search cheque #, bank, company, department…" aria-label="Search cheques" wire:model.live.debounce.350ms="search">
                 </div>
             </div>
             <select class="form-select form-select-sm w-auto" wire:model.live="status">
@@ -136,7 +136,7 @@ $clearFilters = function () {
             </select>
             @unless ($companyId)
                 <div style="min-width:200px">
-                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" class="form-select-sm" />
+                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" />
                 </div>
             @endunless
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Received from">
@@ -150,12 +150,12 @@ $clearFilters = function () {
                     <thead class="table-light">
                         <tr>
                             <x-sort-th field="cheque_number" :sort="$sortField" :dir="$sortDir">Cheque #</x-sort-th>
-                            @unless ($companyId)<th>Company</th>@endunless
-                            <th>Issued by</th>
-                            <x-sort-th field="received_date" :sort="$sortField" :dir="$sortDir">Received</x-sort-th>
-                            <x-sort-th field="expiry_date" :sort="$sortField" :dir="$sortDir">Valid until</x-sort-th>
-                            <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money">Amount</x-sort-th>
-                            <x-sort-th field="status" :sort="$sortField" :dir="$sortDir">Status</x-sort-th>
+                            @unless ($companyId)<th class="d-none d-md-table-cell">Company</th>@endunless
+                            <th class="d-none d-md-table-cell">Issued by</th>
+                            <x-sort-th field="received_date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Received</x-sort-th>
+                            <x-sort-th field="expiry_date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Valid until</x-sort-th>
+                            <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money d-none d-md-table-cell">Amount</x-sort-th>
+                            <x-sort-th field="status" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Status</x-sort-th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -166,13 +166,21 @@ $clearFilters = function () {
                                 <td>
                                     <div class="fw-semibold">#{{ $c->cheque_number }}</div>
                                     <div class="fs-12 text-muted">{{ $c->issuing_bank }}{{ $c->issuing_branch ? ' · '.$c->issuing_branch : '' }}</div>
+                                    {{-- Phones: company, amount, validity and status folded into this cell --}}
+                                    <div class="d-md-none mt-1">
+                                        @unless ($companyId)<div class="fs-13 fw-medium">{{ $c->company->name }}</div>@endunless
+                                        <div class="fw-semibold">{{ money($c->amount) }}</div>
+                                        <div class="fs-12 {{ $c->isExpired() ? 'text-danger' : ($c->isNearExpiry() ? 'text-warning' : 'text-muted') }}">Valid until {{ $c->expiry_date->format('d M Y') }}</div>
+                                        <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
+                                        @if ($pendingReq)<span class="badge bg-info-subtle text-info"><i class="ri-hourglass-line"></i> Awaiting approval</span>@endif
+                                    </div>
                                 </td>
                                 @unless ($companyId)
-                                    <td><a href="{{ route('companies.show', $c->company_id) }}" class="text-body fw-medium">{{ $c->company->name }}</a></td>
+                                    <td class="d-none d-md-table-cell"><a href="{{ route('companies.show', $c->company_id) }}" class="text-body fw-medium">{{ $c->company->name }}</a></td>
                                 @endunless
-                                <td class="fs-13">{{ $c->department?->name ?? '—' }}</td>
-                                <td class="fs-13">{{ $c->received_date->format('d M Y') }}</td>
-                                <td class="fs-13">
+                                <td class="fs-13 d-none d-md-table-cell">{{ $c->department?->name ?? '—' }}</td>
+                                <td class="fs-13 d-none d-md-table-cell">{{ $c->received_date->format('d M Y') }}</td>
+                                <td class="fs-13 d-none d-md-table-cell">
                                     @if ($c->isExpired())
                                         <span class="text-danger" title="Expired"><i class="ri-error-warning-fill"></i> {{ $c->expiry_date->format('d M Y') }}</span>
                                     @elseif ($c->isNearExpiry())
@@ -181,8 +189,8 @@ $clearFilters = function () {
                                         {{ $c->expiry_date->format('d M Y') }}
                                     @endif
                                 </td>
-                                <td class="money fw-semibold">{{ money($c->amount) }}</td>
-                                <td>
+                                <td class="money fw-semibold d-none d-md-table-cell">{{ money($c->amount) }}</td>
+                                <td class="d-none d-md-table-cell">
                                     <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
                                     @if ($c->status === ChequeStatus::Cleared)
                                         <div class="fs-11 text-muted mt-1">{{ $c->clearing_method->label() }} → {{ $c->clearedInto?->name }}, {{ $c->cleared_date->format('d M') }}</div>

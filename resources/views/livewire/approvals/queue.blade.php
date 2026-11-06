@@ -65,7 +65,13 @@ $describePayload = function (?array $payload): array {
     $out = [];
     foreach ($payload ?? [] as $key => $value) {
         if (isset($labels[$key]) && filled($value) && ! is_array($value)) {
-            $out[$labels[$key]] = in_array($key, ['amount', 'bank_charges'], true) ? money($value) : $value;
+            $out[$labels[$key]] = match ($key) {
+                'amount', 'bank_charges' => money($value),
+                'clearing_method' => \App\Enums\ClearingMethod::tryFrom($value)?->label() ?? $value,
+                'commission_type' => \App\Enums\CommissionType::tryFrom($value)?->label() ?? $value,
+                'commission_rate' => ($payload['commission_type'] ?? null) === 'percent' ? $value.'%' : money($value),
+                default => $value,
+            };
         }
     }
     if (! empty($payload['lines'])) {

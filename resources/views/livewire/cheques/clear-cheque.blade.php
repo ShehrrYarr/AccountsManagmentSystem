@@ -126,7 +126,7 @@ $save = function () {
             <div class="modal-body">
                 @if ($this->cheque)
                     @php($c = $this->cheque)
-                    <div class="p-3 rounded-3 bg-light-subtle border mb-4 d-flex flex-wrap gap-4 align-items-center">
+                    <div class="p-3 rounded-3 bg-body-tertiary border mb-4 d-flex flex-wrap gap-4 align-items-center">
                         <div>
                             <div class="fs-12 text-muted">Cheque</div>
                             <div class="fw-semibold">#{{ $c->cheque_number }} · {{ $c->issuing_bank }}</div>
@@ -188,7 +188,7 @@ $save = function () {
                             <div class="col-md-8" wire:key="vault-account">
                                 <label class="form-label">Cash goes to</label>
                                 @if ($this->vault)
-                                    <div class="form-control bg-light-subtle"><i class="ri-safe-2-line me-1"></i>{{ $this->vault->name }} <span class="text-muted">· {{ money($this->vault->current_balance) }}</span></div>
+                                    <div class="form-control bg-body-tertiary"><i class="ri-safe-2-line me-1"></i>{{ $this->vault->name }} <span class="text-muted">· {{ money($this->vault->current_balance) }}</span></div>
                                 @else
                                     <div class="alert alert-danger mb-0 py-2 fs-13">No Cash Vault exists yet. Create it under My Accounts.</div>
                                 @endif

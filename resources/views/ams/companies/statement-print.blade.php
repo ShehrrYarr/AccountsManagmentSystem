@@ -56,8 +56,8 @@
                 <th>Date</th>
                 <th>Particulars</th>
                 <th>Cheque / Ref</th>
-                <th class="num">Credited</th>
-                <th class="num">Paid</th>
+                <th class="num">Credit (+)</th>
+                <th class="num">Debit (-)</th>
                 <th class="num">Payable</th>
                 @if ($hasReceivable)<th class="num">Receivable</th>@endif
             </tr>

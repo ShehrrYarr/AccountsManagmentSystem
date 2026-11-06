@@ -162,14 +162,14 @@ $save = function () {
                     <div class="col-md-5">
                         <label class="form-label">Company position</label>
                         @if ($this->company)
-                            <div class="form-control bg-light-subtle ams-balance fs-13">
+                            <div class="form-control bg-body-tertiary ams-balance fs-13">
                                 Payable <strong class="text-success">{{ money($this->company->payable_balance) }}</strong>
                                 @if (\App\Support\Money::isPositive($this->company->receivable_balance))
                                     · Receivable <strong class="text-danger">{{ money($this->company->receivable_balance) }}</strong>
                                 @endif
                             </div>
                         @else
-                            <div class="form-control bg-light-subtle text-muted fs-13">Select a company</div>
+                            <div class="form-control bg-body-tertiary text-muted fs-13">Select a company</div>
                         @endif
                     </div>
 

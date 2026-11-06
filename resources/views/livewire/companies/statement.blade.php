@@ -56,7 +56,7 @@ on(['transaction-updated' => function () {
                 <thead class="table-light">
                     <tr>
                         <th>Date</th><th>Particulars</th><th>Cheque / Ref</th>
-                        <th class="money">Credited</th><th class="money">Paid</th><th class="money">Payable</th>
+                        <th class="money" title="Increases what you owe the company">Credit (+)</th><th class="money" title="Payouts and reversals that reduce what you owe">Debit (−)</th><th class="money">Payable</th>
                         @if ($s['hasReceivable'])<th class="money">Receivable</th>@endif
                     </tr>
                 </thead>

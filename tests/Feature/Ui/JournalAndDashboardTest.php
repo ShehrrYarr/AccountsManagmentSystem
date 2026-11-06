@@ -134,6 +134,21 @@ class JournalAndDashboardTest extends TestCase
         $this->assertCount(6, $c->get('chartData')['monthly']['labels']);
     }
 
+    public function test_bounced_cheques_are_netted_out_of_cash_in(): void
+    {
+        $bounced = $this->clearedCheque('50000');
+        $this->clearedCheque('20000');
+        app(\App\Services\ChequeService::class)->performBounce($bounced, ['closed_reason' => 'Returned']);
+
+        $this->assertSame(20000.0, (float) end(Volt::test('dashboard.charts')->get('chartData')['monthly']['in']));
+        $this->assertSame('20000.00', Volt::test('transactions.datatable')->get('totals')['in']);
+    }
+
+    public function test_app_uses_pakistan_time(): void
+    {
+        $this->assertSame('Asia/Karachi', config('app.timezone'));
+    }
+
     public function test_company_statement_component_running_balances(): void
     {
         $this->clearedCheque('10000', ['clearing_method' => 'encashment', 'commission_type' => 'fixed', 'commission_rate' => '500']);

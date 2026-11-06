@@ -122,7 +122,7 @@ $delete = function (int $id) {
             </div>
 
             @if ($editing)
-                <form wire:submit="save" class="border rounded-3 p-3 bg-light-subtle">
+                <form wire:submit="save" class="border rounded-3 p-3 bg-body-tertiary">
                     <h6 class="mb-3">{{ $accountId ? 'Edit account' : 'Add account' }}</h6>
                     <div class="row g-2">
                         <div class="col-md-4">

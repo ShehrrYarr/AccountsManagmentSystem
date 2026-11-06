@@ -6,7 +6,7 @@
     $options: list of ['value' => 1, 'label' => 'Acme', 'hint' => 'Rs. 1,000'] (hint optional)
     The element is re-keyed whenever the options change so Alpine picks up the new list.
 --}}
-@props(['options' => [], 'placeholder' => 'Select...', 'disabled' => false, 'invalid' => false, 'clearable' => true])
+@props(['options' => [], 'placeholder' => 'Select...', 'disabled' => false, 'invalid' => false, 'clearable' => true, 'size' => null])
 
 @php
     $model = $attributes->whereStartsWith('wire:model')->first();
@@ -22,11 +22,11 @@
     x-on:click.outside="open = false"
     x-on:keydown.escape.prevent.stop="open = false">
 
-    <button type="button" class="form-select ams-select-toggle {{ $invalid ? 'is-invalid' : '' }}" x-on:click="toggle()" x-bind:disabled="disabled">
+    <button type="button" class="form-select ams-select-toggle {{ $size === 'sm' ? 'form-select-sm' : '' }} {{ $invalid ? 'is-invalid' : '' }}" x-on:click="toggle()" x-bind:disabled="disabled">
         <span class="text-truncate" x-bind:class="{ 'placeholder-text': !selected() }" x-text="selected() ? selected().label : placeholder"></span>
     </button>
 
-    <div class="ams-select-menu" x-show="open" x-cloak x-transition.opacity.duration.100ms>
+    <div class="ams-select-menu" x-show="open" x-cloak x-transition.opacity.duration.100ms x-bind:style="{ maxHeight: menuMax + 'px' }">
         <div class="p-2 border-bottom d-flex gap-2">
             <input type="text" class="form-control form-control-sm" placeholder="Type to search..." x-ref="search" x-model="search"
                 x-on:keydown.down.prevent="move(1)" x-on:keydown.up.prevent="move(-1)" x-on:keydown.enter.prevent="chooseHighlighted()">

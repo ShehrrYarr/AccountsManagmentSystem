@@ -25,7 +25,7 @@ on(['transaction-updated' => function () {
                 <div class="fw-semibold">{{ $c->name }}
                     @unless ($c->is_active)<span class="badge bg-secondary-subtle text-secondary">Inactive</span>@endunless
                 </div>
-                <div class="fs-13 text-muted">{{ $c->contact_person }} {{ $c->phone ? '· '.$c->phone : '' }}</div>
+                <div class="fs-13 text-muted">{{ collect([$c->contact_person, $c->phone])->filter()->implode(' · ') ?: 'No contact details' }}</div>
                 <div class="fs-12 text-muted">{{ $c->bank_accounts_count }} bank account(s) on file</div>
             </div>
         </div>

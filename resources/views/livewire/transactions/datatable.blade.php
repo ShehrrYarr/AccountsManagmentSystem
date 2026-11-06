@@ -77,8 +77,11 @@ $rows = computed(fn () => (clone $this->baseQuery)
 $totals = computed(function () {
     $q = (clone $this->baseQuery)->where('status', TransactionStatus::Posted);
 
+    // Bounces of already-cleared cheques (they carry a source account) take money back out.
+    $bounced = (clone $q)->where('type', TransactionType::ChequeBounce)->whereNotNull('source_account_id')->sum('amount');
+
     return [
-        'in' => Money::of((clone $q)->whereIn('type', TransactionType::inflows())->sum('amount')),
+        'in' => Money::sub((clone $q)->whereIn('type', TransactionType::inflows())->sum('amount'), $bounced),
         'out' => Money::of((clone $q)->whereIn('type', TransactionType::outflows())->sum('amount')),
         'count' => (clone $this->baseQuery)->count(),
     ];
@@ -147,11 +150,11 @@ $exportCsv = function (): StreamedResponse {
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="To date">
             @unless ($companyId)
                 <div style="min-width:190px">
-                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" />
+                    <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" />
                 </div>
             @endunless
             <div style="min-width:170px">
-                <x-searchable-select wire:model.live="account" :options="$this->accountOptions" placeholder="All accounts" />
+                <x-searchable-select wire:model.live="account" :options="$this->accountOptions" placeholder="All accounts" size="sm" />
             </div>
             <select class="form-select form-select-sm w-auto" wire:model.live="type">
                 <option value="">All types</option>
@@ -172,9 +175,9 @@ $exportCsv = function (): StreamedResponse {
     </div>
 
     @unless ($compact)
-        <div class="px-4 py-2 border-bottom d-flex flex-wrap gap-4 fs-13 bg-light-subtle">
+        <div class="px-4 py-2 border-bottom d-flex flex-wrap gap-4 fs-13 bg-body-tertiary">
             <span><span class="text-muted">Records:</span> <strong>{{ number_format($this->totals['count']) }}</strong></span>
-            <span><span class="text-muted">Cheque inflows:</span> <strong class="text-success">{{ money($this->totals['in']) }}</strong></span>
+            <span><span class="text-muted">Cheque inflows (net of bounces):</span> <strong class="text-success">{{ money($this->totals['in']) }}</strong></span>
             <span><span class="text-muted">Company outflows:</span> <strong class="text-danger">{{ money($this->totals['out']) }}</strong></span>
         </div>
     @endunless
@@ -186,13 +189,13 @@ $exportCsv = function (): StreamedResponse {
                     <tr>
                         <th style="width:32px"></th>
                         <x-sort-th field="date" :sort="$sortField" :dir="$sortDir">Date</x-sort-th>
-                        <x-sort-th field="type" :sort="$sortField" :dir="$sortDir">Type</x-sort-th>
+                        <x-sort-th field="type" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Type</x-sort-th>
                         <th>Description</th>
-                        @unless ($companyId)<th>Company</th>@endunless
-                        <th>Source → Destination</th>
-                        <x-sort-th field="cheque_number" :sort="$sortField" :dir="$sortDir">Cheque #</x-sort-th>
-                        <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money">Amount</x-sort-th>
-                        <th>Status</th>
+                        @unless ($companyId)<th class="d-none d-md-table-cell">Company</th>@endunless
+                        <th class="d-none d-md-table-cell">Source → Destination</th>
+                        <x-sort-th field="cheque_number" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Cheque #</x-sort-th>
+                        <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money d-none d-md-table-cell">Amount</x-sort-th>
+                        <th class="d-none d-md-table-cell">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -204,29 +207,35 @@ $exportCsv = function (): StreamedResponse {
                                 </button>
                             </td>
                             <td class="fs-13 text-nowrap">{{ $t->date->format('d M Y') }}</td>
-                            <td><span class="badge {{ $t->type->badge() }}">{{ $t->type->label() }}</span></td>
-                            <td class="fs-13" style="max-width:320px">
-                                <div class="text-truncate" title="{{ $t->description }}">{{ $t->description }}</div>
-                                @if ($t->notes)<div class="fs-11 text-muted text-truncate">{{ $t->notes }}</div>@endif
+                            <td class="d-none d-md-table-cell"><span class="badge {{ $t->type->badge() }}">{{ $t->type->label() }}</span></td>
+                            <td class="fs-13 ams-desc-cell">
+                                {{-- Phones: type, amount, company and status folded into this cell --}}
+                                <div class="d-md-none mb-1">
+                                    <span class="badge {{ $t->type->badge() }}">{{ $t->type->label() }}</span>
+                                    @if ($t->status === TransactionStatus::Void)<span class="badge {{ $t->status->badge() }}">Void</span>@endif
+                                </div>
+                                <div class="text-truncate ams-wrap-sm" title="{{ $t->description }}">{{ $t->description }}</div>
+                                @if ($t->notes)<div class="fs-11 text-muted text-truncate ams-wrap-sm">{{ $t->notes }}</div>@endif
+                                <div class="d-md-none fw-semibold mt-1">{{ money($t->amount) }}</div>
                             </td>
                             @unless ($companyId)
-                                <td class="fs-13">
+                                <td class="fs-13 d-none d-md-table-cell">
                                     @if ($t->company)
                                         <a href="{{ route('companies.show', $t->company_id) }}" class="text-body">{{ $t->company->name }}</a>
                                     @else — @endif
                                 </td>
                             @endunless
-                            <td class="fs-13 text-nowrap">
+                            <td class="fs-13 text-nowrap d-none d-md-table-cell">
                                 {{ $t->sourceAccount?->name ?? ($t->company && in_array($t->type, TransactionType::inflows()) ? 'Govt cheque' : '—') }}
                                 <i class="ri-arrow-right-s-line text-muted"></i>
                                 {{ $t->destinationAccount?->name ?? ($t->company ? $t->company->name : '—') }}
                             </td>
-                            <td class="fs-13">{{ $t->cheque_number ?? '—' }}</td>
-                            <td class="money fw-semibold">{{ money($t->amount) }}</td>
-                            <td><span class="badge {{ $t->status->badge() }}">{{ $t->status->label() }}</span></td>
+                            <td class="fs-13 d-none d-md-table-cell">{{ $t->cheque_number ?? '—' }}</td>
+                            <td class="money fw-semibold d-none d-md-table-cell">{{ money($t->amount) }}</td>
+                            <td class="d-none d-md-table-cell"><span class="badge {{ $t->status->badge() }}">{{ $t->status->label() }}</span></td>
                         </tr>
                         @if (in_array($t->id, $expanded))
-                            <tr wire:key="tx-lines-{{ $t->id }}" class="bg-light-subtle">
+                            <tr wire:key="tx-lines-{{ $t->id }}" class="bg-body-tertiary">
                                 <td></td>
                                 <td colspan="{{ $companyId ? 7 : 8 }}">
                                     <table class="table table-sm mb-0 fs-12">

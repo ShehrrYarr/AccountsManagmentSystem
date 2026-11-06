@@ -381,7 +381,7 @@ $save = function () {
                                         <div class="alert alert-light border mb-0 fs-13">Select a company first to see its bank accounts.</div>
                                     @else
                                         @if ($addingAccount)
-                                            <div class="border rounded-3 p-3 mb-3 bg-light-subtle">
+                                            <div class="border rounded-3 p-3 mb-3 bg-body-tertiary">
                                                 <div class="row g-2">
                                                     <div class="col-md-3"><input class="form-control form-control-sm @error('newAccount.bank_name') is-invalid @enderror" wire:model="newAccount.bank_name" placeholder="Bank *"></div>
                                                     <div class="col-md-3"><input class="form-control form-control-sm @error('newAccount.account_title') is-invalid @enderror" wire:model="newAccount.account_title" placeholder="Account title *"></div>
