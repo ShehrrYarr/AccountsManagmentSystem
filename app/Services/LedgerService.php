@@ -1,0 +1,352 @@
+<?php
+
+namespace App\Services;
+
+use App\Enums\LedgerAccount;
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionType;
+use App\Exceptions\BusinessRuleException;
+use App\Models\BankAccount;
+use App\Models\Company;
+use App\Models\JournalLedgerEntry;
+use App\Models\Transaction;
+use App\Support\Money;
+use Closure;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * The only place that writes to the journal and touches cached balances.
+ *
+ * Every posting is a balanced set of debit/credit lines. Running balances on
+ * companies (payable / receivable) and on my bank accounts are updated
+ * atomically in the same database transaction.
+ *
+ * Invariants (checked when the outermost batch finishes, so an edit may
+ * void and re-post without tripping over intermediate states):
+ *   - no bank / cash account may go below zero
+ *   - no company payable may go below zero  (payouts cannot exceed what I owe)
+ *   - no company receivable may go below zero
+ */
+class LedgerService
+{
+    private int $depth = 0;
+
+    /** @var array<int, array{before: string}> */
+    private array $touchedCompanies = [];
+
+    /** @var array<int, array{before: string}> */
+    private array $touchedAccounts = [];
+
+    /**
+     * Run several postings / voids atomically; invariants are verified once at the end.
+     */
+    public function batch(Closure $callback): mixed
+    {
+        return DB::transaction(function () use ($callback) {
+            $this->depth++;
+
+            try {
+                $result = $callback();
+
+                if ($this->depth === 1) {
+                    $this->assertInvariants();
+                }
+
+                return $result;
+            } finally {
+                $this->depth--;
+                if ($this->depth === 0) {
+                    $this->touchedCompanies = [];
+                    $this->touchedAccounts = [];
+                }
+            }
+        });
+    }
+
+    /**
+     * Post a balanced journal transaction.
+     *
+     * @param  array<int, array{account: LedgerAccount, debit?: mixed, credit?: mixed, bank_account_id?: ?int, company_id?: ?int, memo?: ?string}>  $lines
+     * @param  array<string, mixed>  $attributes  extra Transaction columns (company_id, source/destination account, cheque_number, description, notes...)
+     * @param  bool  $allowEmpty  return null instead of failing when every line is zero (e.g. a zero opening balance)
+     */
+    public function post(TransactionType $type, mixed $date, array $lines, array $attributes = [], ?Model $source = null, bool $allowEmpty = false): ?Transaction
+    {
+        return $this->batch(function () use ($type, $date, $lines, $attributes, $source, $allowEmpty) {
+            $lines = $this->normaliseLines($lines);
+
+            if ($lines === [] && $allowEmpty) {
+                return null;
+            }
+
+            $total = $this->assertBalanced($lines);
+
+            $transaction = Transaction::create(array_merge([
+                'date' => $date,
+                'type' => $type,
+                'amount' => $total,
+                'description' => $type->label(),
+                'status' => TransactionStatus::Posted,
+                'created_by' => auth()->id(),
+            ], $attributes, $source ? [
+                'source_type' => $source->getMorphClass(),
+                'source_id' => $source->getKey(),
+            ] : []));
+
+            foreach ($lines as $line) {
+                $transaction->entries()->create([
+                    'ledger_account' => $line['account'],
+                    'bank_account_id' => $line['bank_account_id'],
+                    'company_id' => $line['company_id'],
+                    'debit' => $line['debit'],
+                    'credit' => $line['credit'],
+                    'memo' => $line['memo'],
+                ]);
+            }
+
+            $this->applyBalances($lines, 1);
+
+            return $transaction;
+        });
+    }
+
+    /** Void one transaction: its effect on balances is removed, the row is kept for history. */
+    public function void(Transaction $transaction): void
+    {
+        if ($transaction->status === TransactionStatus::Void) {
+            return;
+        }
+
+        $this->batch(function () use ($transaction) {
+            $lines = $transaction->entries->map(fn (JournalLedgerEntry $e) => [
+                'account' => $e->ledger_account,
+                'bank_account_id' => $e->bank_account_id,
+                'company_id' => $e->company_id,
+                'debit' => Money::of($e->debit),
+                'credit' => Money::of($e->credit),
+                'memo' => $e->memo,
+            ])->all();
+
+            $this->applyBalances($lines, -1);
+
+            $transaction->update([
+                'status' => TransactionStatus::Void,
+                'voided_by' => auth()->id(),
+                'voided_at' => now(),
+            ]);
+        });
+    }
+
+    /** Void every posted transaction generated by a source document (cheque, disbursement...). */
+    public function voidAllFor(Model $source): void
+    {
+        $this->batch(function () use ($source) {
+            Transaction::query()
+                ->where('source_type', $source->getMorphClass())
+                ->where('source_id', $source->getKey())
+                ->where('status', TransactionStatus::Posted)
+                ->with('entries')
+                ->orderByDesc('id')
+                ->get()
+                ->each(fn (Transaction $t) => $this->void($t));
+        });
+    }
+
+    /** Swap debits and credits — used for bounce reversals. */
+    public static function reverseLines(array $lines): array
+    {
+        return array_map(fn ($l) => array_merge($l, [
+            'debit' => $l['credit'] ?? 0,
+            'credit' => $l['debit'] ?? 0,
+        ]), $lines);
+    }
+
+    /**
+     * Rebuild every cached balance from opening values + posted journal lines.
+     * Safe to run at any time (artisan ams:recalculate-balances).
+     */
+    public function recalculateAll(): void
+    {
+        DB::transaction(function () {
+            $posted = fn () => JournalLedgerEntry::query()
+                ->join('transactions', 'transactions.id', '=', 'journal_ledger_entries.transaction_id')
+                ->where('transactions.status', TransactionStatus::Posted->value);
+
+            $bank = $posted()->where('ledger_account', LedgerAccount::Bank->value)
+                ->groupBy('bank_account_id')
+                ->selectRaw('bank_account_id, SUM(debit) - SUM(credit) as bal')
+                ->pluck('bal', 'bank_account_id');
+
+            BankAccount::withTrashed()->pluck('id')->each(function ($id) use ($bank) {
+                DB::table('bank_accounts')->where('id', $id)->update(['current_balance' => Money::of($bank[$id] ?? 0)]);
+            });
+
+            $payable = $posted()->where('ledger_account', LedgerAccount::CompanyPayable->value)
+                ->groupBy('journal_ledger_entries.company_id')
+                ->selectRaw('journal_ledger_entries.company_id as cid, SUM(credit) - SUM(debit) as bal')
+                ->pluck('bal', 'cid');
+
+            $receivable = $posted()->where('ledger_account', LedgerAccount::CompanyReceivable->value)
+                ->groupBy('journal_ledger_entries.company_id')
+                ->selectRaw('journal_ledger_entries.company_id as cid, SUM(debit) - SUM(credit) as bal')
+                ->pluck('bal', 'cid');
+
+            Company::withTrashed()->pluck('id')->each(function ($id) use ($payable, $receivable) {
+                DB::table('companies')->where('id', $id)->update([
+                    'payable_balance' => Money::of($payable[$id] ?? 0),
+                    'receivable_balance' => Money::of($receivable[$id] ?? 0),
+                ]);
+            });
+        });
+    }
+
+    // ---------------------------------------------------------------------
+
+    private function normaliseLines(array $lines): array
+    {
+        $out = [];
+
+        foreach ($lines as $line) {
+            $debit = Money::of($line['debit'] ?? 0);
+            $credit = Money::of($line['credit'] ?? 0);
+
+            if (Money::isZero($debit) && Money::isZero($credit)) {
+                continue; // drop empty lines such as zero commission
+            }
+
+            if (Money::isNegative($debit) || Money::isNegative($credit)) {
+                throw new \LogicException('Journal lines must not be negative.');
+            }
+
+            /** @var LedgerAccount $account */
+            $account = $line['account'];
+
+            if ($account === LedgerAccount::Bank && empty($line['bank_account_id'])) {
+                throw new \LogicException('Bank lines require bank_account_id.');
+            }
+
+            if (in_array($account, [LedgerAccount::CompanyPayable, LedgerAccount::CompanyReceivable], true) && empty($line['company_id'])) {
+                throw new \LogicException('Company lines require company_id.');
+            }
+
+            $out[] = [
+                'account' => $account,
+                'bank_account_id' => $line['bank_account_id'] ?? null,
+                'company_id' => $line['company_id'] ?? null,
+                'debit' => $debit,
+                'credit' => $credit,
+                'memo' => $line['memo'] ?? null,
+            ];
+        }
+
+        return $out;
+    }
+
+    private function assertBalanced(array $lines): string
+    {
+        $debits = Money::add(...array_column($lines, 'debit'));
+        $credits = Money::add(...array_column($lines, 'credit'));
+
+        if ($lines === [] || Money::cmp($debits, $credits) !== 0 || Money::isZero($debits)) {
+            throw new \LogicException("Unbalanced journal: debits {$debits} vs credits {$credits}.");
+        }
+
+        return $debits;
+    }
+
+    /** @param  int  $sign  1 = apply, -1 = undo */
+    private function applyBalances(array $lines, int $sign): void
+    {
+        $companyDeltas = [];   // id => ['payable' => x, 'receivable' => y]
+        $accountDeltas = [];   // id => x
+
+        foreach ($lines as $l) {
+            $net = Money::sub($l['debit'], $l['credit']); // debit-positive
+
+            match ($l['account']) {
+                LedgerAccount::Bank => $accountDeltas[$l['bank_account_id']] = Money::add($accountDeltas[$l['bank_account_id']] ?? 0, $net),
+                LedgerAccount::CompanyReceivable => $companyDeltas[$l['company_id']]['receivable'] = Money::add($companyDeltas[$l['company_id']]['receivable'] ?? 0, $net),
+                // Payable is a liability: credits increase it.
+                LedgerAccount::CompanyPayable => $companyDeltas[$l['company_id']]['payable'] = Money::sub($companyDeltas[$l['company_id']]['payable'] ?? 0, $net),
+                default => null,
+            };
+        }
+
+        // Fixed lock order (by id) avoids deadlocks between concurrent postings.
+        ksort($accountDeltas);
+        ksort($companyDeltas);
+
+        foreach ($accountDeltas as $id => $delta) {
+            $delta = $sign < 0 ? Money::sub(0, $delta) : $delta;
+            $this->rememberAccount($id);
+            DB::table('bank_accounts')->where('id', $id)->update([
+                'current_balance' => DB::raw('current_balance + ('.Money::of($delta).')'),
+            ]);
+        }
+
+        foreach ($companyDeltas as $id => $deltas) {
+            $this->rememberCompany($id);
+            $update = [];
+            foreach (['payable', 'receivable'] as $col) {
+                if (isset($deltas[$col])) {
+                    $d = $sign < 0 ? Money::sub(0, $deltas[$col]) : $deltas[$col];
+                    $update["{$col}_balance"] = DB::raw("{$col}_balance + (".Money::of($d).')');
+                }
+            }
+            DB::table('companies')->where('id', $id)->update($update);
+        }
+    }
+
+    private function rememberAccount(int $id): void
+    {
+        if (! isset($this->touchedAccounts[$id])) {
+            $this->touchedAccounts[$id] = [
+                'before' => Money::of(DB::table('bank_accounts')->where('id', $id)->lockForUpdate()->value('current_balance')),
+            ];
+        }
+    }
+
+    private function rememberCompany(int $id): void
+    {
+        if (! isset($this->touchedCompanies[$id])) {
+            $row = DB::table('companies')->where('id', $id)->lockForUpdate()->first(['payable_balance', 'receivable_balance']);
+            $this->touchedCompanies[$id] = [
+                'payable' => Money::of($row->payable_balance),
+                'receivable' => Money::of($row->receivable_balance),
+            ];
+        }
+    }
+
+    private function assertInvariants(): void
+    {
+        foreach ($this->touchedAccounts as $id => $snap) {
+            $account = BankAccount::withTrashed()->find($id);
+            if (Money::isNegative($account->current_balance)) {
+                $available = $snap['before'];
+                throw new BusinessRuleException(
+                    "Insufficient funds in {$account->name}. Available: ".money($available).
+                    ', short by '.money(Money::sub(0, $account->current_balance)).'.',
+                    'amount'
+                );
+            }
+        }
+
+        foreach ($this->touchedCompanies as $id => $snap) {
+            $company = Company::withTrashed()->find($id);
+            if (Money::isNegative($company->payable_balance)) {
+                throw new BusinessRuleException(
+                    "This exceeds what you owe {$company->name}. Payable available: ".money($snap['payable']).
+                    ', exceeded by '.money(Money::sub(0, $company->payable_balance)).'.',
+                    'amount'
+                );
+            }
+            if (Money::isNegative($company->receivable_balance)) {
+                throw new BusinessRuleException(
+                    "This exceeds what {$company->name} owes you. Receivable available: ".money($snap['receivable']).'.',
+                    'amount'
+                );
+            }
+        }
+    }
+}
