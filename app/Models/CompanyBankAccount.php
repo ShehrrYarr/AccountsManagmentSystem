@@ -28,6 +28,11 @@ class CompanyBankAccount extends Model
         return $this->belongsTo(Company::class);
     }
 
+    public function lines(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(DisbursementLine::class);
+    }
+
     public function label(): string
     {
         return "{$this->bank_name} · {$this->account_title} · {$this->account_number}";

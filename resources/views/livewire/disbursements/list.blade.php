@@ -30,11 +30,11 @@ state([
     'perPage' => 15,
     'sortField' => 'date',
     'sortDir' => 'desc',
-])->url(except: '');
+]);
 
 $updated = function ($property) {
     if (in_array($property, ['search', 'type', 'status', 'filterCompany', 'from', 'to', 'perPage'], true)) {
-        $this->resetPage();
+        $this->resetPage('payoutsPage');
     }
 };
 
@@ -63,7 +63,7 @@ $rows = computed(fn () => (clone $this->baseQuery)
     ->with(['company', 'sourceAccount', 'vendor', 'creator', 'lines.companyBankAccount',
         'approvalRequests' => fn ($q) => $q->where('status', ApprovalStatus::Pending)])
     ->orderBy($this->sortField, $this->sortDir)->orderByDesc('id')
-    ->paginate($this->perPage));
+    ->paginate($this->perPage, pageName: 'payoutsPage'));
 
 $totals = computed(function () {
     $posted = (clone $this->baseQuery)->where('status', RecordStatus::Posted);
@@ -94,7 +94,7 @@ $delete = function (int $id) {
 
 $clearFilters = function () {
     $this->reset(['search', 'type', 'status', 'filterCompany', 'from', 'to']);
-    $this->resetPage();
+    $this->resetPage('payoutsPage');
 };
 
 ?>

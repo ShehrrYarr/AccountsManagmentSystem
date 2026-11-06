@@ -29,11 +29,11 @@ state([
     'perPage' => 15,
     'sortField' => 'received_date',
     'sortDir' => 'desc',
-])->url(except: '');
+]);
 
 $updated = function ($property) {
     if (in_array($property, ['search', 'status', 'filterCompany', 'from', 'to', 'perPage'], true)) {
-        $this->resetPage();
+        $this->resetPage('chequesPage');
     }
 };
 
@@ -62,7 +62,7 @@ $baseQuery = computed(function () {
 $cheques = computed(fn () => (clone $this->baseQuery)
     ->with(['company', 'department', 'clearedInto', 'approvalRequests' => fn ($q) => $q->where('status', ApprovalStatus::Pending)])
     ->orderBy($this->sortField, $this->sortDir)->orderByDesc('id')
-    ->paginate($this->perPage));
+    ->paginate($this->perPage, pageName: 'chequesPage'));
 
 $summary = computed(function () {
     $pending = Cheque::pending()->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id));
@@ -97,7 +97,7 @@ $delete = function (int $id) {
 $clearFilters = function () {
     $this->reset(['search', 'filterCompany', 'from', 'to']);
     $this->status = 'all';
-    $this->resetPage();
+    $this->resetPage('chequesPage');
 };
 
 ?>

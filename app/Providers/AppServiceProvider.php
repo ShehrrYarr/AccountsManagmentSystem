@@ -48,5 +48,8 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrapFive();
 
         Gate::define('admin', fn (User $user) => $user->isAdmin());
+
+        // Re-apply "active user" checks on every Livewire update request, not just page loads.
+        \Livewire\Livewire::addPersistentMiddleware([\App\Http\Middleware\EnsureUserIsActive::class]);
     }
 }

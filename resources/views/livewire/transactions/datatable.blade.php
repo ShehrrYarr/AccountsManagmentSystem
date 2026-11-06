@@ -29,13 +29,13 @@ state([
     'perPage' => 25,
     'sortField' => 'date',
     'sortDir' => 'desc',
-])->url(except: '');
+]);
 
 state(['expanded' => []]);
 
 $updated = function ($property) {
     if (! in_array($property, ['sortField', 'sortDir', 'expanded'], true)) {
-        $this->resetPage();
+        $this->resetPage('txPage');
     }
 };
 
@@ -72,7 +72,7 @@ $baseQuery = computed(fn () => Transaction::query()
 $rows = computed(fn () => (clone $this->baseQuery)
     ->with(['company', 'sourceAccount', 'destinationAccount', 'creator', 'entries.bankAccount', 'entries.company'])
     ->orderBy($this->sortField, $this->sortDir)->orderBy('id', $this->sortDir)
-    ->paginate($this->compact ? 10 : $this->perPage));
+    ->paginate($this->compact ? 10 : $this->perPage, pageName: 'txPage'));
 
 $totals = computed(function () {
     $q = (clone $this->baseQuery)->where('status', TransactionStatus::Posted);
@@ -94,7 +94,7 @@ on(['transaction-updated' => function () {
 $clearFilters = function () {
     $this->reset(['search', 'from', 'to', 'filterCompany', 'account', 'type']);
     $this->status = 'posted';
-    $this->resetPage();
+    $this->resetPage('txPage');
 };
 
 $exportCsv = function (): StreamedResponse {
