@@ -106,7 +106,7 @@ class DisbursementService
         $this->prepare($data);
 
         // A staff member may freely fix their own entry while it is still unapproved.
-        $ownPending = $disbursement->status === RecordStatus::PendingApproval && $disbursement->created_by === $by->id;
+        $ownPending = $disbursement->status === RecordStatus::PendingApproval && $disbursement->created_by == $by->id;
 
         if ($by->needsApproval() && ! $ownPending) {
             $this->approvals->request(ApprovalAction::UpdateRecord, $disbursement, $data, $by, 'Edit '.$this->summary($disbursement));
@@ -143,7 +143,7 @@ class DisbursementService
 
     public function delete(Disbursement $disbursement, User $by): Outcome
     {
-        $ownPending = $disbursement->status === RecordStatus::PendingApproval && $disbursement->created_by === $by->id;
+        $ownPending = $disbursement->status === RecordStatus::PendingApproval && $disbursement->created_by == $by->id;
 
         if ($by->needsApproval() && ! $ownPending) {
             $this->approvals->request(ApprovalAction::DeleteRecord, $disbursement, [], $by, 'Delete '.$this->summary($disbursement));

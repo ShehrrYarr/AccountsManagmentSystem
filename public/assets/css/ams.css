@@ -1,0 +1,38 @@
+/* AMS additions on top of the Herozi theme */
+[x-cloak] { display: none !important; }
+
+/* Searchable select (Alpine) */
+.ams-select { position: relative; }
+.ams-select .ams-select-toggle { text-align: left; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.ams-select .ams-select-toggle .placeholder-text { color: var(--bs-secondary-color); }
+.ams-select .ams-select-menu {
+    position: absolute; z-index: 1065; inset: calc(100% + 4px) 0 auto 0;
+    background: var(--bs-body-bg); border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius); box-shadow: var(--bs-box-shadow);
+    max-height: 280px; display: flex; flex-direction: column;
+}
+.ams-select .ams-select-options { overflow-y: auto; }
+.ams-select .ams-select-option { padding: .45rem .75rem; cursor: pointer; display: flex; justify-content: space-between; gap: .75rem; }
+.ams-select .ams-select-option:hover,
+.ams-select .ams-select-option.highlighted { background: var(--bs-tertiary-bg); }
+.ams-select .ams-select-option.selected { font-weight: 600; color: var(--bs-primary); }
+.ams-select .ams-select-option small { color: var(--bs-secondary-color); white-space: nowrap; }
+.ams-select.is-invalid .ams-select-toggle { border-color: var(--bs-danger); }
+
+/* Choice cards (clearing method / disbursement type) */
+.ams-choice { cursor: pointer; border: 1px solid var(--bs-border-color); border-radius: var(--bs-border-radius-lg); padding: .9rem 1rem; transition: border-color .15s, background-color .15s; height: 100%; }
+.ams-choice:hover { border-color: var(--bs-primary); }
+.ams-choice.active { border-color: var(--bs-primary); background: rgba(var(--bs-primary-rgb), .06); }
+.ams-choice i { font-size: 1.4rem; }
+
+/* Tables */
+.ams-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+.ams-table th.sortable i { opacity: .35; }
+.ams-table th.sortable.sorted i { opacity: 1; }
+.ams-table td.money, .ams-table th.money { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ams-loading { opacity: .55; transition: opacity .15s; pointer-events: none; }
+
+/* Balance pill shown inside forms */
+.ams-balance { font-variant-numeric: tabular-nums; }
+
+.side-menu__item .badge { margin-left: auto; }
