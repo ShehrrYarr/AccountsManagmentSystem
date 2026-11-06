@@ -1,6 +1,27 @@
 /* AMS additions on top of the Herozi theme */
 [x-cloak] { display: none !important; }
 
+/*
+ * Scrollable modals with a <form> wrapper.
+ * Bootstrap's .modal-dialog-scrollable expects .modal-body to be a direct flex child of
+ * .modal-content. Our modals wrap body + footer in a <form>, so make the form the flex
+ * column instead; the header and footer stay fixed and only the body scrolls.
+ */
+.modal-dialog-scrollable .modal-content > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+.modal-dialog-scrollable .modal-content > form > .modal-body {
+    overflow-y: auto;
+    min-height: 0;
+}
+.modal-dialog-scrollable .modal-content > form > .modal-footer {
+    flex-shrink: 0;
+}
+
 /* Searchable select (Alpine) */
 .ams-select { position: relative; }
 .ams-select .ams-select-toggle { text-align: left; display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
@@ -11,6 +32,7 @@
     border-radius: var(--bs-border-radius); box-shadow: var(--bs-box-shadow);
     max-height: 280px; display: flex; flex-direction: column;
 }
+.ams-select.drop-up .ams-select-menu { inset: auto 0 calc(100% + 4px) 0; }
 .ams-select .ams-select-options { overflow-y: auto; }
 .ams-select .ams-select-option { padding: .45rem .75rem; cursor: pointer; display: flex; justify-content: space-between; gap: .75rem; }
 .ams-select .ams-select-option:hover,

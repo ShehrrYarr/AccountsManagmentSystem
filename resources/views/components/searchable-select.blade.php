@@ -18,6 +18,7 @@
     x-modelable="value"
     {{ $attributes->whereStartsWith('wire:model') }}
     {{ $attributes->whereDoesntStartWith('wire:model')->merge(['class' => 'ams-select'.($invalid ? ' is-invalid' : '')]) }}
+    x-bind:class="{ 'drop-up': dropUp }"
     x-on:click.outside="open = false"
     x-on:keydown.escape.prevent.stop="open = false">
 

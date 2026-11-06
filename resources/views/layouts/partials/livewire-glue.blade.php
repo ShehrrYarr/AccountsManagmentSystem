@@ -36,8 +36,20 @@
             options, placeholder, disabled, clearable,
             value: null,
             open: false,
+            dropUp: false,
             search: '',
             hi: 0,
+            // Open upwards when the scroll area (modal body or window) has more room above.
+            placeMenu() {
+                const box = this.$el.getBoundingClientRect();
+                const area = this.$el.closest('.modal-body, .table-responsive');
+                const limits = area ? area.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+                const menu = this.$el.querySelector('.ams-select-menu');
+                const needed = (menu && menu.offsetHeight) || 290;
+                const below = limits.bottom - box.bottom;
+                const above = box.top - limits.top;
+                this.dropUp = needed > below && above > below;
+            },
             selected() {
                 return this.options.find(o => String(o.value) === String(this.value)) || null;
             },
@@ -50,9 +62,14 @@
                 if (this.disabled) return;
                 this.open = !this.open;
                 if (this.open) {
+                    this.dropUp = false;
                     this.search = '';
                     this.hi = Math.max(0, this.filtered().findIndex(o => String(o.value) === String(this.value)));
-                    this.$nextTick(() => this.$refs.search.focus());
+                    // Measure once the menu is rendered, then flip it if it would be cut off.
+                    this.$nextTick(() => {
+                        this.placeMenu();
+                        this.$refs.search.focus();
+                    });
                 }
             },
             move(step) {
