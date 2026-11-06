@@ -31,6 +31,20 @@ transactions and foreign keys are required.
 composer install
 ```
 
+Front-end assets (`public/assets`) are **not** committed; build them from `resources/assets` with Laravel Mix
+(Node 18+). Run this after every pull that touches `resources/assets` or `webpack.mix.js`:
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Use `npm run production` for a minified production build. `webpack` is pinned to 5.99.9 in `package.json`
+because newer 5.x releases removed a file Laravel Mix 6 depends on.
+
 ```bash
 copy .env.example .env
 ```

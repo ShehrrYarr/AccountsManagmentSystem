@@ -36,6 +36,9 @@ mix.copyDirectory(path.join(folder.src_assets, 'js'), path.join(folder.dist_asse
 mix.copyDirectory(path.join(folder.src_assets, 'libs'), path.join(folder.dist_assets, 'libs'));
 mix.copyDirectory(path.join(folder.src_assets, 'json'), path.join(folder.dist_assets, 'json'));
 
+// AMS styles (plain CSS layered on top of the Herozi theme)
+mix.copy(path.join(folder.src_assets, 'css/ams.css'), path.join(folder.dist_assets, 'css/ams.css'));
+
 // Add BrowserSync for live-reloading during development
 mix.browserSync({
     proxy: false,
