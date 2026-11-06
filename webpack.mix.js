@@ -23,6 +23,11 @@ const cssPairs = [
 // Ensure the assets folder is created in the dist directory
 fs.ensureDirSync(folder.dist_assets);
 
+// Emit font/image URLs in the compiled CSS relative to public/assets/css/
+// (e.g. ../../fonts/vendor/...), so icons work both at "/" and when the app is
+// served from a sub-path such as http://23.230.253.206/ams
+mix.setResourceRoot('../../');
+
 // Compile SCSS and generate minified CSS files
 mix.sass(path.join(folder.src_assets, 'scss/app.scss'), 'assets/css/app.min.css')
    .sass(path.join(folder.src_assets, 'scss/bootstrap.scss'), 'assets/css/bootstrap.min.css')

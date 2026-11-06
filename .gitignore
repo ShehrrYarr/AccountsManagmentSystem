@@ -19,6 +19,7 @@
 # from resources/assets via webpack.mix.js)
 # ---------------------------------------------------------------
 /public/assets
+/public/fonts
 /public/mix-manifest.json
 /public/build
 /public/hot
