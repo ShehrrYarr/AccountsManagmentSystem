@@ -1,66 +1,110 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# AMS — Cash-In / Cash-Out & Government Cheque Clearing
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel 12 · Livewire 4 + Volt (functional API) · Herozi Bootstrap 5 admin theme · MySQL (InnoDB) · ApexCharts · DomPDF
 
-## About Laravel
+## What it does
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Area | Screens |
+|---|---|
+| **Cash in** | Receive government cheques for a company → clear them by **bank deposit** or **over-the-counter encashment** (into the Cash Vault), with per-cheque commission and bank charges. Bounce / cancel with automatic reversal. |
+| **Cash out** | Pay companies by **cash payout**, **bank transfer** (split across several of the company's accounts) or **direct vendor purchase** (with receipt). Internal transfers between my own accounts. |
+| **Ledger** | Double-entry journal (`transactions` + `journal_ledger_entries`) with filters, sorting, expandable debit/credit lines and CSV export. Manual company adjustments (admin). |
+| **Companies** | Payable (I owe them) and receivable (they owe me) tracked separately. Statement of account on screen, printable, and as PDF. |
+| **Control** | Admin / Staff roles. Staff clearings, payouts, purchases, edits and deletes go to an **approvals queue**. Full audit log with before / after values. |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Accounting rules enforced by `App\Services\LedgerService`
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+* Every posting is a balanced set of debit / credit lines; cached balances update in the same DB transaction.
+* No bank or cash account may go below zero.
+* A payout can never exceed what you owe the company (no advances). Receivables come only from adjustments.
+* A cleared cheque cannot be bounced if the company was already paid out of that money. Record an
+  *Overpaid → Receivable* adjustment first.
+* Received cheques do not affect company balances until they clear (they are tracked as memo entries).
+* Edits and deletes void the original journal entries and re-post them; voided rows stay visible in the journal.
 
-## Learning Laravel
+## Setup (Windows / WAMP)
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+The WAMP MySQL server defaults to MyISAM, so the app forces InnoDB (`DB_ENGINE`, default `InnoDB`) because
+transactions and foreign keys are required.
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```bash
+composer install
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+copy .env.example .env
+```
 
-## Laravel Sponsors
+```bash
+php artisan key:generate
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Create the databases `ams` and `ams_testing` (utf8mb4) in phpMyAdmin, then:
 
-### Premium Partners
+```bash
+php artisan migrate
+```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+```bash
+php artisan db:seed
+```
 
-## Contributing
+`db:seed` creates the first administrator and the Cash Vault. Credentials are documented in
+`database/seeders/DatabaseSeeder.php`; change the password after the first sign-in.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Optional sample data (companies, cheques, payouts over the last 8 months):
 
-## Code of Conduct
+```bash
+php artisan db:seed --class=DemoDataSeeder
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Run the app:
 
-## Security Vulnerabilities
+```bash
+php artisan serve
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Useful commands
 
-## License
+```bash
+php artisan test
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan ams:recalculate-balances
+```
+
+`ams:recalculate-balances` rebuilds every company payable / receivable and account balance from the posted journal.
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+## Where things live
+
+```
+app/Enums/                      ChequeStatus, TransactionType, LedgerAccount, DisbursementType, ...
+app/Services/LedgerService.php  double-entry posting, voiding, invariants, recalculation
+app/Services/*Service.php       Cheque, Disbursement, InternalTransfer, Adjustment, MasterData, Approval, Statement
+resources/views/livewire/       Volt single-file components
+  cheques/        register-cheque, clear-cheque, close-cheque, list
+  disbursements/  create, list
+  transactions/   datatable
+  dashboard/      overview-metrics, charts, attention
+  companies/      list, bank-accounts, statement, summary
+  ...             transfers, adjustments, approvals, users, audit, bank-accounts, master
+resources/views/layouts/        Herozi-based app & auth layouts; livewire-glue (toasts, modals, Alpine select, charts)
+resources/views/ams/            page views that embed the Volt components
+tests/Feature/Ledger            accounting rules
+tests/Feature/Ui                every Volt component + page access
+```
+
+### Livewire ↔ Herozi conventions
+
+* `$this->dispatch('transaction-updated')` after any money movement; stats, lists, journal and charts listen and refresh.
+* `$this->dispatch('modal-show' | 'modal-hide', id: '...')` opens / closes Herozi Bootstrap modals (`<x-modal>`).
+* `$this->dispatch('toast', type: 'success', message: '...')` shows a SweetAlert2 toast.
+* `<x-searchable-select wire:model.live="company_id" :options="..."/>` is the Alpine-powered searchable dropdown.
+* Volt state has no class defaults, so components reset forms with `fill([...])`, never `reset()`.
+
+The original Herozi demo pages are still available to administrators at `/herozi/{page}` as a UI reference.

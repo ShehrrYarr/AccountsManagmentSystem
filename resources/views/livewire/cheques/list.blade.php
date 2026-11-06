@@ -106,7 +106,7 @@ $clearFilters = function () {
     @unless ($companyId)
         <div class="row g-3 mb-4">
             <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Pending clearing" :value="$this->summary['pendingCount'].' cheques'" icon="ri-time-line" color="warning" :hint="money($this->summary['pendingAmount'])" />
+                <x-stat-card label="Pending clearing" :value="$this->summary['pendingCount'].' '.\Illuminate\Support\Str::plural('cheque', $this->summary['pendingCount'])" icon="ri-time-line" color="warning" :hint="money($this->summary['pendingAmount'])" />
             </div>
             <div class="col-sm-6 col-xl-3">
                 <x-stat-card label="Expiring within {{ \App\Models\Cheque::EXPIRY_WARNING_DAYS }} days" :value="$this->summary['nearExpiry']" icon="ri-alarm-warning-line" color="danger" hint="Includes already expired" />

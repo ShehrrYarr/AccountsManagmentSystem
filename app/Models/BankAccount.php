@@ -61,6 +61,6 @@ class BankAccount extends Model
 
     public function label(): string
     {
-        return $this->isVault() ? $this->name : trim("{$this->name} ({$this->bank_name})", ' ()');
+        return $this->isVault() || blank($this->bank_name) ? $this->name : "{$this->name} ({$this->bank_name})";
     }
 }
