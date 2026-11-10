@@ -2,40 +2,42 @@
 
 namespace App\Models;
 
+use App\Enums\AccountType;
 use App\Models\Concerns\Auditable;
-use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * One of MY companies. Each has exactly one cash in hand account plus any number of bank accounts.
+ */
 class Company extends Model
 {
     use Auditable, HasFactory, SoftDeletes;
 
-    protected $fillable = [
-        'name', 'registration_no', 'ntn', 'contact_person', 'phone', 'email', 'address',
-        'opening_payable', 'opening_receivable', 'notes', 'is_active',
-    ];
-
-    /** Running balances change on every posting; the journal is their audit trail. */
-    protected array $auditExclude = ['payable_balance', 'receivable_balance'];
+    protected $fillable = ['name', 'ntn', 'registration_no', 'phone', 'email', 'address', 'notes', 'is_active'];
 
     protected function casts(): array
     {
-        return [
-            'opening_payable' => 'decimal:2',
-            'opening_receivable' => 'decimal:2',
-            'payable_balance' => 'decimal:2',
-            'receivable_balance' => 'decimal:2',
-            'is_active' => 'boolean',
-        ];
+        return ['is_active' => 'boolean'];
+    }
+
+    public function accounts(): HasMany
+    {
+        return $this->hasMany(Account::class);
+    }
+
+    public function cashAccount(): HasOne
+    {
+        return $this->hasOne(Account::class)->where('type', AccountType::Cash);
     }
 
     public function bankAccounts(): HasMany
     {
-        return $this->hasMany(CompanyBankAccount::class);
+        return $this->hasMany(Account::class)->where('type', AccountType::Bank);
     }
 
     public function cheques(): HasMany
@@ -43,19 +45,14 @@ class Company extends Model
         return $this->hasMany(Cheque::class);
     }
 
-    public function disbursements(): HasMany
+    public function payments(): HasMany
     {
-        return $this->hasMany(Disbursement::class);
+        return $this->hasMany(Payment::class);
     }
 
-    public function adjustments(): HasMany
+    public function openingBalances(): HasMany
     {
-        return $this->hasMany(CompanyAdjustment::class);
-    }
-
-    public function transactions(): HasMany
-    {
-        return $this->hasMany(Transaction::class);
+        return $this->hasMany(OpeningBalance::class);
     }
 
     public function ledgerEntries(): HasMany
@@ -66,17 +63,5 @@ class Company extends Model
     public function scopeActive(Builder $q): Builder
     {
         return $q->where('is_active', true);
-    }
-
-    /** Net position: positive = I owe them, negative = they owe me. */
-    public function netBalance(): string
-    {
-        return Money::sub($this->payable_balance, $this->receivable_balance);
-    }
-
-    /** Uncleared government cheques received for this company. */
-    public function pendingChequesTotal(): string
-    {
-        return Money::of($this->cheques()->pending()->sum('amount'));
     }
 }

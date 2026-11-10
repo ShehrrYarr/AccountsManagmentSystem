@@ -10,5 +10,5 @@ Artisan::command('inspire', function () {
 
 Artisan::command('ams:recalculate-balances', function (LedgerService $ledger) {
     $ledger->recalculateAll();
-    $this->info('Company payables / receivables and account balances rebuilt from the journal.');
+    $this->info('Cash and bank account balances rebuilt from the journal.');
 })->purpose('Rebuild cached running balances from posted journal entries');

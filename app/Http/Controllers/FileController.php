@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cheque;
-use App\Models\Disbursement;
+use App\Models\Expense;
+use App\Models\Payment;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -16,7 +17,8 @@ class FileController extends Controller
     {
         $path = match ($type) {
             'cheque' => Cheque::withTrashed()->findOrFail($id)->scan_path,
-            'disbursement' => Disbursement::withTrashed()->findOrFail($id)->receipt_path,
+            'payment' => Payment::withTrashed()->findOrFail($id)->receipt_path,
+            'expense' => Expense::withTrashed()->findOrFail($id)->receipt_path,
         };
 
         abort_unless($path && Storage::disk('local')->exists($path), 404);

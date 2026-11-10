@@ -1,81 +1,79 @@
 <?php
 
 /**
- * Companies (clients): list with live balances + create / edit modal.
- * Opening balances can only be set or changed by administrators.
+ * My companies: where each one's money is (cash, banks, cheques in hand) and what is owed,
+ * plus a create / edit modal. Creating a company also creates its cash in hand.
  */
 
+use App\Enums\AccountType;
 use App\Livewire\Concerns\InteractsWithUi;
+use App\Models\Account;
+use App\Models\Cheque;
 use App\Models\Company;
+use App\Services\Balances;
 use App\Services\MasterDataService;
 use App\Support\Money;
 use Illuminate\Validation\Rule;
 
-use function Livewire\Volt\{computed, on, rules, state, uses, usesPagination};
+use function Livewire\Volt\{computed, on, rules, state, uses};
 
 uses([InteractsWithUi::class]);
-usesPagination(theme: 'bootstrap');
 
-state(['search' => '', 'filter' => 'active', 'sortField' => 'name', 'sortDir' => 'asc'])->url(except: '');
 state(['companyId' => null])->locked();
+state(['showInactive' => false]);
 state([
-    'name' => '', 'registration_no' => '', 'ntn' => '', 'contact_person' => '', 'phone' => '', 'email' => '',
-    'address' => '', 'opening_payable' => '0', 'opening_receivable' => '0', 'notes' => '', 'is_active' => true,
+    'name' => '', 'ntn' => '', 'registration_no' => '', 'phone' => '', 'email' => '', 'address' => '', 'notes' => '',
+    'is_active' => true, 'cash_opening' => '0', 'opening_date' => '',
 ]);
 
 rules(fn () => [
     'name' => ['required', 'string', 'max:255', Rule::unique('companies', 'name')->ignore($this->companyId)],
-    'registration_no' => ['nullable', 'string', 'max:100'],
     'ntn' => ['nullable', 'string', 'max:50'],
-    'contact_person' => ['nullable', 'string', 'max:255'],
+    'registration_no' => ['nullable', 'string', 'max:100'],
     'phone' => ['nullable', 'string', 'max:30'],
     'email' => ['nullable', 'email', 'max:255'],
     'address' => ['nullable', 'string', 'max:1000'],
-    'opening_payable' => ['nullable', 'numeric', 'min:0'],
-    'opening_receivable' => ['nullable', 'numeric', 'min:0'],
     'notes' => ['nullable', 'string', 'max:2000'],
     'is_active' => ['boolean'],
+    'cash_opening' => ['nullable', 'numeric', 'min:0'],
+    'opening_date' => ['nullable', 'date'],
 ]);
 
-$updatedSearch = fn () => $this->resetPage();
-$updatedFilter = fn () => $this->resetPage();
+$rows = computed(function () {
+    $companies = Company::query()->when(! $this->showInactive, fn ($q) => $q->where('is_active', true))->orderBy('name')->get();
 
-$sortBy = function (string $field) {
-    abort_unless(in_array($field, ['name', 'payable_balance', 'receivable_balance', 'created_at'], true), 400);
-    $this->sortDir = $this->sortField === $field && $this->sortDir === 'asc' ? 'desc' : 'asc';
-    $this->sortField = $field;
-};
+    $money = Account::query()->selectRaw('company_id, type, SUM(current_balance) as total')->groupBy('company_id', 'type')->get()
+        ->groupBy('company_id');
+    $cheques = Cheque::inHand()->selectRaw('company_id, SUM(amount) as total, COUNT(*) as n')->groupBy('company_id')->get()->keyBy('company_id');
+    $depts = Balances::departments()->groupBy('company_id');
+    $suppliers = Balances::suppliers()->groupBy('company_id');
 
-$companies = computed(fn () => Company::query()
-    ->withCount(['cheques as pending_cheques_count' => fn ($q) => $q->pending()])
-    ->withSum(['cheques as pending_cheques_sum' => fn ($q) => $q->pending()], 'amount')
-    ->when($this->filter === 'active', fn ($q) => $q->where('is_active', true))
-    ->when($this->filter === 'inactive', fn ($q) => $q->where('is_active', false))
-    ->when($this->filter === 'owed', fn ($q) => $q->where('payable_balance', '>', 0))
-    ->when($this->filter === 'owing', fn ($q) => $q->where('receivable_balance', '>', 0))
-    ->when($this->search, fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', "%{$this->search}%")
-        ->orWhere('contact_person', 'like', "%{$this->search}%")
-        ->orWhere('ntn', 'like', "%{$this->search}%")
-        ->orWhere('phone', 'like', "%{$this->search}%")))
-    ->orderBy($this->sortField, $this->sortDir)
-    ->paginate(20));
+    return $companies->map(function (Company $c) use ($money, $cheques, $depts, $suppliers) {
+        $m = $money->get($c->id, collect())->keyBy(fn ($r) => $r->type instanceof AccountType ? $r->type->value : $r->type);
+        $d = $depts->get($c->id, collect());
 
-$totals = computed(fn () => [
-    'payable' => Money::of(Company::sum('payable_balance')),
-    'receivable' => Money::of(Company::sum('receivable_balance')),
-]);
+        return (object) [
+            'company' => $c,
+            'cash' => Money::of($m['cash']->total ?? 0),
+            'bank' => Money::of($m['bank']->total ?? 0),
+            'chequesAmount' => Money::of($cheques[$c->id]->total ?? 0),
+            'chequesCount' => (int) ($cheques[$c->id]->n ?? 0),
+            'deptsOwe' => Money::add(...$d->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
+            'deptsHeld' => Money::sub(0, Money::add(...$d->filter(fn ($r) => Money::isNegative($r->balance))->pluck('balance')->all())),
+            'suppliersOwed' => Money::add(...$suppliers->get($c->id, collect())->pluck('owed')->all()),
+        ];
+    });
+});
 
 on(['transaction-updated' => function () {
-    unset($this->companies, $this->totals);
+    unset($this->rows);
 }]);
 
 $create = function () {
     $this->resetErrorBag();
-    $this->fill([
-        'name' => '', 'registration_no' => '', 'ntn' => '', 'contact_person' => '', 'phone' => '', 'email' => '',
-        'address' => '', 'opening_payable' => '0', 'opening_receivable' => '0', 'notes' => '', 'is_active' => true,
-    ]);
     $this->companyId = null;
+    $this->fill(['name' => '', 'ntn' => '', 'registration_no' => '', 'phone' => '', 'email' => '', 'address' => '', 'notes' => '',
+        'is_active' => true, 'cash_opening' => '0', 'opening_date' => now()->toDateString()]);
     $this->showModal('companyModal');
 };
 
@@ -83,25 +81,19 @@ $edit = function (int $id) {
     $this->resetErrorBag();
     $c = Company::findOrFail($id);
     $this->companyId = $c->id;
-    $this->fill($c->only(['name', 'registration_no', 'ntn', 'contact_person', 'phone', 'email', 'address', 'opening_payable', 'opening_receivable', 'notes', 'is_active']));
+    $this->fill($c->only(['name', 'ntn', 'registration_no', 'phone', 'email', 'address', 'notes', 'is_active']));
     $this->showModal('companyModal');
 };
 
 $save = function () {
     $data = $this->validate();
-    $company = $this->companyId ? Company::findOrFail($this->companyId) : null;
-
-    // Opening balances affect the ledger: staff cannot set or change them.
-    if (! auth()->user()->isAdmin()) {
-        $data['opening_payable'] = $company?->opening_payable ?? 0;
-        $data['opening_receivable'] = $company?->opening_receivable ?? 0;
+    if ($this->companyId) {
+        unset($data['cash_opening'], $data['opening_date']); // edited on the Cash & Bank page
     }
-
-    $ok = $this->attempt(function () use ($company, $data) {
-        $saved = app(MasterDataService::class)->saveCompany($company, $data);
-        $this->toast('success', "{$saved->name} saved.");
+    $ok = $this->attempt(function () use ($data) {
+        $saved = app(MasterDataService::class)->saveCompany($this->companyId ? Company::findOrFail($this->companyId) : null, $data);
+        $this->toast('success', $this->companyId ? "{$saved->name} saved." : "{$saved->name} created with its cash in hand. Add its bank accounts next.");
     });
-
     if ($ok !== false) {
         $this->hideModal('companyModal');
         $this->broadcastChange();
@@ -109,9 +101,7 @@ $save = function () {
 };
 
 $delete = function (int $id) {
-    abort_unless(auth()->user()->isAdmin(), 403);
-    $ok = $this->attempt(fn () => app(MasterDataService::class)->deleteCompany(Company::findOrFail($id)));
-    if ($ok !== false) {
+    if ($this->attempt(fn () => app(MasterDataService::class)->deleteCompany(Company::findOrFail($id))) !== false) {
         $this->toast('success', 'Company deleted.');
         $this->broadcastChange();
     }
@@ -120,81 +110,81 @@ $delete = function (int $id) {
 ?>
 
 <div>
-    <div class="row g-3 mb-4">
-        <div class="col-md-6">
-            <x-stat-card label="Total payable to companies" :value="money($this->totals['payable'])" icon="ri-arrow-right-up-line" color="success" hint="Cleared cheque money you still hold for clients" />
-        </div>
-        <div class="col-md-6">
-            <x-stat-card label="Total receivable from companies" :value="money($this->totals['receivable'])" icon="ri-arrow-left-down-line" color="danger" hint="Money companies owe you" />
-        </div>
-    </div>
-
     <div class="card">
         <div class="card-header d-flex flex-wrap gap-2 align-items-center">
-            <input type="search" class="form-control form-control-sm flex-grow-1" style="max-width:320px" placeholder="Search name, contact, NTN, phone…" wire:model.live.debounce.350ms="search">
-            <div class="btn-group btn-group-sm" role="group">
-                @foreach (['active' => 'Active', 'owed' => 'I owe them', 'owing' => 'They owe me', 'inactive' => 'Inactive', 'all' => 'All'] as $key => $label)
-                    <button type="button" class="btn {{ $filter === $key ? 'btn-primary' : 'btn-light' }}" wire:click="$set('filter', '{{ $key }}')">{{ $label }}</button>
-                @endforeach
+            <h5 class="card-title mb-0 me-auto">My companies</h5>
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="co-inactive" wire:model.live="showInactive">
+                <label class="form-check-label fs-13" for="co-inactive">Show inactive</label>
             </div>
-            <button type="button" class="btn btn-sm btn-primary ms-auto" wire:click="create"><i class="ri-add-line me-1"></i>New Company</button>
+            <button type="button" class="btn btn-sm btn-primary" wire:click="create"><i class="ri-add-line me-1"></i>New company</button>
         </div>
         <div class="card-body p-0">
-            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,filter,sortBy,gotoPage,nextPage,previousPage">
+            <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 ams-table">
                     <thead class="table-light">
                         <tr>
-                            <x-sort-th field="name" :sort="$sortField" :dir="$sortDir">Company</x-sort-th>
-                            <th>Contact</th>
-                            <th class="money">Cheques pending</th>
-                            <x-sort-th field="payable_balance" :sort="$sortField" :dir="$sortDir" class="money">Payable (I owe)</x-sort-th>
-                            <x-sort-th field="receivable_balance" :sort="$sortField" :dir="$sortDir" class="money">Receivable (they owe)</x-sort-th>
-                            <th class="text-end">Actions</th>
+                            <th>Company</th>
+                            <th class="money d-none d-md-table-cell">Cash in hand</th>
+                            <th class="money d-none d-md-table-cell">Bank</th>
+                            <th class="money d-none d-lg-table-cell">Cheques in hand</th>
+                            <th class="money d-none d-lg-table-cell" title="Departments that owe this company (spent more than cheques received)">Depts owe</th>
+                            <th class="money d-none d-lg-table-cell" title="Cheques received ahead of spending">Held for depts</th>
+                            <th class="money d-none d-xl-table-cell">Owed to suppliers</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @forelse ($this->companies as $c)
-                            <tr wire:key="co-{{ $c->id }}">
+                        @forelse ($this->rows as $r)
+                            <tr wire:key="co-{{ $r->company->id }}">
                                 <td>
-                                    <a href="{{ route('companies.show', $c) }}" class="fw-semibold text-body">{{ $c->name }}</a>
-                                    @unless ($c->is_active)<span class="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>@endunless
-                                    <div class="fs-12 text-muted">{{ collect([$c->registration_no, $c->ntn ? 'NTN '.$c->ntn : null])->filter()->implode(' · ') ?: '—' }}</div>
+                                    <a href="{{ route('companies.show', $r->company) }}" class="fw-semibold text-body">{{ $r->company->name }}</a>
+                                    @unless ($r->company->is_active)<span class="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>@endunless
+                                    @if ($r->company->ntn)<div class="fs-12 text-muted">NTN {{ $r->company->ntn }}</div>@endif
+                                    <div class="d-md-none fs-12 mt-1">
+                                        Cash <strong>{{ money($r->cash) }}</strong> · Bank <strong>{{ money($r->bank) }}</strong>
+                                        @if ($r->chequesCount)<br>Cheques in hand {{ money($r->chequesAmount) }}@endif
+                                    </div>
                                 </td>
-                                <td class="fs-13">
-                                    {{ $c->contact_person ?? '—' }}
-                                    @if ($c->phone)<div class="fs-12 text-muted">{{ $c->phone }}</div>@endif
-                                </td>
-                                <td class="money fs-13">
-                                    @if ($c->pending_cheques_count)
-                                        {{ money($c->pending_cheques_sum) }} <div class="fs-11 text-muted">{{ $c->pending_cheques_count }} cheque(s)</div>
-                                    @else <span class="text-muted">—</span> @endif
-                                </td>
-                                <td class="money fw-semibold {{ Money::isPositive($c->payable_balance) ? 'text-success' : 'text-muted' }}">{{ money($c->payable_balance) }}</td>
-                                <td class="money fw-semibold {{ Money::isPositive($c->receivable_balance) ? 'text-danger' : 'text-muted' }}">{{ money($c->receivable_balance) }}</td>
+                                <td class="money d-none d-md-table-cell">{{ money($r->cash) }}</td>
+                                <td class="money d-none d-md-table-cell">{{ money($r->bank) }}</td>
+                                <td class="money d-none d-lg-table-cell">{{ money($r->chequesAmount) }}@if ($r->chequesCount)<div class="fs-11 text-muted">{{ $r->chequesCount }} cheque(s)</div>@endif</td>
+                                <td class="money d-none d-lg-table-cell {{ Money::isPositive($r->deptsOwe) ? 'text-danger' : 'text-muted' }}">{{ money($r->deptsOwe) }}</td>
+                                <td class="money d-none d-lg-table-cell {{ Money::isPositive($r->deptsHeld) ? 'text-success' : 'text-muted' }}">{{ money($r->deptsHeld) }}</td>
+                                <td class="money d-none d-xl-table-cell {{ Money::isPositive($r->suppliersOwed) ? 'text-warning' : 'text-muted' }}">{{ money($r->suppliersOwed) }}</td>
                                 <td class="text-end text-nowrap">
-                                    <a href="{{ route('companies.show', $c) }}" class="btn btn-sm btn-light icon-btn-sm" title="Statement"><i class="ri-file-list-3-line"></i></a>
-                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="$dispatch('company-accounts', { companyId: {{ $c->id }} })" title="Bank accounts"><i class="ri-bank-line"></i></button>
-                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="edit({{ $c->id }})" title="Edit"><i class="ri-edit-line"></i></button>
-                                    @can('admin')
-                                        <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
-                                            x-on:click="amsConfirm(@js('Delete '.$c->name.'? Only possible when it has no cheques or payments.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))"><i class="ri-delete-bin-line"></i></button>
-                                    @endcan
+                                    <a href="{{ route('companies.show', $r->company) }}" class="btn btn-sm btn-light" title="Open ledger"><i class="ri-book-open-line"></i><span class="d-none d-xl-inline ms-1">Ledger</span></a>
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="edit({{ $r->company->id }})"><i class="ri-edit-line"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
+                                        x-on:click="amsConfirm(@js('Delete '.$r->company->name.'? Only possible when it has no transactions.'), 'Delete').then(ok => ok && $wire.delete({{ $r->company->id }}))"><i class="ri-delete-bin-line"></i></button>
                                 </td>
                             </tr>
                         @empty
-                            <x-empty-row :colspan="6" icon="ri-building-2-line" message="No companies found." />
+                            <x-empty-row :colspan="8" icon="ri-building-2-line" message="No companies yet — add your first company." />
                         @endforelse
                     </tbody>
+                    @if ($this->rows->count() > 1)
+                        <tfoot class="table-light fw-semibold fs-13">
+                            <tr>
+                                <td>Total</td>
+                                <td class="money d-none d-md-table-cell">{{ money(Money::add(...$this->rows->pluck('cash')->all())) }}</td>
+                                <td class="money d-none d-md-table-cell">{{ money(Money::add(...$this->rows->pluck('bank')->all())) }}</td>
+                                <td class="money d-none d-lg-table-cell">{{ money(Money::add(...$this->rows->pluck('chequesAmount')->all())) }}</td>
+                                <td class="money d-none d-lg-table-cell">{{ money(Money::add(...$this->rows->pluck('deptsOwe')->all())) }}</td>
+                                <td class="money d-none d-lg-table-cell">{{ money(Money::add(...$this->rows->pluck('deptsHeld')->all())) }}</td>
+                                <td class="money d-none d-xl-table-cell">{{ money(Money::add(...$this->rows->pluck('suppliersOwed')->all())) }}</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    @endif
                 </table>
             </div>
         </div>
-        <div class="card-footer">{{ $this->companies->links() }}</div>
     </div>
 
     <x-modal id="companyModal" :title="$companyId ? 'Edit Company' : 'New Company'" icon="ri-building-2-line" size="lg">
         <form wire:submit="save">
             <div class="modal-body">
-                @error('general') <div class="alert alert-danger">{{ $message }}</div> @enderror
                 <div class="row g-3">
                     <div class="col-md-8">
                         <label class="form-label">Company name <span class="text-danger">*</span></label>
@@ -202,52 +192,40 @@ $delete = function (int $id) {
                         @error('name') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Registration #</label>
-                        <input type="text" class="form-control" wire:model="registration_no">
-                    </div>
-                    <div class="col-md-4">
                         <label class="form-label">NTN</label>
                         <input type="text" class="form-control" wire:model="ntn">
                     </div>
                     <div class="col-md-4">
-                        <label class="form-label">Contact person</label>
-                        <input type="text" class="form-control" wire:model="contact_person">
+                        <label class="form-label">Registration no.</label>
+                        <input type="text" class="form-control" wire:model="registration_no">
                     </div>
                     <div class="col-md-4">
                         <label class="form-label">Phone</label>
                         <input type="text" class="form-control" wire:model="phone">
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <label class="form-label">Email</label>
                         <input type="email" class="form-control @error('email') is-invalid @enderror" wire:model="email">
                         @error('email') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-12">
                         <label class="form-label">Address</label>
                         <input type="text" class="form-control" wire:model="address">
                     </div>
-
-                    <div class="col-12"><hr class="my-1"><h6 class="mb-0">Opening balances <span class="text-muted fw-normal fs-12">— carried over from before this system</span></h6></div>
-                    <div class="col-md-6">
-                        <label class="form-label">I owe this company (payable)</label>
-                        <div class="input-group has-validation">
-                            <span class="input-group-text">Rs.</span>
-                            <input type="number" step="0.01" min="0" class="form-control @error('opening_payable') is-invalid @enderror" wire:model="opening_payable" @disabled(! auth()->user()->isAdmin())>
-                            @error('opening_payable') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    @unless ($companyId)
+                        <div class="col-md-6">
+                            <label class="form-label">Cash in hand today (opening)</label>
+                            <div class="input-group"><span class="input-group-text">Rs.</span>
+                                <input type="number" step="0.01" min="0" class="form-control @error('cash_opening') is-invalid @enderror" wire:model="cash_opening">
+                            </div>
+                            @error('cash_opening') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         </div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">This company owes me (receivable)</label>
-                        <div class="input-group has-validation">
-                            <span class="input-group-text">Rs.</span>
-                            <input type="number" step="0.01" min="0" class="form-control @error('opening_receivable') is-invalid @enderror" wire:model="opening_receivable" @disabled(! auth()->user()->isAdmin())>
-                            @error('opening_receivable') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        <div class="col-md-6">
+                            <label class="form-label">Opening date</label>
+                            <input type="date" class="form-control" wire:model="opening_date">
                         </div>
-                    </div>
-                    @unless (auth()->user()->isAdmin())
-                        <div class="col-12"><div class="form-text">Only administrators can set opening balances.</div></div>
+                        <div class="col-12"><div class="form-text mt-0"><i class="ri-information-line"></i> A "Cash in hand" account is created automatically. Add bank accounts on the Cash &amp; Bank page.</div></div>
                     @endunless
-
                     <div class="col-12">
                         <label class="form-label">Notes</label>
                         <textarea class="form-control" rows="2" wire:model="notes"></textarea>
@@ -262,7 +240,7 @@ $delete = function (int $id) {
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save">Save company</button>
+                <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save"><i class="ri-save-3-line me-1"></i>Save</button>
             </div>
         </form>
     </x-modal>

@@ -46,12 +46,6 @@ class User extends Authenticatable
         return $this->role === UserRole::Admin;
     }
 
-    /** Staff changes to money records go through the approval queue. */
-    public function needsApproval(): bool
-    {
-        return ! $this->isAdmin();
-    }
-
     public function initials(): string
     {
         return collect(explode(' ', trim($this->name)))

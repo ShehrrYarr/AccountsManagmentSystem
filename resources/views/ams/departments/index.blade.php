@@ -1,9 +1,10 @@
 @extends('layouts.app')
 
-@section('title', 'Government Departments')
-@section('page-title', 'Government Departments')
-@section('breadcrumb-parent', 'Master Data')
+@section('title', 'Departments')
+@section('page-title', 'Departments')
+@section('breadcrumb-parent', 'Ledgers')
 
 @section('content')
-    <livewire:master.simple-crud entity="departments" />
+    <livewire:departments.list />
+    <livewire:departments.close-deal />
 @endsection

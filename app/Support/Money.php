@@ -28,7 +28,7 @@ final class Money
 
     public static function add(mixed ...$values): string
     {
-        $sum = '0';
+        $sum = '0.00';
         foreach ($values as $v) {
             $sum = bcadd($sum, self::of($v), self::SCALE);
         }

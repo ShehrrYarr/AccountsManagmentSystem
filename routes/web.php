@@ -4,6 +4,10 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FileController;
 use App\Http\Controllers\StatementController;
+use App\Models\Account;
+use App\Models\Company;
+use App\Models\Department;
+use App\Models\Supplier;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -19,7 +23,7 @@ Route::middleware('guest')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
-| Application (signed-in, active users)
+| Application (signed-in, active administrators)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'active'])->group(function () {
@@ -31,28 +35,38 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::view('/dashboard', 'ams.dashboard')->name('dashboard');
     Route::view('/profile', 'ams.profile')->name('profile');
 
+    // Money in / out
     Route::view('/cheques', 'ams.cheques.index')->name('cheques.index');
-    Route::view('/disbursements', 'ams.disbursements.index')->name('disbursements.index');
+    Route::view('/payments', 'ams.payments.index')->name('payments.index');
+    Route::view('/supplier-payments', 'ams.supplier-payments.index')->name('supplier-payments.index');
+    Route::view('/expenses', 'ams.expenses.index')->name('expenses.index');
     Route::view('/transfers', 'ams.transfers.index')->name('transfers.index');
+
+    // Ledgers & statements
+    Route::view('/companies', 'ams.companies.index')->name('companies.index');
+    Route::get('/companies/{company}', fn (Company $company) => view('ams.companies.show', compact('company')))->withTrashed()->name('companies.show');
+    Route::view('/accounts', 'ams.accounts.index')->name('accounts.index');
+    Route::get('/accounts/{account}', fn (Account $account) => view('ams.accounts.show', compact('account')))->withTrashed()->name('accounts.show');
+    Route::view('/departments', 'ams.departments.index')->name('departments.index');
+    Route::get('/departments/{department}', fn (Department $department) => view('ams.departments.show', compact('department')))->name('departments.show');
+    Route::view('/suppliers', 'ams.suppliers.index')->name('suppliers.index');
+    Route::get('/suppliers/{supplier}', fn (Supplier $supplier) => view('ams.suppliers.show', compact('supplier')))->name('suppliers.show');
     Route::view('/transactions', 'ams.transactions.index')->name('transactions.index');
 
-    Route::view('/companies', 'ams.companies.index')->name('companies.index');
-    Route::get('/companies/{company}', fn (\App\Models\Company $company) => view('ams.companies.show', compact('company')))
-        ->withTrashed()->name('companies.show');
-    Route::get('/companies/{company}/statement.pdf', [StatementController::class, 'pdf'])->withTrashed()->name('companies.statement.pdf');
-    Route::get('/companies/{company}/statement/print', [StatementController::class, 'print'])->withTrashed()->name('companies.statement.print');
+    Route::get('/statements/{kind}/{id}/print', [StatementController::class, 'print'])
+        ->whereIn('kind', ['account', 'department', 'supplier', 'company'])->whereNumber('id')->name('statements.print');
+    Route::get('/statements/{kind}/{id}/pdf', [StatementController::class, 'pdf'])
+        ->whereIn('kind', ['account', 'department', 'supplier', 'company'])->whereNumber('id')->name('statements.pdf');
 
-    Route::view('/bank-accounts', 'ams.bank-accounts.index')->name('bank-accounts.index');
-    Route::view('/vendors', 'ams.vendors.index')->name('vendors.index');
-    Route::view('/departments', 'ams.departments.index')->name('departments.index');
+    // Setup
+    Route::view('/opening-balances', 'ams.opening-balances.index')->name('opening-balances.index');
+    Route::view('/expense-categories', 'ams.expense-categories.index')->name('expense-categories.index');
 
-    // Private uploads (cheque scans, purchase receipts)
+    // Private uploads (cheque scans, receipts)
     Route::get('/files/{type}/{id}', [FileController::class, 'show'])
-        ->whereIn('type', ['cheque', 'disbursement'])->whereNumber('id')->name('files.show');
+        ->whereIn('type', ['cheque', 'payment', 'expense'])->whereNumber('id')->name('files.show');
 
     Route::middleware('can:admin')->group(function () {
-        Route::view('/adjustments', 'ams.adjustments.index')->name('adjustments.index');
-        Route::view('/approvals', 'ams.approvals.index')->name('approvals.index');
         Route::view('/users', 'ams.users.index')->name('users.index');
         Route::view('/audit-log', 'ams.audit.index')->name('audit.index');
 

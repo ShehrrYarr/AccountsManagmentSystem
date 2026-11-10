@@ -2,7 +2,7 @@
 
 @section('title', 'Transaction Journal')
 @section('page-title', 'Transaction Journal')
-@section('breadcrumb-parent', 'Ledger')
+@section('breadcrumb-parent', 'Ledgers')
 
 @section('content')
     <livewire:transactions.datatable />

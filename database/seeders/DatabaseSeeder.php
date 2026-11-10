@@ -3,14 +3,13 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
-use App\Models\BankAccount;
+use App\Models\ExpenseCategory;
 use App\Models\User;
-use App\Services\MasterDataService;
 use Illuminate\Database\Seeder;
 
 /**
- * Minimal production-safe setup: the first administrator and the Cash Vault.
- * Run DemoDataSeeder as well for sample companies, cheques and payouts.
+ * Minimal production-safe setup: a first administrator (only when there is none yet)
+ * and the default expense categories. Run DemoDataSeeder as well for sample data.
  *
  * Local development login (change the password after first sign-in):
  *   email:    admin@ams.test
@@ -18,21 +17,19 @@ use Illuminate\Database\Seeder;
  */
 class DatabaseSeeder extends Seeder
 {
+    public const EXPENSE_CATEGORIES = ['Fuel', 'Office rent', 'Salaries', 'Utilities', 'Travel', 'Miscellaneous'];
+
     public function run(): void
     {
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@ams.test'],
-            ['name' => 'System Administrator', 'password' => 'password', 'role' => UserRole::Admin, 'is_active' => true, 'email_verified_at' => now()]
-        );
-
-        auth()->login($admin); // so opening-balance postings and audit rows are attributed
-
-        if (! BankAccount::vault()) {
-            app(MasterDataService::class)->saveBankAccount(null, [
-                'name' => 'Cash Vault', 'type' => 'cash', 'opening_balance' => 0, 'is_active' => true,
+        if (User::where('role', UserRole::Admin)->doesntExist()) {
+            User::create([
+                'name' => 'System Administrator', 'email' => 'admin@ams.test', 'password' => 'password',
+                'role' => UserRole::Admin, 'is_active' => true, 'email_verified_at' => now(),
             ]);
         }
 
-        auth()->logout();
+        foreach (self::EXPENSE_CATEGORIES as $name) {
+            ExpenseCategory::firstOrCreate(['name' => $name], ['is_active' => true]);
+        }
     }
 }

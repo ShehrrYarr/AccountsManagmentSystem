@@ -2,16 +2,19 @@
 
 namespace App\Providers;
 
-use App\Models\BankAccount;
+use App\Models\Account;
 use App\Models\Cheque;
 use App\Models\Company;
-use App\Models\CompanyAdjustment;
-use App\Models\CompanyBankAccount;
-use App\Models\Disbursement;
-use App\Models\GovernmentDepartment;
-use App\Models\InternalTransfer;
+use App\Models\DealClosing;
+use App\Models\Department;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
+use App\Models\OpeningBalance;
+use App\Models\Payment;
+use App\Models\Supplier;
+use App\Models\SupplierPayment;
+use App\Models\Transfer;
 use App\Models\User;
-use App\Models\Vendor;
 use App\Services\LedgerService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -35,14 +38,17 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'user' => User::class,
             'company' => Company::class,
-            'company_bank_account' => CompanyBankAccount::class,
-            'bank_account' => BankAccount::class,
-            'government_department' => GovernmentDepartment::class,
-            'vendor' => Vendor::class,
+            'account' => Account::class,
+            'department' => Department::class,
+            'supplier' => Supplier::class,
+            'expense_category' => ExpenseCategory::class,
             'cheque' => Cheque::class,
-            'disbursement' => Disbursement::class,
-            'internal_transfer' => InternalTransfer::class,
-            'company_adjustment' => CompanyAdjustment::class,
+            'payment' => Payment::class,
+            'supplier_payment' => SupplierPayment::class,
+            'transfer' => Transfer::class,
+            'expense' => Expense::class,
+            'deal_closing' => DealClosing::class,
+            'opening_balance' => OpeningBalance::class,
         ]);
 
         Paginator::useBootstrapFive();

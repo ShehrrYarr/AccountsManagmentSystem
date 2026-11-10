@@ -4,23 +4,29 @@ Laravel 12 · Livewire 4 + Volt (functional API) · Herozi Bootstrap 5 admin the
 
 ## What it does
 
+I run several **companies** of my own. Each has one **cash in hand** and any number of **bank accounts**.
+My customers are **government departments**: I spend for them (hand over cash, send a bank transfer, or buy
+goods from a supplier) and the government later pays with **cheques** — sometimes before, sometimes after.
+
 | Area | Screens |
 |---|---|
-| **Cash in** | Receive government cheques for a company → clear them by **bank deposit** or **over-the-counter encashment** (into the Cash Vault), with per-cheque commission and bank charges. Bounce / cancel with automatic reversal. |
-| **Cash out** | Pay companies by **cash payout**, **bank transfer** (split across several of the company's accounts) or **direct vendor purchase** (with receipt). Internal transfers between my own accounts. |
-| **Ledger** | Double-entry journal (`transactions` + `journal_ledger_entries`) with filters, sorting, expandable debit/credit lines and CSV export. Manual company adjustments (admin). |
-| **Companies** | Payable (I owe them) and receivable (they owe me) tracked separately. Statement of account on screen, printable, and as PDF. |
-| **Control** | Admin / Staff roles. Staff clearings, payouts, purchases, edits and deletes go to an **approvals queue**. Full audit log with before / after values. |
+| **Money in** | Receive a govt cheque for a department under one of my companies (the department is credited at once), then **deposit** it into that company's bank in one step, with optional bank charges. |
+| **Money out** | Department payments: **cash given**, **bank transfer** or **goods purchased** (paid now or **on credit** to a supplier). Supplier payments. General expenses by category. |
+| **Transfers** | Within one company (ATM / cash withdrawal, cash deposit, bank to bank) or **between my companies** — the receiving company owes the sender until it is sent back. |
+| **Ledgers** | Company ledger, cash statements, bank statements, department (customer) ledger per company and in total, supplier ledger — on screen, printable and as PDF. Double-entry journal with CSV export. |
+| **Deals** | **Close a deal** with a department: the leftover balance (cheques minus spending) is booked as profit or loss. |
+| **Setup** | Opening balances (cash / bank, departments, suppliers), expense categories, users (administrators only for now), audit log. |
 
 ### Accounting rules enforced by `App\Services\LedgerService`
 
-* Every posting is a balanced set of debit / credit lines; cached balances update in the same DB transaction.
-* No bank or cash account may go below zero.
-* A payout can never exceed what you owe the company (no advances). Receivables come only from adjustments.
-* A cleared cheque cannot be bounced if the company was already paid out of that money. Record an
-  *Overpaid → Receivable* adjustment first.
-* Received cheques do not affect company balances until they clear (they are tracked as memo entries).
-* Edits and deletes void the original journal entries and re-post them; voided rows stay visible in the journal.
+* Every posting is a balanced set of debit / credit lines, and each company's lines balance on their own.
+* Source documents (cheques, payments, transfers…) implement `PostsToLedger`; saving one voids its old
+  journal entries and re-posts them, so edits and deletes always keep the ledger consistent. Voided rows stay
+  visible in the journal.
+* No cash or bank account may go below zero; a company can never pay a supplier more than it owes.
+* Department balance = spent for them − cheques received. Positive: they owe me. Negative: I hold their money.
+* Department, supplier and inter-company balances are read straight from the journal (`App\Services\Balances`);
+  only account balances are cached (`php artisan ams:recalculate-balances` rebuilds them).
 
 ## Setup (Windows / WAMP)
 
@@ -63,10 +69,10 @@ php artisan migrate
 php artisan db:seed
 ```
 
-`db:seed` creates the first administrator and the Cash Vault. Credentials are documented in
+`db:seed` creates the first administrator (only if there is none) and default expense categories. Credentials are documented in
 `database/seeders/DatabaseSeeder.php`; change the password after the first sign-in.
 
-Optional sample data (companies, cheques, payouts over the last 8 months):
+Optional sample data (three companies, departments, suppliers and about four months of activity):
 
 ```bash
 php artisan db:seed --class=DemoDataSeeder
@@ -88,7 +94,7 @@ php artisan test
 php artisan ams:recalculate-balances
 ```
 
-`ams:recalculate-balances` rebuilds every company payable / receivable and account balance from the posted journal.
+`ams:recalculate-balances` rebuilds every cash / bank account balance from the posted journal.
 
 ```bash
 php artisan migrate:fresh --seed
@@ -97,16 +103,21 @@ php artisan migrate:fresh --seed
 ## Where things live
 
 ```
-app/Enums/                      ChequeStatus, TransactionType, LedgerAccount, DisbursementType, ...
-app/Services/LedgerService.php  double-entry posting, voiding, invariants, recalculation
-app/Services/*Service.php       Cheque, Disbursement, InternalTransfer, Adjustment, MasterData, Approval, Statement
+app/Enums/                      AccountType, ChequeStatus, PaymentMethod, TransactionType, LedgerAccount, ...
+app/Models/                     Company, Account, Department, Supplier + documents that implement PostsToLedger
+app/Services/LedgerService.php  double-entry posting, voiding, sync of documents, invariants, recalculation
+app/Services/Balances.php       department / supplier / inter-company / profit balances from the journal
+app/Services/*Service.php       Cheque, Payment, Transfer, Deal (closings & openings), MasterData, Statement
 resources/views/livewire/       Volt single-file components
-  cheques/        register-cheque, clear-cheque, close-cheque, list
-  disbursements/  create, list
-  transactions/   datatable
-  dashboard/      overview-metrics, charts, attention
-  companies/      list, bank-accounts, statement, summary
-  ...             transfers, adjustments, approvals, users, audit, bank-accounts, master
+  cheques/          register-cheque, deposit-cheque, list
+  payments/         create, list
+  supplier-payments/, expenses/, transfers/, accounts/, opening-balances/   manage (list + modal)
+  companies/        list, summary
+  departments/      list, balances, close-deal, closings
+  suppliers/        list
+  statements/       ledger (account, department, supplier, company)
+  transactions/     datatable
+  dashboard/        overview-metrics, charts, attention
 resources/views/layouts/        Herozi-based app & auth layouts; livewire-glue (toasts, modals, Alpine select, charts)
 resources/views/ams/            page views that embed the Volt components
 tests/Feature/Ledger            accounting rules

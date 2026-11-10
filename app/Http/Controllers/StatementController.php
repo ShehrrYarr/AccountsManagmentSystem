@@ -2,39 +2,40 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Services\StatementService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 /**
- * Printable / PDF company statements (same data as the on-screen statement).
+ * Printable / PDF statements (same data as the on-screen statements).
  */
 class StatementController extends Controller
 {
     public function __construct(private StatementService $statements) {}
 
-    public function print(Request $request, Company $company)
+    public function print(Request $request, string $kind, int $id)
     {
-        return view('ams.companies.statement-print', $this->data($request, $company) + ['forPdf' => false]);
+        return view('ams.statements.print', $this->data($request, $kind, $id) + ['forPdf' => false]);
     }
 
-    public function pdf(Request $request, Company $company)
+    public function pdf(Request $request, string $kind, int $id)
     {
-        $pdf = Pdf::loadView('ams.companies.statement-print', $this->data($request, $company) + ['forPdf' => true])
-            ->setPaper('a4', 'portrait');
+        $data = $this->data($request, $kind, $id);
+        $pdf = Pdf::loadView('ams.statements.print', $data + ['forPdf' => true])->setPaper('a4', 'landscape');
 
-        return $pdf->download('statement-'.Str::slug($company->name).'-'.now()->format('Ymd').'.pdf');
+        return $pdf->download(Str::slug($data['title'].' '.$data['name']).'-'.now()->format('Ymd').'.pdf');
     }
 
-    private function data(Request $request, Company $company): array
+    private function data(Request $request, string $kind, int $id): array
     {
         $validated = $request->validate([
+            'company' => ['nullable', 'integer', 'exists:companies,id'],
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
 
-        return $this->statements->build($company, $validated['from'] ?? null, $validated['to'] ?? null);
+        return $this->statements->build($kind, $id, $validated['company'] ?? null, $validated['from'] ?? null, $validated['to'] ?? null)
+            + ['query' => array_filter($validated)];
     }
 }

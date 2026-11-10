@@ -2,49 +2,40 @@
 
 namespace App\Services;
 
-use App\Enums\BankAccountType;
-use App\Enums\LedgerAccount;
+use App\Enums\AccountType;
 use App\Enums\TransactionType;
 use App\Exceptions\BusinessRuleException;
-use App\Models\BankAccount;
+use App\Models\Account;
 use App\Models\Company;
 use App\Models\JournalLedgerEntry;
-use App\Models\Transaction;
 use App\Support\Money;
 
 /**
- * Companies and my bank accounts, including their opening balances, which
- * are posted to the journal against Opening Balance Equity.
+ * My companies and their accounts. Creating a company also creates its single cash in hand.
  */
 class MasterDataService
 {
     public function __construct(private LedgerService $ledger) {}
 
+    /**
+     * @param  array{name: string, cash_opening?: mixed, opening_date?: string}  $data
+     */
     public function saveCompany(?Company $company, array $data): Company
     {
         return $this->ledger->batch(function () use ($company, $data) {
+            $isNew = ! $company?->exists;
             $company ??= new Company;
-            $openingChanged = ! $company->exists
-                || Money::cmp($company->opening_payable, $data['opening_payable'] ?? 0) !== 0
-                || Money::cmp($company->opening_receivable, $data['opening_receivable'] ?? 0) !== 0;
+            $company->fill(collect($data)->except(['cash_opening', 'opening_date'])->all())->save();
 
-            $company->fill(array_merge($data, [
-                'opening_payable' => Money::of($data['opening_payable'] ?? 0),
-                'opening_receivable' => Money::of($data['opening_receivable'] ?? 0),
-            ]))->save();
-
-            if ($openingChanged) {
-                $this->ledger->voidAllFor($company);
-
-                $this->ledger->post(TransactionType::OpeningBalance, $company->created_at ?? now(), [
-                    ['account' => LedgerAccount::OpeningEquity, 'debit' => $company->opening_payable, 'company_id' => $company->id],
-                    ['account' => LedgerAccount::CompanyPayable, 'credit' => $company->opening_payable, 'company_id' => $company->id],
-                    ['account' => LedgerAccount::CompanyReceivable, 'debit' => $company->opening_receivable, 'company_id' => $company->id],
-                    ['account' => LedgerAccount::OpeningEquity, 'credit' => $company->opening_receivable, 'company_id' => $company->id],
-                ], [
+            if ($isNew) {
+                $this->saveAccount(null, [
                     'company_id' => $company->id,
-                    'description' => "Opening balance — {$company->name}",
-                ], $company, allowEmpty: true);
+                    'type' => AccountType::Cash->value,
+                    'name' => 'Cash in hand',
+                    'opening_balance' => $data['cash_opening'] ?? 0,
+                    'opening_date' => $data['opening_date'] ?? now()->toDateString(),
+                    'is_active' => true,
+                ]);
             }
 
             return $company->fresh();
@@ -53,71 +44,82 @@ class MasterDataService
 
     public function deleteCompany(Company $company): void
     {
-        if ($company->cheques()->exists() || $company->disbursements()->exists() || $company->adjustments()->exists()) {
-            throw new BusinessRuleException("{$company->name} has cheques or payments on record. Deactivate it instead of deleting.");
+        $used = JournalLedgerEntry::where('company_id', $company->id)
+            ->whereHas('transaction', fn ($q) => $q->posted()->where('type', '!=', TransactionType::OpeningBalance))
+            ->exists();
+
+        if ($used) {
+            throw new BusinessRuleException("{$company->name} has transactions on record. Deactivate it instead of deleting.");
         }
 
         $this->ledger->batch(function () use ($company) {
-            $this->ledger->voidAllFor($company);
+            foreach ($company->accounts as $account) {
+                $this->ledger->remove($account);
+            }
+            $company->openingBalances()->each(fn ($o) => $this->ledger->remove($o));
             $company->delete();
         });
     }
 
-    public function saveBankAccount(?BankAccount $account, array $data): BankAccount
+    public function saveAccount(?Account $account, array $data): Account
     {
         return $this->ledger->batch(function () use ($account, $data) {
-            $account ??= new BankAccount;
-            $type = BankAccountType::from($data['type'] ?? ($account->type?->value ?? 'bank'));
+            $account ??= new Account;
+            $type = AccountType::from($data['type'] ?? $account->type?->value ?? AccountType::Bank->value);
+            $companyId = (int) ($data['company_id'] ?? $account->company_id);
 
-            if ($type === BankAccountType::Cash) {
-                $existing = BankAccount::where('type', BankAccountType::Cash)->when($account->exists, fn ($q) => $q->whereKeyNot($account->id))->exists();
-                if ($existing) {
-                    throw new BusinessRuleException('There is already a Cash Vault. Only one is allowed.', 'type');
+            if ($account->exists && ($account->type !== $type || $account->company_id !== $companyId) && $this->hasActivity($account)) {
+                throw new BusinessRuleException('Company and type cannot change after the account has been used.', 'type');
+            }
+
+            if ($type === AccountType::Cash) {
+                $another = Account::where('company_id', $companyId)->where('type', AccountType::Cash)
+                    ->when($account->exists, fn ($q) => $q->whereKeyNot($account->id))->exists();
+                if ($another) {
+                    throw new BusinessRuleException('Each company has exactly one cash in hand account.', 'type');
                 }
             }
 
-            if ($account->exists && $account->type !== $type && $this->hasActivity($account)) {
-                throw new BusinessRuleException('Account type cannot change after it has been used.', 'type');
+            $opening = Money::of($data['opening_balance'] ?? 0);
+            if (Money::isNegative($opening)) {
+                throw new BusinessRuleException('Opening balance cannot be negative.', 'opening_balance');
             }
 
-            $openingChanged = ! $account->exists || Money::cmp($account->opening_balance, $data['opening_balance'] ?? 0) !== 0;
-
             $account->fill(array_merge($data, [
+                'company_id' => $companyId,
                 'type' => $type,
-                'opening_balance' => Money::of($data['opening_balance'] ?? 0),
-            ]))->save();
+                'opening_balance' => $opening,
+                'opening_date' => $data['opening_date'] ?? $account->opening_date ?? now()->toDateString(),
+            ]));
+
+            $openingChanged = ! $account->exists || $account->isDirty(['opening_balance', 'opening_date', 'name']);
+            $account->save();
 
             if ($openingChanged) {
-                $this->ledger->voidAllFor($account);
-                $this->ledger->post(TransactionType::OpeningBalance, $account->created_at ?? now(), [
-                    ['account' => LedgerAccount::Bank, 'debit' => $account->opening_balance, 'bank_account_id' => $account->id],
-                    ['account' => LedgerAccount::OpeningEquity, 'credit' => $account->opening_balance],
-                ], [
-                    'destination_account_id' => $account->id,
-                    'description' => "Opening balance — {$account->name}",
-                ], $account, allowEmpty: true);
+                $this->ledger->sync($account);
             }
 
             return $account->fresh();
         });
     }
 
-    public function deleteBankAccount(BankAccount $account): void
+    public function deleteAccount(Account $account): void
     {
-        if ($this->hasActivity($account)) {
-            throw new BusinessRuleException("{$account->name} has transactions. Deactivate it instead of deleting.");
+        if ($account->isCash()) {
+            throw new BusinessRuleException('The cash in hand account cannot be deleted.');
         }
 
-        $this->ledger->batch(function () use ($account) {
-            $this->ledger->voidAllFor($account);
-            $account->delete();
-        });
+        if ($this->hasActivity($account)) {
+            throw new BusinessRuleException("{$account->shortLabel()} has transactions. Deactivate it instead of deleting.");
+        }
+
+        $this->ledger->remove($account);
     }
 
-    private function hasActivity(BankAccount $account): bool
+    public function hasActivity(Account $account): bool
     {
-        return JournalLedgerEntry::where('bank_account_id', $account->id)
-            ->whereHas('transaction', fn ($q) => $q->where('type', '!=', TransactionType::OpeningBalance)->posted())
+        return JournalLedgerEntry::where('account_id', $account->id)
+            ->whereHas('transaction', fn ($q) => $q->posted()->where('type', '!=', TransactionType::OpeningBalance))
             ->exists();
     }
 }

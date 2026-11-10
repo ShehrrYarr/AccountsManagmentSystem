@@ -1,17 +1,18 @@
 <?php
 
 /**
- * Stage 1: receive a government cheque on behalf of a company (also used to edit one).
+ * Receive a government cheque for a department (also used to edit one).
  *
- * Open with:  $dispatch('cheque-create')  or  $dispatch('cheque-create', { companyId: 5 })
+ * Open with:  $dispatch('cheque-create')  or  $dispatch('cheque-create', { companyId: 5, departmentId: 2 })
  *             $dispatch('cheque-edit', { id: 12 })
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\Cheque;
-use App\Models\Company;
-use App\Models\GovernmentDepartment;
+use App\Models\Department;
+use App\Services\Balances;
 use App\Services\ChequeService;
+use App\Support\Money;
 use App\Support\Options;
 use Illuminate\Validation\Rule;
 
@@ -24,7 +25,7 @@ state(['chequeId' => null])->locked();
 
 state([
     'company_id' => null,
-    'government_department_id' => null,
+    'department_id' => null,
     'cheque_number' => '',
     'issuing_bank' => '',
     'issuing_branch' => '',
@@ -40,7 +41,7 @@ state([
 
 rules(fn () => [
     'company_id' => ['required', 'exists:companies,id'],
-    'government_department_id' => ['nullable', 'exists:government_departments,id'],
+    'department_id' => ['required', 'exists:departments,id'],
     'cheque_number' => [
         'required', 'string', 'max:50',
         Rule::unique('cheques')->where('issuing_bank', $this->issuing_bank)->whereNull('deleted_at')->ignore($this->chequeId),
@@ -55,12 +56,24 @@ rules(fn () => [
 ])->messages([
     'cheque_number.unique' => 'This cheque number is already registered for that issuing bank.',
     'received_date.after_or_equal' => 'Received date cannot be before the cheque date.',
+    'department_id.required' => 'Choose the department this cheque is for.',
 ]);
 
-$companyOptions = computed(fn () => Options::companies(include: $this->company_id));
-$departmentOptions = computed(fn () => Options::departments());
+$companyOptions = computed(fn () => Options::companies($this->company_id));
+$departmentOptions = computed(fn () => Options::departments($this->department_id));
 
-$company = computed(fn () => $this->company_id ? Company::find($this->company_id) : null);
+// Where the department stands with this company before this cheque.
+$position = computed(function () {
+    if (! $this->company_id || ! $this->department_id) {
+        return null;
+    }
+    $balance = Balances::departmentBalance((int) $this->department_id, (int) $this->company_id);
+    if ($this->chequeId && ($old = Cheque::find($this->chequeId)) && $old->company_id == $this->company_id && $old->department_id == $this->department_id) {
+        $balance = Money::add($balance, $old->amount); // show it without the cheque being edited
+    }
+
+    return $balance;
+});
 
 $expiry = computed(function () {
     if (! $this->cheque_date || strtotime($this->cheque_date) === false) {
@@ -68,14 +81,13 @@ $expiry = computed(function () {
     }
     $date = \Illuminate\Support\Carbon::parse(Cheque::expiryFor($this->cheque_date));
 
-    return ['date' => $date, 'expired' => $date->isPast(), 'soon' => ! $date->isPast() && $date->lte(now()->addDays(Cheque::EXPIRY_WARNING_DAYS))];
+    return ['date' => $date, 'expired' => $date->endOfDay()->isPast(), 'soon' => ! $date->isPast() && $date->lte(now()->addDays(Cheque::EXPIRY_WARNING_DAYS))];
 });
 
 $resetForm = function () {
     $this->fill([
-        'company_id' => null, 'government_department_id' => null, 'cheque_number' => '', 'issuing_bank' => '',
-        'issuing_branch' => '', 'amount' => '', 'notes' => '', 'scan' => null, 'existingScan' => false,
-        'newDepartment' => '', 'addingDepartment' => false,
+        'company_id' => null, 'department_id' => null, 'cheque_number' => '', 'issuing_bank' => '', 'issuing_branch' => '',
+        'amount' => '', 'notes' => '', 'scan' => null, 'existingScan' => false, 'newDepartment' => '', 'addingDepartment' => false,
     ]);
     $this->chequeId = null;
     $this->cheque_date = now()->toDateString();
@@ -83,9 +95,10 @@ $resetForm = function () {
     $this->resetErrorBag();
 };
 
-on(['cheque-create' => function (?int $companyId = null) {
+on(['cheque-create' => function (?int $companyId = null, ?int $departmentId = null) {
     $this->resetForm();
     $this->company_id = $companyId;
+    $this->department_id = $departmentId;
     $this->showModal('chequeFormModal');
 }]);
 
@@ -95,7 +108,7 @@ on(['cheque-edit' => function (int $id) {
     $this->chequeId = $cheque->id;
     $this->fill([
         'company_id' => $cheque->company_id,
-        'government_department_id' => $cheque->government_department_id,
+        'department_id' => $cheque->department_id,
         'cheque_number' => $cheque->cheque_number,
         'issuing_bank' => $cheque->issuing_bank,
         'issuing_branch' => $cheque->issuing_branch,
@@ -109,12 +122,11 @@ on(['cheque-edit' => function (int $id) {
 }]);
 
 $addDepartment = function () {
-    $this->validate(['newDepartment' => ['required', 'string', 'max:255', 'unique:government_departments,name']], [], ['newDepartment' => 'department name']);
-    $dept = GovernmentDepartment::create(['name' => trim($this->newDepartment), 'is_active' => true]);
+    $this->validate(['newDepartment' => ['required', 'string', 'max:255', 'unique:departments,name']], [], ['newDepartment' => 'department name']);
+    $dept = Department::create(['name' => trim($this->newDepartment), 'is_active' => true]);
     unset($this->departmentOptions);
-    $this->government_department_id = $dept->id;
-    $this->newDepartment = '';
-    $this->addingDepartment = false;
+    $this->department_id = $dept->id;
+    $this->fill(['newDepartment' => '', 'addingDepartment' => false]);
 };
 
 $save = function () {
@@ -122,20 +134,11 @@ $save = function () {
     $data['scan_path'] = $this->storeUpload($this->scan, 'cheques');
     unset($data['scan']);
 
-    $service = app(ChequeService::class);
-
-    $ok = $this->attempt(function () use ($service, $data) {
-        if ($this->chequeId) {
-            $cheque = Cheque::findOrFail($this->chequeId);
-            if (! $data['scan_path']) {
-                unset($data['scan_path']); // keep existing scan
-            }
-            $outcome = $service->update($cheque, $data, auth()->user());
-            $this->toastOutcome($outcome, "Cheque #{$data['cheque_number']} updated.", 'Your edit');
-        } else {
-            $cheque = $service->register($data, auth()->user());
-            $this->toast('success', "Cheque #{$cheque->cheque_number} for ".money($cheque->amount).' registered as pending clearing.');
-        }
+    $ok = $this->attempt(function () use ($data) {
+        $cheque = app(ChequeService::class)->save($this->chequeId ? Cheque::findOrFail($this->chequeId) : null, $data, auth()->user());
+        $this->toast('success', $this->chequeId
+            ? "Cheque #{$cheque->cheque_number} updated."
+            : "Cheque #{$cheque->cheque_number} for ".money($cheque->amount).' received and credited to '.$cheque->department->name.'.');
     });
 
     if ($ok !== false) {
@@ -154,40 +157,49 @@ $save = function () {
                 @error('general') <div class="alert alert-danger">{{ $message }}</div> @enderror
 
                 <div class="row g-3">
-                    <div class="col-md-7">
-                        <label class="form-label">Company <span class="text-danger">*</span></label>
+                    <div class="col-md-6">
+                        <label class="form-label">Received by company <span class="text-danger">*</span></label>
                         <x-searchable-select wire:model.live="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
                         @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-md-5">
-                        <label class="form-label">Company position</label>
-                        @if ($this->company)
-                            <div class="form-control bg-body-tertiary ams-balance fs-13">
-                                Payable <strong class="text-success">{{ money($this->company->payable_balance) }}</strong>
-                                @if (\App\Support\Money::isPositive($this->company->receivable_balance))
-                                    · Receivable <strong class="text-danger">{{ money($this->company->receivable_balance) }}</strong>
-                                @endif
-                            </div>
-                        @else
-                            <div class="form-control bg-body-tertiary text-muted fs-13">Select a company</div>
-                        @endif
-                    </div>
 
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                         <label class="form-label d-flex justify-content-between">
-                            <span>Issuing government department</span>
+                            <span>For department <span class="text-danger">*</span></span>
                             <a href="#" class="fs-12" wire:click.prevent="$toggle('addingDepartment')">{{ $addingDepartment ? 'Cancel' : '+ New department' }}</a>
                         </label>
                         @if ($addingDepartment)
                             <div class="input-group has-validation">
-                                <input type="text" class="form-control @error('newDepartment') is-invalid @enderror" wire:model="newDepartment" placeholder="e.g. Accountant General Punjab" wire:keydown.enter.prevent="addDepartment">
+                                <input type="text" class="form-control @error('newDepartment') is-invalid @enderror" wire:model="newDepartment" placeholder="e.g. District Health Office" wire:keydown.enter.prevent="addDepartment">
                                 <button type="button" class="btn btn-primary" wire:click="addDepartment">Add</button>
                                 @error('newDepartment') <div class="invalid-feedback">{{ $message }}</div> @enderror
                             </div>
                         @else
-                            <x-searchable-select wire:model="government_department_id" :options="$this->departmentOptions" placeholder="Select department (optional)" />
+                            <x-searchable-select wire:model.live="department_id" :options="$this->departmentOptions" placeholder="Select department" :invalid="$errors->has('department_id')" />
+                            @error('department_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         @endif
                     </div>
+
+                    @if ($this->position !== null)
+                        <div class="col-12">
+                            <div class="alert alert-light border mb-0 py-2 fs-13 ams-balance">
+                                <i class="ri-scales-3-line me-1"></i>
+                                Department balance with this company{{ $chequeId ? ' (without this cheque)' : '' }}:
+                                @if (Money::isPositive($this->position))
+                                    <strong class="text-danger">owes you {{ money($this->position) }}</strong>
+                                @elseif (Money::isNegative($this->position))
+                                    <strong class="text-success">you hold {{ money(Money::sub(0, $this->position)) }}</strong>
+                                @else
+                                    <strong>settled</strong>
+                                @endif
+                                @if (is_numeric($amount) && $amount > 0)
+                                    @php($after = Money::sub($this->position, $amount))
+                                    → after this cheque:
+                                    <strong>{{ Money::isNegative($after) ? 'you hold '.money(Money::sub(0, $after)) : (Money::isZero($after) ? 'settled' : 'owes you '.money($after)) }}</strong>
+                                @endif
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="col-md-4">
                         <label class="form-label">Cheque number <span class="text-danger">*</span></label>
@@ -248,15 +260,11 @@ $save = function () {
                         <textarea class="form-control" rows="2" wire:model="notes" placeholder="Bill / invoice reference, remarks…"></textarea>
                     </div>
                 </div>
-
-                @if ($chequeId && auth()->user()->needsApproval())
-                    <div class="alert alert-info mt-4 mb-0 fs-13"><i class="ri-information-line me-1"></i>Edits by staff are sent to an administrator for approval before they take effect.</div>
-                @endif
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
-                    <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Register cheque' }}</span>
+                    <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Receive cheque' }}</span>
                     <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
                 </button>
             </div>

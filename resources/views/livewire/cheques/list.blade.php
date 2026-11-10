@@ -2,10 +2,9 @@
 
 /**
  * Government cheque register: live filters, summary tiles, pagination and row actions.
- * Refreshes itself whenever any component dispatches 'transaction-updated'.
+ * Embeddable on a company or department page via the locked companyId / departmentId.
  */
 
-use App\Enums\ApprovalStatus;
 use App\Enums\ChequeStatus;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\Cheque;
@@ -18,12 +17,13 @@ use function Livewire\Volt\{computed, on, state, uses, usesPagination};
 uses([InteractsWithUi::class]);
 usesPagination(theme: 'bootstrap');
 
-state(['companyId' => null])->locked(); // set when embedded on a company page
+state(['companyId' => null, 'departmentId' => null])->locked();
 
 state([
     'search' => '',
-    'status' => 'received',
+    'status' => 'all',
     'filterCompany' => null,
+    'filterDepartment' => null,
     'from' => '',
     'to' => '',
     'perPage' => 15,
@@ -32,93 +32,97 @@ state([
 ]);
 
 $updated = function ($property) {
-    if (in_array($property, ['search', 'status', 'filterCompany', 'from', 'to', 'perPage'], true)) {
+    if (in_array($property, ['search', 'status', 'filterCompany', 'filterDepartment', 'from', 'to', 'perPage'], true)) {
         $this->resetPage('chequesPage');
     }
 };
 
 $sortBy = function (string $field) {
-    abort_unless(in_array($field, ['cheque_number', 'amount', 'cheque_date', 'received_date', 'expiry_date', 'status'], true), 400);
+    abort_unless(in_array($field, ['cheque_number', 'amount', 'received_date', 'expiry_date', 'status'], true), 400);
     $this->sortDir = $this->sortField === $field && $this->sortDir === 'asc' ? 'desc' : 'asc';
     $this->sortField = $field;
 };
 
 // Filtered query (clone before use — computed values are cached per request).
-$baseQuery = computed(function () {
-    return Cheque::query()
-        ->when($this->companyId ?? $this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
-        ->when($this->status !== 'all' && $this->status !== '', fn ($q) => $q->where('status', $this->status))
-        ->when($this->from, fn ($q) => $q->whereDate('received_date', '>=', $this->from))
-        ->when($this->to, fn ($q) => $q->whereDate('received_date', '<=', $this->to))
-        ->when($this->search, function ($q) {
-            $s = '%'.trim($this->search).'%';
-            $q->where(fn ($q) => $q->where('cheque_number', 'like', $s)
-                ->orWhere('issuing_bank', 'like', $s)
-                ->orWhereHas('company', fn ($c) => $c->where('name', 'like', $s))
-                ->orWhereHas('department', fn ($d) => $d->where('name', 'like', $s)));
-        });
-});
+$baseQuery = computed(fn () => Cheque::query()
+    ->when($this->companyId ?? $this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
+    ->when($this->departmentId ?? $this->filterDepartment, fn ($q, $id) => $q->where('department_id', $id))
+    ->when($this->status !== 'all' && $this->status !== '', fn ($q) => $q->where('status', $this->status))
+    ->when($this->from, fn ($q) => $q->whereDate('received_date', '>=', $this->from))
+    ->when($this->to, fn ($q) => $q->whereDate('received_date', '<=', $this->to))
+    ->when($this->search, function ($q) {
+        $s = '%'.trim($this->search).'%';
+        $q->where(fn ($q) => $q->where('cheque_number', 'like', $s)
+            ->orWhere('issuing_bank', 'like', $s)
+            ->orWhereHas('company', fn ($c) => $c->where('name', 'like', $s))
+            ->orWhereHas('department', fn ($d) => $d->where('name', 'like', $s)));
+    }));
 
 $cheques = computed(fn () => (clone $this->baseQuery)
-    ->with(['company', 'department', 'clearedInto', 'approvalRequests' => fn ($q) => $q->where('status', ApprovalStatus::Pending)])
+    ->with(['company', 'department', 'depositAccount'])
     ->orderBy($this->sortField, $this->sortDir)->orderByDesc('id')
     ->paginate($this->perPage, pageName: 'chequesPage'));
 
 $summary = computed(function () {
-    $pending = Cheque::pending()->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id));
+    $scope = fn () => Cheque::query()
+        ->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
+        ->when($this->departmentId, fn ($q, $id) => $q->where('department_id', $id));
+    $inHand = $scope()->inHand();
 
     return [
-        'pendingCount' => (clone $pending)->count(),
-        'pendingAmount' => Money::of((clone $pending)->sum('amount')),
-        'nearExpiry' => (clone $pending)->whereDate('expiry_date', '<=', now()->addDays(Cheque::EXPIRY_WARNING_DAYS))->count(),
-        'clearedMonth' => Money::of(Cheque::cleared()->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
-            ->whereBetween('cleared_date', [now()->startOfMonth(), now()->endOfMonth()])->sum('amount')),
+        'inHandCount' => (clone $inHand)->count(),
+        'inHandAmount' => Money::of((clone $inHand)->sum('amount')),
+        'nearExpiry' => (clone $inHand)->whereDate('expiry_date', '<=', now()->addDays(Cheque::EXPIRY_WARNING_DAYS))->count(),
+        'depositedMonth' => Money::of($scope()->deposited()->whereBetween('deposited_date', [now()->startOfMonth()->toDateString(), now()->toDateString()])->sum('amount')),
         'filteredTotal' => Money::of((clone $this->baseQuery)->sum('amount')),
     ];
 });
 
-$companyOptions = computed(fn () => Options::companies(false));
+$companyOptions = computed(fn () => Options::companies());
+$departmentOptions = computed(fn () => Options::departments());
 
 on(['transaction-updated' => function () {
     unset($this->baseQuery, $this->cheques, $this->summary);
 }]);
 
+$undoDeposit = function (int $id) {
+    $cheque = Cheque::findOrFail($id);
+    if ($this->attempt(fn () => app(ChequeService::class)->undoDeposit($cheque)) !== false) {
+        $this->toast('success', "Cheque #{$cheque->cheque_number} is back in hand.");
+        $this->broadcastChange();
+    }
+};
+
 $delete = function (int $id) {
     $cheque = Cheque::findOrFail($id);
-    $ok = $this->attempt(function () use ($cheque) {
-        $outcome = app(ChequeService::class)->delete($cheque, auth()->user());
-        $this->toastOutcome($outcome, "Cheque #{$cheque->cheque_number} deleted.", 'The delete request');
-    });
-    if ($ok !== false) {
+    if ($this->attempt(fn () => app(ChequeService::class)->delete($cheque)) !== false) {
+        $this->toast('success', "Cheque #{$cheque->cheque_number} deleted.");
         $this->broadcastChange();
     }
 };
 
 $clearFilters = function () {
-    $this->fill(['search' => '', 'filterCompany' => null, 'from' => '', 'to' => '']);
-    $this->status = 'all';
+    $this->fill(['search' => '', 'status' => 'all', 'filterCompany' => null, 'filterDepartment' => null, 'from' => '', 'to' => '']);
     $this->resetPage('chequesPage');
 };
 
 ?>
 
 <div>
-    @unless ($companyId)
-        <div class="row g-3 mb-4">
-            <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Pending clearing" :value="$this->summary['pendingCount'].' '.\Illuminate\Support\Str::plural('cheque', $this->summary['pendingCount'])" icon="ri-time-line" color="warning" :hint="money($this->summary['pendingAmount'])" />
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Expiring within {{ \App\Models\Cheque::EXPIRY_WARNING_DAYS }} days" :value="$this->summary['nearExpiry']" icon="ri-alarm-warning-line" color="danger" hint="Includes already expired" />
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Cleared this month" :value="money($this->summary['clearedMonth'])" icon="ri-checkbox-circle-line" color="success" />
-            </div>
-            <div class="col-sm-6 col-xl-3">
-                <x-stat-card label="Total of filtered list" :value="money($this->summary['filteredTotal'])" icon="ri-filter-3-line" color="info" />
-            </div>
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-3">
+            <x-stat-card label="Cheques in hand" :value="money($this->summary['inHandAmount'])" icon="ri-time-line" color="warning" :hint="$this->summary['inHandCount'].' not yet deposited'" />
         </div>
-    @endunless
+        <div class="col-sm-6 col-xl-3">
+            <x-stat-card label="Expiring within {{ Cheque::EXPIRY_WARNING_DAYS }} days" :value="$this->summary['nearExpiry']" icon="ri-alarm-warning-line" color="danger" hint="Includes already expired" />
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <x-stat-card label="Deposited this month" :value="money($this->summary['depositedMonth'])" icon="ri-checkbox-circle-line" color="success" />
+        </div>
+        <div class="col-sm-6 col-xl-3">
+            <x-stat-card label="Total of filtered list" :value="money($this->summary['filteredTotal'])" icon="ri-filter-3-line" color="info" />
+        </div>
+    </div>
 
     <div class="card">
         <div class="card-header d-flex flex-wrap gap-2 align-items-center">
@@ -128,32 +132,36 @@ $clearFilters = function () {
                     <input type="search" class="form-control" placeholder="Search cheque #, bank, company, department…" aria-label="Search cheques" wire:model.live.debounce.350ms="search">
                 </div>
             </div>
-            <select class="form-select form-select-sm w-auto" wire:model.live="status">
+            <select class="form-select form-select-sm w-auto" wire:model.live="status" aria-label="Status">
                 <option value="all">All statuses</option>
                 @foreach (ChequeStatus::cases() as $s)
                     <option value="{{ $s->value }}">{{ $s->label() }}</option>
                 @endforeach
             </select>
             @unless ($companyId)
-                <div style="min-width:200px">
+                <div style="min-width:190px">
                     <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" />
                 </div>
             @endunless
-            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Received from">
-            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="Received to">
+            @unless ($departmentId)
+                <div style="min-width:190px">
+                    <x-searchable-select wire:model.live="filterDepartment" :options="$this->departmentOptions" placeholder="All departments" size="sm" />
+                </div>
+            @endunless
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Received from" aria-label="Received from">
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="Received to" aria-label="Received to">
             <button type="button" class="btn btn-sm btn-light" wire:click="clearFilters" title="Reset filters"><i class="ri-refresh-line"></i></button>
         </div>
 
         <div class="card-body p-0">
-            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,status,filterCompany,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
+            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,status,filterCompany,filterDepartment,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
                 <table class="table table-hover align-middle mb-0 ams-table">
                     <thead class="table-light">
                         <tr>
                             <x-sort-th field="cheque_number" :sort="$sortField" :dir="$sortDir">Cheque #</x-sort-th>
-                            @unless ($companyId)<th class="d-none d-md-table-cell">Company</th>@endunless
-                            <th class="d-none d-md-table-cell">Issued by</th>
+                            <th class="d-none d-md-table-cell">Department → Company</th>
                             <x-sort-th field="received_date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Received</x-sort-th>
-                            <x-sort-th field="expiry_date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Valid until</x-sort-th>
+                            <x-sort-th field="expiry_date" :sort="$sortField" :dir="$sortDir" class="d-none d-lg-table-cell">Valid until</x-sort-th>
                             <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money d-none d-md-table-cell">Amount</x-sort-th>
                             <x-sort-th field="status" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Status</x-sort-th>
                             <th class="text-end">Actions</th>
@@ -161,26 +169,25 @@ $clearFilters = function () {
                     </thead>
                     <tbody>
                         @forelse ($this->cheques as $c)
-                            @php($pendingReq = $c->approvalRequests->first())
                             <tr wire:key="cheque-{{ $c->id }}">
                                 <td>
                                     <div class="fw-semibold">#{{ $c->cheque_number }}</div>
                                     <div class="fs-12 text-muted">{{ $c->issuing_bank }}{{ $c->issuing_branch ? ' · '.$c->issuing_branch : '' }}</div>
-                                    {{-- Phones: company, amount, validity and status folded into this cell --}}
-                                    <div class="d-md-none mt-1">
-                                        @unless ($companyId)<div class="fs-13 fw-medium">{{ $c->company->name }}</div>@endunless
+                                    {{-- Phones: the other columns folded into this cell --}}
+                                    <div class="d-md-none mt-1 fs-13">
+                                        <div class="fw-medium">{{ $c->department->name }}</div>
+                                        <div class="text-muted">{{ $c->company->name }}</div>
                                         <div class="fw-semibold">{{ money($c->amount) }}</div>
-                                        <div class="fs-12 {{ $c->isExpired() ? 'text-danger' : ($c->isNearExpiry() ? 'text-warning' : 'text-muted') }}">Valid until {{ $c->expiry_date->format('d M Y') }}</div>
                                         <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
-                                        @if ($pendingReq)<span class="badge bg-info-subtle text-info"><i class="ri-hourglass-line"></i> Awaiting approval</span>@endif
+                                        @if ($c->isExpired())<span class="badge bg-danger-subtle text-danger">Expired</span>@endif
                                     </div>
                                 </td>
-                                @unless ($companyId)
-                                    <td class="d-none d-md-table-cell"><a href="{{ route('companies.show', $c->company_id) }}" class="text-body fw-medium">{{ $c->company->name }}</a></td>
-                                @endunless
-                                <td class="fs-13 d-none d-md-table-cell">{{ $c->department?->name ?? '—' }}</td>
-                                <td class="fs-13 d-none d-md-table-cell">{{ $c->received_date->format('d M Y') }}</td>
-                                <td class="fs-13 d-none d-md-table-cell">
+                                <td class="d-none d-md-table-cell">
+                                    <a href="{{ route('departments.show', $c->department_id) }}" class="text-body fw-medium">{{ $c->department->name }}</a>
+                                    <div class="fs-12"><a href="{{ route('companies.show', $c->company_id) }}" class="text-muted">{{ $c->company->name }}</a></div>
+                                </td>
+                                <td class="fs-13 d-none d-md-table-cell text-nowrap">{{ $c->received_date->format('d M Y') }}</td>
+                                <td class="fs-13 d-none d-lg-table-cell text-nowrap">
                                     @if ($c->isExpired())
                                         <span class="text-danger" title="Expired"><i class="ri-error-warning-fill"></i> {{ $c->expiry_date->format('d M Y') }}</span>
                                     @elseif ($c->isNearExpiry())
@@ -192,51 +199,47 @@ $clearFilters = function () {
                                 <td class="money fw-semibold d-none d-md-table-cell">{{ money($c->amount) }}</td>
                                 <td class="d-none d-md-table-cell">
                                     <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
-                                    @if ($c->status === ChequeStatus::Cleared)
-                                        <div class="fs-11 text-muted mt-1">{{ $c->clearing_method->label() }} → {{ $c->clearedInto?->name }}, {{ $c->cleared_date->format('d M') }}</div>
-                                    @elseif (in_array($c->status, [ChequeStatus::Bounced, ChequeStatus::Cancelled]))
-                                        <div class="fs-11 text-muted mt-1 text-truncate" style="max-width:180px" title="{{ $c->closed_reason }}">{{ $c->closed_reason }}</div>
-                                    @endif
-                                    @if ($pendingReq)
-                                        <div><span class="badge bg-info-subtle text-info mt-1" title="{{ $pendingReq->summary }}"><i class="ri-hourglass-line"></i> {{ $pendingReq->action->label() }} awaiting approval</span></div>
+                                    @if ($c->isDeposited())
+                                        <div class="fs-11 text-muted mt-1">→ {{ $c->depositAccount?->shortLabel() }}, {{ $c->deposited_date->format('d M') }}
+                                            @if (Money::isPositive($c->bank_charges))<br>charges {{ money($c->bank_charges) }}@endif
+                                        </div>
                                     @endif
                                 </td>
                                 <td class="text-end text-nowrap">
-                                    @if ($c->status === ChequeStatus::Received && ! $pendingReq)
-                                        <button type="button" class="btn btn-sm btn-success" wire:click="$dispatch('cheque-clear', { id: {{ $c->id }} })">
-                                            <i class="ri-checkbox-circle-line me-1"></i>Clear
+                                    @unless ($c->isDeposited())
+                                        <button type="button" class="btn btn-sm btn-success" wire:click="$dispatch('cheque-deposit', { id: {{ $c->id }} })">
+                                            <i class="ri-bank-line me-1"></i>Deposit
                                         </button>
-                                    @endif
+                                    @endunless
                                     <div class="dropdown d-inline-block">
-                                        <button class="btn btn-sm btn-light icon-btn-sm" data-bs-toggle="dropdown" aria-expanded="false"><i class="ri-more-2-fill"></i></button>
+                                        <button class="btn btn-sm btn-light icon-btn-sm" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions"><i class="ri-more-2-fill"></i></button>
                                         <ul class="dropdown-menu dropdown-menu-end">
                                             @if ($c->scan_path)
                                                 <li><a class="dropdown-item" href="{{ route('files.show', ['cheque', $c->id]) }}" target="_blank"><i class="ri-attachment-2 me-2"></i>View scan</a></li>
                                             @endif
-                                            @unless ($pendingReq)
-                                                <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line me-2"></i>Edit</a></li>
-                                                @if (in_array($c->status, [ChequeStatus::Received, ChequeStatus::Cleared]))
-                                                    <li><a class="dropdown-item text-warning" href="#" wire:click.prevent="$dispatch('cheque-close', { id: {{ $c->id }}, action: 'bounce' })"><i class="ri-arrow-go-back-line me-2"></i>Mark bounced</a></li>
-                                                @endif
-                                                @if ($c->status === ChequeStatus::Received)
-                                                    <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-close', { id: {{ $c->id }}, action: 'cancel' })"><i class="ri-close-circle-line me-2"></i>Cancel cheque</a></li>
-                                                @endif
-                                                <li><hr class="dropdown-divider"></li>
+                                            <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line me-2"></i>Edit cheque</a></li>
+                                            @if ($c->isDeposited())
+                                                <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-deposit', { id: {{ $c->id }} })"><i class="ri-bank-line me-2"></i>Edit deposit</a></li>
                                                 <li>
-                                                    <a class="dropdown-item text-danger" href="#"
-                                                        x-on:click.prevent="amsConfirm('Delete cheque #{{ $c->cheque_number }}? Its ledger entries will be voided.', 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))">
-                                                        <i class="ri-delete-bin-line me-2"></i>Delete
+                                                    <a class="dropdown-item text-warning" href="#"
+                                                        x-on:click.prevent="amsConfirm(@js('Put cheque #'.$c->cheque_number.' back in hand? The deposit will be removed from '.$c->depositAccount?->shortLabel().'.'), 'Undo deposit').then(ok => ok && $wire.undoDeposit({{ $c->id }}))">
+                                                        <i class="ri-arrow-go-back-line me-2"></i>Undo deposit
                                                     </a>
                                                 </li>
-                                            @else
-                                                <li><span class="dropdown-item-text fs-12 text-muted">Locked while awaiting approval</span></li>
-                                            @endunless
+                                            @endif
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <a class="dropdown-item text-danger" href="#"
+                                                    x-on:click.prevent="amsConfirm(@js('Delete cheque #'.$c->cheque_number.'? Its ledger entries will be voided.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))">
+                                                    <i class="ri-delete-bin-line me-2"></i>Delete
+                                                </a>
+                                            </li>
                                         </ul>
                                     </div>
                                 </td>
                             </tr>
                         @empty
-                            <x-empty-row :colspan="$companyId ? 7 : 8" icon="ri-bank-card-line" message="No cheques match these filters." />
+                            <x-empty-row :colspan="7" icon="ri-bank-card-line" message="No cheques match these filters." />
                         @endforelse
                     </tbody>
                 </table>
@@ -246,7 +249,7 @@ $clearFilters = function () {
             <div class="text-muted fs-13 me-auto">
                 Showing {{ $this->cheques->firstItem() ?? 0 }}–{{ $this->cheques->lastItem() ?? 0 }} of {{ $this->cheques->total() }}
             </div>
-            <select class="form-select form-select-sm w-auto" wire:model.live="perPage">
+            <select class="form-select form-select-sm w-auto" wire:model.live="perPage" aria-label="Rows per page">
                 @foreach ([15, 30, 50, 100] as $n)
                     <option value="{{ $n }}">{{ $n }} / page</option>
                 @endforeach

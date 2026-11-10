@@ -3,139 +3,125 @@
 namespace Database\Seeders;
 
 use App\Enums\UserRole;
-use App\Models\BankAccount;
+use App\Models\Account;
 use App\Models\Company;
-use App\Models\GovernmentDepartment;
+use App\Models\Department;
+use App\Models\ExpenseCategory;
+use App\Models\Supplier;
 use App\Models\User;
-use App\Models\Vendor;
-use App\Services\AdjustmentService;
 use App\Services\ChequeService;
-use App\Services\DisbursementService;
-use App\Services\InternalTransferService;
+use App\Services\DealService;
 use App\Services\MasterDataService;
+use App\Services\PaymentService;
+use App\Services\TransferService;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Carbon;
 
 /**
- * Realistic sample data posted through the real services (so the journal is
- * consistent). Development only:  php artisan db:seed --class=DemoDataSeeder
+ * Sample data for the middle-man model, posted through the real services so the journal is
+ * consistent:  php artisan db:seed --class=DemoDataSeeder
  *
- * Demo staff login: staff@ams.test / password
+ * Three of my companies, five government departments, three suppliers, about four months of
+ * cheques, payments, purchases (paid and on credit), transfers, expenses and one closed deal.
  */
 class DemoDataSeeder extends Seeder
 {
+    private int $chequeNo = 40211870;
+
     public function run(): void
     {
         $this->call(DatabaseSeeder::class);
 
-        $admin = User::where('email', 'admin@ams.test')->firstOrFail();
-        User::firstOrCreate(['email' => 'staff@ams.test'], [
-            'name' => 'Bilal Ahmed', 'password' => 'password', 'role' => UserRole::Staff, 'is_active' => true, 'email_verified_at' => now(),
-        ]);
-        auth()->login($admin);
+        auth()->login(User::where('role', UserRole::Admin)->orderBy('id')->firstOrFail());
 
         $master = app(MasterDataService::class);
+        $opening = now()->subDays(120)->toDateString();
+
+        // ---------------------------------------------------------------- companies & accounts
+        $noor = $master->saveCompany(null, ['name' => 'Al-Noor Traders', 'ntn' => '4217893-1', 'phone' => '0300-1234567', 'address' => 'Hall Road, Lahore', 'is_active' => true, 'cash_opening' => 150000, 'opening_date' => $opening]);
+        $zamzam = $master->saveCompany(null, ['name' => 'Zamzam Enterprises', 'ntn' => '3520187-6', 'phone' => '0321-7654321', 'address' => 'GT Road, Gujranwala', 'is_active' => true, 'cash_opening' => 80000, 'opening_date' => $opening]);
+        $crescent = $master->saveCompany(null, ['name' => 'Crescent Supplies', 'ntn' => '6110452-3', 'phone' => '0333-5551122', 'address' => 'Saddar, Rawalpindi', 'is_active' => true, 'cash_opening' => 50000, 'opening_date' => $opening]);
+
+        $bank = fn (Company $c, string $name, string $bankName, string $number, int $amount) => $master->saveAccount(null, [
+            'company_id' => $c->id, 'type' => 'bank', 'name' => $name, 'bank_name' => $bankName, 'branch' => 'Main Branch',
+            'account_title' => $c->name, 'account_number' => $number, 'opening_balance' => $amount, 'opening_date' => $opening, 'is_active' => true,
+        ]);
+
+        $noorHbl = $bank($noor, 'HBL Current', 'HBL', '0012-7790-4410', 500000);
+        $noorMcb = $bank($noor, 'MCB Business', 'MCB', '1450-0098-221', 250000);
+        $zamzamUbl = $bank($zamzam, 'UBL Current', 'UBL', '2290-4471-889', 300000);
+        $crescentMeezan = $bank($crescent, 'Meezan Current', 'Meezan Bank', '0102-5566-7781', 200000);
+
+        $cash = fn (Company $c) => Account::where('company_id', $c->id)->cash()->first();
+
+        // ---------------------------------------------------------------- customers & suppliers
+        $dept = fn (string $name, string $code, string $city) => Department::firstOrCreate(['name' => $name], ['code' => $code, 'city' => $city, 'is_active' => true]);
+        $health = $dept('District Health Office Lahore', 'LA4021', 'Lahore');
+        $school = $dept('Govt Boys High School No. 1', 'LE1180', 'Lahore');
+        $highways = $dept('Punjab Highways Division', 'GW7730', 'Gujranwala');
+        $municipal = $dept('Municipal Committee Gujranwala', 'GW1002', 'Gujranwala');
+        $agri = $dept('Agriculture Extension Office', 'RW3315', 'Rawalpindi');
+
+        $supplier = fn (string $name, string $phone) => Supplier::firstOrCreate(['name' => $name], ['phone' => $phone, 'is_active' => true]);
+        $furniture = $supplier('Al-Fatah Furniture', '042-35761234');
+        $officeMart = $supplier('Office Mart', '042-37220011');
+        $electronics = $supplier('City Electronics', '055-3841122');
+
+        $deals = app(DealService::class);
+        $deals->saveOpening(null, ['company_id' => $zamzam->id, 'supplier_id' => $electronics->id, 'amount' => 15000, 'date' => $opening, 'notes' => 'Old invoice carried over']);
+
         $cheques = app(ChequeService::class);
-        $payouts = app(DisbursementService::class);
+        $payments = app(PaymentService::class);
+        $transfers = app(TransferService::class);
+        $day = fn (int $ago) => now()->subDays($ago)->toDateString();
 
-        $vault = BankAccount::vault();
-        $hbl = $master->saveBankAccount(null, ['name' => 'HBL Main', 'type' => 'bank', 'bank_name' => 'Habib Bank Limited', 'branch' => 'Gulberg, Lahore', 'account_title' => 'AMS Traders', 'account_number' => '0123-4567890-01', 'opening_balance' => 150000, 'is_active' => true]);
-        $mcb = $master->saveBankAccount(null, ['name' => 'MCB Business', 'type' => 'bank', 'bank_name' => 'MCB Bank', 'branch' => 'Mall Road', 'account_title' => 'AMS Traders', 'account_number' => '9988-7766554', 'opening_balance' => 50000, 'is_active' => true]);
+        // ---------------------------------------------------------------- Al-Noor ↔ Health Office: spent first, cheque later, deal closed
+        $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'method' => 'goods', 'supplier_id' => $furniture->id, 'on_credit' => true, 'amount' => 180000, 'date' => $day(90), 'item_description' => '30 office chairs and 6 desks', 'reference' => 'INV-2231']);
+        $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'method' => 'cash', 'amount' => 40000, 'date' => $day(85), 'received_by' => 'Dr. Imran (store officer)']);
+        $c = $cheques->save(null, $this->cheque($noor, $health, 250000, $day(62), $day(60)));
+        $cheques->deposit($c, ['deposit_account_id' => $noorHbl->id, 'deposited_date' => $day(58), 'bank_charges' => 150, 'deposit_reference' => 'DS-88120']);
+        $payments->saveSupplierPayment(null, ['company_id' => $noor->id, 'supplier_id' => $furniture->id, 'account_id' => $noorHbl->id, 'amount' => 120000, 'date' => $day(55), 'reference' => 'CHQ-00412']);
+        $deals->close(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'date' => $day(50), 'notes' => 'Furniture supply order complete']);
 
-        $depts = collect(['Accountant General Punjab', 'District Accounts Office Lahore', 'AGPR Islamabad', 'Punjab Health Department'])
-            ->map(fn ($n, $i) => GovernmentDepartment::firstOrCreate(['name' => $n], ['city' => ['Lahore', 'Lahore', 'Islamabad', 'Lahore'][$i], 'is_active' => true]));
+        // ---------------------------------------------------------------- Al-Noor ↔ School: cheque first, spending after
+        $c = $cheques->save(null, $this->cheque($noor, $school, 120000, $day(42), $day(40)));
+        $cheques->deposit($c, ['deposit_account_id' => $noorMcb->id, 'deposited_date' => $day(38)]);
+        $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $school->id, 'method' => 'bank_transfer', 'account_id' => $noorMcb->id, 'amount' => 70000, 'date' => $day(30), 'reference' => 'IBFT-559021']);
+        $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $school->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $noorHbl->id, 'amount' => 35000, 'date' => $day(25), 'item_description' => 'Stationery and 2 printers', 'reference' => 'OM-7781']);
 
-        $vendors = collect(['Paper House', 'Al-Noor Hardware', 'TechZone Computers'])
-            ->map(fn ($n) => Vendor::firstOrCreate(['name' => $n], ['is_active' => true]));
+        // ---------------------------------------------------------------- Zamzam ↔ Highways and Municipal Committee
+        $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 100000, 'date' => $day(68), 'reference' => 'IBFT-330017', 'notes' => 'Short-term support']);
+        $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'bank_transfer', 'account_id' => $zamzamUbl->id, 'amount' => 200000, 'date' => $day(66), 'reference' => 'IBFT-411290']);
+        $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'goods', 'supplier_id' => $electronics->id, 'on_credit' => true, 'amount' => 90000, 'date' => $day(64), 'item_description' => 'Traffic signal controllers (3)']);
+        $cheques->save(null, $this->cheque($zamzam, $highways, 320000, $day(22), $day(20)));
+        $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $municipal->id, 'method' => 'cash', 'amount' => 25000, 'date' => $day(15), 'received_by' => 'Naveed (clerk)']);
+        $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 40000, 'date' => $day(12), 'notes' => 'Part repayment']);
+        $transfers->save(null, ['from_account_id' => $cash($zamzam)->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
 
-        $companies = collect([
-            ['name' => 'Al-Habib Construction', 'contact_person' => 'Usman Khalid', 'phone' => '0300-1112233', 'ntn' => '1234567-8'],
-            ['name' => 'Green Valley Suppliers', 'contact_person' => 'Ayesha Noor', 'phone' => '0321-4455667', 'ntn' => '7654321-0'],
-            ['name' => 'Crescent Medical Traders', 'contact_person' => 'Dr. Farhan', 'phone' => '0333-9988776'],
-            ['name' => 'Punjab Office Solutions', 'contact_person' => 'Kamran Ali', 'phone' => '0345-1239876', 'opening_payable' => 25000],
-        ])->map(fn ($c) => $master->saveCompany(null, $c + ['is_active' => true]));
+        // ---------------------------------------------------------------- Crescent ↔ Agriculture
+        $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $cash($crescent)->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
+        $cheques->save(null, $this->cheque($crescent, $agri, 45000, $day(12), $day(10)));
 
-        foreach ($companies as $i => $company) {
-            $company->bankAccounts()->create([
-                'bank_name' => ['Meezan Bank', 'UBL', 'Allied Bank', 'Bank Alfalah'][$i], 'account_title' => $company->name,
-                'account_number' => '10'.str_pad((string) ($i + 1), 8, '0', STR_PAD_LEFT), 'is_default' => true, 'is_active' => true,
-            ]);
-        }
-
-        // Cheques over the last 8 months, most cleared, some still pending.
-        $n = 4501;
-        for ($m = 7; $m >= 0; $m--) {
-            foreach ($companies as $i => $company) {
-                if (($m + $i) % 3 === 0) {
-                    continue;
-                }
-                $received = Carbon::now()->subMonths($m)->startOfMonth()->addDays(2 + $i * 3);
-                if ($received->isFuture()) {
-                    $received = now()->subDay();
-                }
-                $amount = [185000, 92000, 240000, 67500][$i] + $m * 7500;
-
-                $cheque = $cheques->register([
-                    'company_id' => $company->id,
-                    'government_department_id' => $depts[$i]->id,
-                    'cheque_number' => (string) $n++,
-                    'issuing_bank' => 'National Bank of Pakistan',
-                    'issuing_branch' => 'Treasury Branch',
-                    'amount' => $amount,
-                    'cheque_date' => $received->copy()->subDays(2)->toDateString(),
-                    'received_date' => $received->toDateString(),
-                ], $admin);
-
-                if ($m === 0 && $i % 2 === 0) {
-                    continue; // leave pending
-                }
-
-                $encash = ($n % 4) === 0;
-                $cheques->performClear($cheque, [
-                    'clearing_method' => $encash ? 'encashment' : 'deposit',
-                    'cleared_into_account_id' => $i % 2 ? $mcb->id : $hbl->id,
-                    'cleared_date' => $received->copy()->addDays(3)->min(now())->toDateString(),
-                    'commission_type' => 'percent',
-                    'commission_rate' => [2, 1.5, 2.5, 3][$i],
-                    'bank_charges' => $encash ? 0 : 150,
-                ], $admin);
-
-                // Pay out most of it within the same month.
-                $company->refresh();
-                $payable = (float) $company->payable_balance;
-                $date = $received->copy()->addDays(6)->min(now())->toDateString();
-                $kind = ($m + $i) % 3;
-
-                if ($kind === 1 && (float) $vault->fresh()->current_balance > 0) {
-                    $amt = min(round($payable * 0.6), (float) $vault->fresh()->current_balance);
-                    if ($amt > 0) {
-                        $payouts->create(['company_id' => $company->id, 'type' => 'cash_payout', 'source_account_id' => $vault->id,
-                            'amount' => $amt, 'date' => $date, 'received_by' => $company->contact_person], $admin);
-                    }
-                } elseif ($kind === 2) {
-                    $src = $i % 2 ? $mcb : $hbl;
-                    $amt = min(round($payable * 0.3), (float) $src->fresh()->current_balance);
-                    if ($amt > 0) {
-                        $payouts->create(['company_id' => $company->id, 'type' => 'vendor_purchase', 'source_account_id' => $src->id,
-                            'vendor_id' => $vendors[$i % 3]->id, 'amount' => $amt, 'date' => $date, 'item_description' => 'Supplies for site / office'], $admin);
-                    }
-                } else {
-                    $src = $i % 2 ? $mcb : $hbl;
-                    $amt = min(round($payable * 0.7), (float) $src->fresh()->current_balance);
-                    if ($amt > 0) {
-                        $payouts->create(['company_id' => $company->id, 'type' => 'bank_transfer', 'source_account_id' => $src->id, 'date' => $date,
-                            'lines' => [['company_bank_account_id' => $company->bankAccounts()->value('id'), 'amount' => $amt, 'reference' => 'IBFT'.random_int(100000, 999999)]]], $admin);
-                    }
-                }
-            }
-        }
-
-        app(InternalTransferService::class)->create(['from_account_id' => $hbl->id, 'to_account_id' => $vault->id, 'amount' => 75000,
-            'date' => now()->subDays(10)->toDateString(), 'reference' => 'Cash withdrawal', 'notes' => 'Float for cash payouts'], $admin);
-
-        app(AdjustmentService::class)->create(['company_id' => $companies[1]->id, 'kind' => 'receivable_charge', 'amount' => 15000,
-            'date' => now()->subDays(20)->toDateString(), 'reason' => 'Advance for transport, to be recovered'], $admin);
+        // ---------------------------------------------------------------- own transfers & expenses
+        $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 50000, 'date' => $day(45), 'reference' => 'ATM']);
+        $category = fn (string $name) => ExpenseCategory::where('name', $name)->value('id');
+        $payments->saveExpense(null, ['company_id' => $noor->id, 'expense_category_id' => $category('Fuel'), 'account_id' => $cash($noor)->id, 'amount' => 8500, 'date' => $day(20), 'description' => 'Delivery van diesel']);
+        $payments->saveExpense(null, ['company_id' => $zamzam->id, 'expense_category_id' => $category('Office rent'), 'account_id' => $zamzamUbl->id, 'amount' => 35000, 'date' => $day(5), 'description' => 'Office rent for the month']);
+        $payments->saveExpense(null, ['company_id' => $crescent->id, 'expense_category_id' => $category('Utilities'), 'account_id' => $cash($crescent)->id, 'amount' => 6200, 'date' => $day(3), 'description' => 'Electricity bill']);
 
         auth()->logout();
+    }
+
+    private function cheque(Company $company, Department $department, int $amount, string $chequeDate, string $received): array
+    {
+        return [
+            'company_id' => $company->id,
+            'department_id' => $department->id,
+            'cheque_number' => (string) $this->chequeNo++,
+            'issuing_bank' => 'National Bank of Pakistan',
+            'issuing_branch' => 'AG Office Branch',
+            'amount' => $amount,
+            'cheque_date' => $chequeDate,
+            'received_date' => $received,
+        ];
     }
 }

@@ -17,8 +17,9 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 class Transaction extends Model
 {
     protected $fillable = [
-        'date', 'type', 'source_type', 'source_id', 'company_id', 'source_account_id', 'destination_account_id',
-        'amount', 'cheque_number', 'description', 'notes', 'status', 'created_by', 'voided_by', 'voided_at',
+        'date', 'type', 'source_type', 'source_id', 'company_id', 'counterparty_company_id', 'account_id', 'to_account_id',
+        'department_id', 'supplier_id', 'amount', 'reference', 'description', 'notes', 'status',
+        'created_by', 'voided_by', 'voided_at',
     ];
 
     protected function casts(): array
@@ -47,14 +48,29 @@ class Transaction extends Model
         return $this->belongsTo(Company::class)->withTrashed();
     }
 
-    public function sourceAccount(): BelongsTo
+    public function counterpartyCompany(): BelongsTo
     {
-        return $this->belongsTo(BankAccount::class, 'source_account_id')->withTrashed();
+        return $this->belongsTo(Company::class, 'counterparty_company_id')->withTrashed();
     }
 
-    public function destinationAccount(): BelongsTo
+    public function account(): BelongsTo
     {
-        return $this->belongsTo(BankAccount::class, 'destination_account_id')->withTrashed();
+        return $this->belongsTo(Account::class)->withTrashed();
+    }
+
+    public function toAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'to_account_id')->withTrashed();
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Supplier::class);
     }
 
     public function creator(): BelongsTo

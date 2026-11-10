@@ -2,13 +2,14 @@
 
 namespace Tests\Feature\Ui;
 
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\BuildsLedgerFixtures;
 use Tests\TestCase;
 
 /**
- * Every screen renders for the right role, and is protected for the wrong one.
+ * Every screen renders for an administrator; guests and non-admins are kept out.
  */
 class PagesRenderTest extends TestCase
 {
@@ -18,46 +19,41 @@ class PagesRenderTest extends TestCase
     {
         parent::setUp();
         $this->setUpLedger();
-        $this->clearedCheque('50000');
-        $this->registerCheque();
+        $this->fundBank('50000');
+        $this->receiveCheque();
+        $this->pay(['method' => 'goods', 'supplier_id' => $this->supplier->id, 'on_credit' => true, 'account_id' => null, 'amount' => '7000', 'item_description' => 'Chairs']);
     }
 
-    public static function sharedPages(): array
+    public static function pages(): array
     {
         return [
-            ['/dashboard'], ['/cheques'], ['/disbursements'], ['/transfers'], ['/transactions'],
-            ['/companies'], ['/bank-accounts'], ['/vendors'], ['/departments'], ['/profile'],
+            ['/dashboard'], ['/cheques'], ['/payments'], ['/supplier-payments'], ['/expenses'], ['/transfers'],
+            ['/companies'], ['/accounts'], ['/departments'], ['/suppliers'], ['/transactions'],
+            ['/opening-balances'], ['/expense-categories'], ['/users'], ['/audit-log'], ['/profile'],
         ];
     }
 
-    public static function adminPages(): array
-    {
-        return [['/adjustments'], ['/approvals'], ['/users'], ['/audit-log']];
-    }
-
-    #[DataProvider('sharedPages')]
-    public function test_shared_pages_render_for_staff(string $url): void
-    {
-        $this->actingAs($this->staff)->get($url)->assertOk();
-    }
-
-    #[DataProvider('adminPages')]
-    public function test_admin_pages_render_for_admin(string $url): void
+    #[DataProvider('pages')]
+    public function test_pages_render_for_admin(string $url): void
     {
         $this->actingAs($this->admin)->get($url)->assertOk();
     }
 
-    #[DataProvider('adminPages')]
-    public function test_admin_pages_are_forbidden_for_staff(string $url): void
+    public function test_detail_pages_and_statements_render(): void
     {
-        $this->actingAs($this->staff)->get($url)->assertForbidden();
-    }
+        $this->get("/companies/{$this->company->id}")->assertOk()->assertSee('Al-Noor Traders')->assertSee('Company ledger');
+        $this->get("/accounts/{$this->bank->id}")->assertOk()->assertSee('Bank Statement');
+        $this->get("/accounts/{$this->cash->id}")->assertOk()->assertSee('Cash Statement');
+        $this->get("/departments/{$this->dept->id}")->assertOk()->assertSee('Health Dept')->assertSee('Department Ledger');
+        $this->get("/suppliers/{$this->supplier->id}")->assertOk()->assertSee('Office Mart')->assertSee('Supplier Ledger');
 
-    public function test_company_statement_page_and_pdf(): void
-    {
-        $this->actingAs($this->staff)->get("/companies/{$this->company->id}")->assertOk()->assertSee('Acme Traders');
-        $this->actingAs($this->staff)->get("/companies/{$this->company->id}/statement/print")->assertOk()->assertSee('Statement of Account');
-        $this->actingAs($this->staff)->get("/companies/{$this->company->id}/statement.pdf")->assertOk()->assertHeader('content-type', 'application/pdf');
+        foreach ([['account', $this->bank->id], ['department', $this->dept->id], ['supplier', $this->supplier->id], ['company', $this->company->id]] as [$kind, $id]) {
+            $this->get("/statements/{$kind}/{$id}/print")->assertOk()->assertSee('Opening balance');
+            $this->get("/statements/{$kind}/{$id}/pdf")->assertOk()->assertHeader('content-type', 'application/pdf');
+        }
+
+        $this->get("/statements/department/{$this->dept->id}/print?company={$this->company->id}&from=".now()->subYear()->toDateString())->assertOk();
+        $this->get('/statements/vendor/1/print')->assertNotFound();
     }
 
     public function test_redirects_stay_inside_a_sub_path_install(): void
@@ -87,9 +83,13 @@ class PagesRenderTest extends TestCase
         $this->get('/login')->assertOk()->assertSee('Sign In');
     }
 
-    public function test_inactive_users_are_signed_out(): void
+    public function test_inactive_users_and_non_admins_are_signed_out(): void
     {
-        $this->staff->update(['is_active' => false]);
-        $this->actingAs($this->staff)->get('/dashboard')->assertRedirect('/login');
+        $staff = User::factory()->create();
+        $this->actingAs($staff)->get('/dashboard')->assertRedirect('/login');
+        $this->assertGuest();
+
+        $this->admin->update(['is_active' => false]);
+        $this->actingAs($this->admin->fresh())->get('/dashboard')->assertRedirect('/login');
     }
 }

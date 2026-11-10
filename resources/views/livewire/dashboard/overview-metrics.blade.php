@@ -1,45 +1,38 @@
 <?php
 
 /**
- * Real-time stat cards. Re-queries whenever any component dispatches 'transaction-updated'.
+ * Real-time stat cards, for all companies or one. Re-queries on 'transaction-updated';
+ * the company picker also tells the charts which company to show.
  */
 
-use App\Enums\BankAccountType;
-use App\Enums\LedgerAccount;
-use App\Enums\TransactionStatus;
-use App\Models\BankAccount;
-use App\Models\Cheque;
-use App\Models\Company;
-use App\Models\JournalLedgerEntry;
+use App\Services\Balances;
 use App\Support\Money;
+use App\Support\Options;
 
-use function Livewire\Volt\{computed, on};
+use function Livewire\Volt\{computed, on, state};
+
+state(['company' => null]);
 
 $metrics = computed(function () {
-    $pending = Cheque::pending();
-    $accounts = BankAccount::query()->get(['id', 'type', 'current_balance', 'is_active']);
-
-    // My commission earned this month, straight from the journal.
-    $commission = JournalLedgerEntry::query()
-        ->where('ledger_account', LedgerAccount::CommissionIncome)
-        ->whereHas('transaction', fn ($q) => $q->where('status', TransactionStatus::Posted)
-            ->whereBetween('date', [now()->startOfMonth(), now()->endOfMonth()]))
-        ->selectRaw('COALESCE(SUM(credit) - SUM(debit), 0) as total')->value('total');
+    $companyId = $this->company ? (int) $this->company : null;
+    $depts = Balances::departments($companyId);
 
     return [
-        'pendingCount' => (clone $pending)->count(),
-        'pendingAmount' => Money::of((clone $pending)->sum('amount')),
-        'expiring' => (clone $pending)->whereDate('expiry_date', '<=', now()->addDays(Cheque::EXPIRY_WARNING_DAYS))->count(),
-        'vault' => Money::of($accounts->where('type', BankAccountType::Cash)->sum('current_balance')),
-        'bank' => Money::of($accounts->where('type', BankAccountType::Bank)->sum('current_balance')),
-        'bankCount' => $accounts->where('type', BankAccountType::Bank)->where('is_active', true)->count(),
-        'payables' => Money::of(Company::sum('payable_balance')),
-        'payableCompanies' => Company::where('payable_balance', '>', 0)->count(),
-        'receivables' => Money::of(Company::sum('receivable_balance')),
-        'receivableCompanies' => Company::where('receivable_balance', '>', 0)->count(),
-        'commission' => Money::of($commission),
+        'money' => Balances::money($companyId),
+        'cheques' => Balances::chequesInHand($companyId),
+        'deptsOwe' => Money::add(...$depts->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
+        'deptsOweCount' => $depts->filter(fn ($r) => Money::isPositive($r->balance))->unique('department_id')->count(),
+        'deptsHeld' => Money::sub(0, Money::add(...$depts->filter(fn ($r) => Money::isNegative($r->balance))->pluck('balance')->all())),
+        'suppliers' => Money::add(...Balances::suppliers($companyId)->pluck('owed')->all()),
+        'profit' => Balances::profit($companyId, now()->startOfMonth(), now()),
     ];
 });
+
+$companyOptions = computed(fn () => Options::companies());
+
+$updatedCompany = function () {
+    $this->dispatch('dashboard-company', company: $this->company ? (int) $this->company : null);
+};
 
 on(['transaction-updated' => function () {
     unset($this->metrics);
@@ -47,25 +40,32 @@ on(['transaction-updated' => function () {
 
 ?>
 
-<div class="row g-3 mb-4" wire:poll.120s.visible>
+<div wire:poll.120s.visible>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <span class="text-muted fs-13">Showing</span>
+        <div style="min-width:240px"><x-searchable-select wire:model.live="company" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
+    </div>
+
     @php($m = $this->metrics)
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Cheques pending clearing" :value="money($m['pendingAmount'])" icon="ri-time-line" color="warning"
-            :hint="$m['pendingCount'].' cheque(s)'.($m['expiring'] ? ' · <span class=\'text-danger\'>'.$m['expiring'].' expiring</span>' : '')" :href="route('cheques.index', ['status' => 'received'])" />
-    </div>
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Cash in vault" :value="money($m['vault'])" icon="ri-safe-2-line" color="success" hint="Physical cash on hand" :href="route('bank-accounts.index')" />
-    </div>
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Bank liquidity" :value="money($m['bank'])" icon="ri-bank-line" color="primary" :hint="$m['bankCount'].' active bank account(s)'" :href="route('bank-accounts.index')" />
-    </div>
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Payable to companies" :value="money($m['payables'])" icon="ri-building-2-line" color="info" :hint="$m['payableCompanies'].' company(ies) owed'" :href="route('companies.index')" />
-    </div>
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Receivable from companies" :value="money($m['receivables'])" icon="ri-arrow-go-back-line" color="danger" :hint="$m['receivableCompanies'].' company(ies) owe you'" :href="route('companies.index')" />
-    </div>
-    <div class="col-sm-6 col-xxl">
-        <x-stat-card label="Commission this month" :value="money($m['commission'])" icon="ri-percent-line" color="secondary" :hint="now()->format('F Y')" />
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="Cash in hand" :value="money($m['money']['cash'])" icon="ri-wallet-3-line" color="success" hint="Physical cash" :href="route('accounts.index')" />
+        </div>
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="In banks" :value="money($m['money']['bank'])" icon="ri-bank-line" color="primary" :hint="'Total money '.money($m['money']['total'])" :href="route('accounts.index')" />
+        </div>
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="Cheques in hand" :value="money($m['cheques']['amount'])" icon="ri-time-line" color="warning" :hint="$m['cheques']['count'].' to deposit'" :href="route('cheques.index')" />
+        </div>
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="Departments owe you" :value="money($m['deptsOwe'])" icon="ri-government-line" color="danger" :hint="'You hold '.money($m['deptsHeld']).' for others'" :href="route('departments.index')" />
+        </div>
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="Owed to suppliers" :value="money($m['suppliers'])" icon="ri-truck-line" color="info" hint="Goods bought on credit" :href="route('suppliers.index')" />
+        </div>
+        <div class="col-sm-6 col-xl-4 col-xxl">
+            <x-stat-card label="Profit this month" :value="money($m['profit']['net'])" icon="ri-line-chart-line" :color="Money::isNegative($m['profit']['net']) ? 'danger' : 'secondary'"
+                :hint="'Deals '.money($m['profit']['deals']).' − costs '.money(Money::add($m['profit']['expenses'], $m['profit']['charges']))" />
+        </div>
     </div>
 </div>

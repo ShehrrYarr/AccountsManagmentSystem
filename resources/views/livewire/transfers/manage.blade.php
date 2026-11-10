@@ -1,14 +1,18 @@
 <?php
 
 /**
- * Internal transfers between my own accounts (e.g. withdraw cash from bank into the vault).
+ * Transfers: within one company (ATM withdrawal, cash deposit, bank to bank) or between my companies.
+ * List + modal; embeddable on a company page.
+ *
+ * Open the form with: $dispatch('transfer-create', { companyId: 1, mode: 'own' | 'intercompany' })  (optional)
  */
 
-use App\Enums\ApprovalStatus;
 use App\Livewire\Concerns\InteractsWithUi;
-use App\Models\BankAccount;
-use App\Models\InternalTransfer;
-use App\Services\InternalTransferService;
+use App\Models\Account;
+use App\Models\Company;
+use App\Models\Transfer;
+use App\Services\Balances;
+use App\Services\TransferService;
 use App\Support\Money;
 use App\Support\Options;
 
@@ -17,76 +21,118 @@ use function Livewire\Volt\{computed, on, rules, state, uses, usesPagination};
 uses([InteractsWithUi::class]);
 usesPagination(theme: 'bootstrap');
 
-state(['transferId' => null])->locked();
+state(['companyId' => null, 'recordId' => null, 'modalOnly' => false])->locked();
+state(['filterKind' => '', 'filterCompany' => null, 'from' => '', 'to' => '']);
 state([
-    'from_account_id' => null,
-    'to_account_id' => null,
-    'amount' => '',
-    'date' => '',
-    'reference' => '',
-    'notes' => '',
-    'search' => '',
+    'mode' => 'own', 'from_company_id' => null, 'from_account_id' => null, 'to_company_id' => null, 'to_account_id' => null,
+    'amount' => '', 'date' => '', 'reference' => '', 'notes' => '',
 ]);
 
-rules([
-    'from_account_id' => ['required', 'exists:bank_accounts,id'],
-    'to_account_id' => ['required', 'different:from_account_id', 'exists:bank_accounts,id'],
+rules(fn () => [
+    'from_company_id' => ['required', 'exists:companies,id'],
+    'to_company_id' => [$this->mode === 'intercompany' ? 'required' : 'nullable', 'exists:companies,id', $this->mode === 'intercompany' ? 'different:from_company_id' : 'nullable'],
+    'from_account_id' => ['required', 'exists:accounts,id'],
+    'to_account_id' => ['required', 'exists:accounts,id', 'different:from_account_id'],
     'amount' => ['required', 'numeric', 'gt:0'],
     'date' => ['required', 'date', 'before_or_equal:today'],
     'reference' => ['nullable', 'string', 'max:255'],
-    'notes' => ['nullable', 'string', 'max:1000'],
-])->messages(['to_account_id.different' => 'Choose a different account to transfer into.']);
+    'notes' => ['nullable', 'string', 'max:2000'],
+])->messages([
+    'to_company_id.different' => 'Choose a different company to receive the money.',
+    'to_account_id.different' => 'Choose two different accounts.',
+    'from_account_id.required' => 'Choose the account the money leaves.',
+    'to_account_id.required' => 'Choose the account the money goes to.',
+]);
 
-$accountOptions = computed(fn () => Options::bankAccounts());
+$updated = function ($property) {
+    if (in_array($property, ['filterKind', 'filterCompany', 'from', 'to'], true)) {
+        $this->resetPage('trPage');
+    }
+    if ($property === 'from_company_id') {
+        $this->from_account_id = null;
+        if ($this->mode === 'own') {
+            $this->to_account_id = null;
+        }
+    }
+    if ($property === 'to_company_id') {
+        $this->to_account_id = null;
+    }
+    if ($property === 'mode') {
+        $this->fill(['to_company_id' => null, 'to_account_id' => null]);
+        $this->resetErrorBag();
+    }
+};
 
-$fromAccount = computed(fn () => $this->from_account_id ? BankAccount::find($this->from_account_id) : null);
+$baseQuery = computed(function () {
+    $company = $this->companyId ?? $this->filterCompany;
 
-$transfers = computed(fn () => InternalTransfer::query()
-    ->with(['fromAccount', 'toAccount', 'creator', 'approvalRequests' => fn ($q) => $q->where('status', ApprovalStatus::Pending)])
-    ->when($this->search, fn ($q) => $q->where(fn ($q) => $q->where('reference', 'like', "%{$this->search}%")->orWhere('notes', 'like', "%{$this->search}%")))
-    ->latest('date')->latest('id')
-    ->paginate(15));
+    return Transfer::query()
+        ->when($company, fn ($q) => $q->where(fn ($q) => $q
+            ->whereHas('fromAccount', fn ($a) => $a->where('company_id', $company))
+            ->orWhereHas('toAccount', fn ($a) => $a->where('company_id', $company))))
+        ->when($this->filterKind === 'own', fn ($q) => $q->whereRaw('(select company_id from accounts where accounts.id = transfers.from_account_id) = (select company_id from accounts where accounts.id = transfers.to_account_id)'))
+        ->when($this->filterKind === 'intercompany', fn ($q) => $q->whereRaw('(select company_id from accounts where accounts.id = transfers.from_account_id) <> (select company_id from accounts where accounts.id = transfers.to_account_id)'))
+        ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
+        ->when($this->to, fn ($q) => $q->whereDate('date', '<=', $this->to));
+});
 
-$updatedSearch = fn () => $this->resetPage();
+$rows = computed(fn () => (clone $this->baseQuery)->with(['fromAccount.company', 'toAccount.company'])
+    ->orderByDesc('date')->orderByDesc('id')->paginate(15, pageName: 'trPage'));
+
+$companyOptions = computed(fn () => Options::companies());
+$fromAccounts = computed(fn () => $this->from_company_id ? Options::accounts((int) $this->from_company_id, null, $this->from_account_id) : []);
+$toAccounts = computed(function () {
+    $company = $this->mode === 'own' ? $this->from_company_id : $this->to_company_id;
+
+    return $company ? Options::accounts((int) $company, null, $this->to_account_id) : [];
+});
+
+// What the receiving company already owes the sending one (positive) — before this transfer.
+$owed = computed(function () {
+    if ($this->mode !== 'intercompany' || ! $this->from_company_id || ! $this->to_company_id || $this->from_company_id == $this->to_company_id) {
+        return null;
+    }
+    $owed = Balances::owedBetween((int) $this->from_company_id, (int) $this->to_company_id);
+    if ($this->recordId && ($old = Transfer::with(['fromAccount', 'toAccount'])->find($this->recordId)) && $old->isInterCompany()) {
+        $owed = $old->fromAccount->company_id == $this->from_company_id ? Money::sub($owed, $old->amount) : Money::add($owed, $old->amount);
+    }
+
+    return ['owed' => $owed, 'from' => Company::find($this->from_company_id)?->name, 'to' => Company::find($this->to_company_id)?->name];
+});
 
 on(['transaction-updated' => function () {
-    unset($this->transfers, $this->accountOptions, $this->fromAccount);
+    unset($this->baseQuery, $this->rows, $this->fromAccounts, $this->toAccounts, $this->owed);
 }]);
 
-$create = function () {
+on(['transfer-create' => function (?int $companyId = null, ?string $mode = null) {
     $this->resetErrorBag();
-    $this->fill(['from_account_id' => null, 'to_account_id' => null, 'amount' => '', 'reference' => '', 'notes' => '']);
-    $this->transferId = null;
-    $this->date = now()->toDateString();
+    $this->recordId = null;
+    $this->fill([
+        'mode' => $mode === 'intercompany' ? 'intercompany' : 'own', 'from_company_id' => $companyId ?? $this->companyId, 'from_account_id' => null,
+        'to_company_id' => null, 'to_account_id' => null, 'amount' => '', 'date' => now()->toDateString(), 'reference' => '', 'notes' => '',
+    ]);
     $this->showModal('transferModal');
-};
+}]);
 
 $edit = function (int $id) {
     $this->resetErrorBag();
-    $t = InternalTransfer::findOrFail($id);
-    $this->transferId = $t->id;
-    $this->fill($t->only(['from_account_id', 'to_account_id', 'amount', 'reference', 'notes']) + ['date' => $t->date->toDateString()]);
+    $t = Transfer::with(['fromAccount', 'toAccount'])->findOrFail($id);
+    $this->recordId = $t->id;
+    $this->fill([
+        'mode' => $t->isInterCompany() ? 'intercompany' : 'own',
+        'from_company_id' => $t->fromAccount->company_id, 'from_account_id' => $t->from_account_id,
+        'to_company_id' => $t->isInterCompany() ? $t->toAccount->company_id : null, 'to_account_id' => $t->to_account_id,
+        'amount' => $t->amount, 'date' => $t->date->toDateString(), 'reference' => $t->reference ?? '', 'notes' => $t->notes ?? '',
+    ]);
     $this->showModal('transferModal');
-};
-
-$swap = function () {
-    [$this->from_account_id, $this->to_account_id] = [$this->to_account_id, $this->from_account_id];
 };
 
 $save = function () {
     $data = $this->validate();
-    $service = app(InternalTransferService::class);
-
-    $ok = $this->attempt(function () use ($service, $data) {
-        if ($this->transferId) {
-            $outcome = $service->update(InternalTransfer::findOrFail($this->transferId), $data, auth()->user());
-            $this->toastOutcome($outcome, 'Transfer updated.', 'Your edit');
-        } else {
-            $t = $service->create($data, auth()->user());
-            $this->toast('success', 'Moved '.money($t->amount)." from {$t->fromAccount->name} to {$t->toAccount->name}.");
-        }
+    $ok = $this->attempt(function () use ($data) {
+        $t = app(TransferService::class)->save($this->recordId ? Transfer::findOrFail($this->recordId) : null, $data);
+        $this->toast('success', $t->kind().' of '.money($t->amount).' saved.');
     });
-
     if ($ok !== false) {
         $this->hideModal('transferModal');
         $this->broadcastChange();
@@ -94,11 +140,9 @@ $save = function () {
 };
 
 $delete = function (int $id) {
-    $ok = $this->attempt(function () use ($id) {
-        $outcome = app(InternalTransferService::class)->delete(InternalTransfer::findOrFail($id), auth()->user());
-        $this->toastOutcome($outcome, 'Transfer deleted.', 'The delete request');
-    });
-    if ($ok !== false) {
+    $t = Transfer::findOrFail($id);
+    if ($this->attempt(fn () => app(TransferService::class)->delete($t)) !== false) {
+        $this->toast('success', 'Transfer deleted.');
         $this->broadcastChange();
     }
 };
@@ -106,96 +150,140 @@ $delete = function (int $id) {
 ?>
 
 <div>
+    @unless ($modalOnly)
     <div class="card">
         <div class="card-header d-flex flex-wrap gap-2 align-items-center">
-            <h5 class="card-title mb-0 me-auto">Transfers between my accounts</h5>
-            <input type="search" class="form-control form-control-sm w-auto" placeholder="Search reference / notes" wire:model.live.debounce.350ms="search">
-            <button type="button" class="btn btn-sm btn-primary" wire:click="create"><i class="ri-arrow-left-right-line me-1"></i>New Transfer</button>
+            <select class="form-select form-select-sm w-auto" wire:model.live="filterKind" aria-label="Kind">
+                <option value="">All transfers</option>
+                <option value="own">Within a company</option>
+                <option value="intercompany">Between companies</option>
+            </select>
+            @unless ($companyId)
+                <div style="min-width:190px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
+            @endunless
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" aria-label="From date">
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" aria-label="To date">
+            <div class="ms-auto d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-primary" wire:click="$dispatch('transfer-create', { mode: 'own' })"><i class="ri-arrow-left-right-line me-1"></i>Own transfer</button>
+                <button type="button" class="btn btn-sm btn-info" wire:click="$dispatch('transfer-create', { mode: 'intercompany' })"><i class="ri-building-2-line me-1"></i>Between companies</button>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0 ams-table">
                     <thead class="table-light">
-                        <tr><th>Date</th><th>From</th><th></th><th>To</th><th class="money">Amount</th><th>Reference</th><th>By</th><th class="text-end">Actions</th></tr>
+                        <tr><th>Date</th><th>Transfer</th><th class="d-none d-md-table-cell">Reference</th><th class="money">Amount</th><th></th></tr>
                     </thead>
                     <tbody>
-                        @forelse ($this->transfers as $t)
-                            @php($pendingReq = $t->approvalRequests->first())
+                        @forelse ($this->rows as $t)
                             <tr wire:key="tr-{{ $t->id }}">
-                                <td class="fs-13">{{ $t->date->format('d M Y') }}</td>
-                                <td>{{ $t->fromAccount->name }}</td>
-                                <td class="text-muted"><i class="ri-arrow-right-line"></i></td>
-                                <td>{{ $t->toAccount->name }}</td>
+                                <td class="fs-13 text-nowrap">{{ $t->date->format('d M Y') }}</td>
+                                <td class="fs-13">
+                                    <span class="badge {{ $t->isInterCompany() ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary' }}">{{ $t->kind() }}</span>
+                                    <div class="mt-1">
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->fromAccount->company->name }}</span> · @endif{{ $t->fromAccount->shortLabel() }}
+                                        <i class="ri-arrow-right-line text-muted"></i>
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->toAccount->company->name }}</span> · @endif{{ $t->toAccount->shortLabel() }}
+                                    </div>
+                                    @if (! $t->isInterCompany() && ! $companyId)<div class="fs-12 text-muted">{{ $t->fromAccount->company->name }}</div>@endif
+                                </td>
+                                <td class="fs-13 d-none d-md-table-cell">{{ $t->reference ?: '—' }}</td>
                                 <td class="money fw-semibold">{{ money($t->amount) }}</td>
-                                <td class="fs-13">{{ $t->reference ?? '—' }} @if ($t->notes)<div class="fs-11 text-muted">{{ $t->notes }}</div>@endif</td>
-                                <td class="fs-13">{{ $t->creator?->name }}</td>
                                 <td class="text-end text-nowrap">
-                                    @if ($pendingReq)
-                                        <span class="badge bg-info-subtle text-info"><i class="ri-hourglass-line"></i> {{ $pendingReq->action->label() }} pending</span>
-                                    @else
-                                        <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="edit({{ $t->id }})" title="Edit"><i class="ri-edit-line"></i></button>
-                                        <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
-                                            x-on:click="amsConfirm('Delete this transfer of {{ money($t->amount) }}?', 'Delete').then(ok => ok && $wire.delete({{ $t->id }}))"><i class="ri-delete-bin-line"></i></button>
-                                    @endif
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="edit({{ $t->id }})"><i class="ri-edit-line"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
+                                        x-on:click="amsConfirm(@js('Delete this transfer of '.money($t->amount).'?'), 'Delete').then(ok => ok && $wire.delete({{ $t->id }}))"><i class="ri-delete-bin-line"></i></button>
                                 </td>
                             </tr>
                         @empty
-                            <x-empty-row :colspan="8" icon="ri-arrow-left-right-line" message="No internal transfers yet." />
+                            <x-empty-row :colspan="5" icon="ri-arrow-left-right-line" message="No transfers yet." />
                         @endforelse
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="card-footer">{{ $this->transfers->links() }}</div>
+        <div class="card-footer">{{ $this->rows->onEachSide(1)->links() }}</div>
     </div>
+    @endunless
 
-    <x-modal id="transferModal" :title="$transferId ? 'Edit Transfer' : 'Move Money Between My Accounts'" icon="ri-arrow-left-right-line" size="md">
+    <x-modal id="transferModal" :title="$recordId ? 'Edit Transfer' : 'New Transfer'" icon="ri-arrow-left-right-line" size="lg">
         <form wire:submit="save">
             <div class="modal-body">
-                @error('general') <div class="alert alert-danger">{{ $message }}</div> @enderror
-                <div class="mb-3">
-                    <label class="form-label">From <span class="text-danger">*</span></label>
-                    <x-searchable-select wire:model.live="from_account_id" :options="$this->accountOptions" placeholder="Source account" :invalid="$errors->has('from_account_id')" />
-                    @error('from_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                <div class="btn-group w-100 mb-3" role="group" aria-label="Transfer type">
+                    <input type="radio" class="btn-check" id="tr-own" value="own" wire:model.live="mode">
+                    <label class="btn btn-outline-primary" for="tr-own"><i class="ri-arrow-left-right-line me-1"></i>Within one company</label>
+                    <input type="radio" class="btn-check" id="tr-ic" value="intercompany" wire:model.live="mode">
+                    <label class="btn btn-outline-info" for="tr-ic"><i class="ri-building-2-line me-1"></i>Between my companies</label>
                 </div>
-                <div class="text-center my-2">
-                    <button type="button" class="btn btn-sm btn-light rounded-circle icon-btn-sm" wire:click="swap" title="Swap"><i class="ri-arrow-up-down-line"></i></button>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">To <span class="text-danger">*</span></label>
-                    <x-searchable-select wire:model.live="to_account_id" :options="$this->accountOptions" placeholder="Destination account" :invalid="$errors->has('to_account_id')" />
-                    @error('to_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                </div>
+                <p class="fs-13 text-muted">
+                    {{ $mode === 'own'
+                        ? 'ATM / cash withdrawal (bank → cash), cash deposit (cash → bank) or bank to bank, inside the same company.'
+                        : 'Money sent from one of your companies to another. The receiving company will owe the sender until it is sent back.' }}
+                </p>
+
                 <div class="row g-3">
-                    <div class="col-6">
-                        <label class="form-label">Amount <span class="text-danger">*</span></label>
-                        <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model.live.debounce.400ms="amount">
-                        @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        @if ($this->fromAccount)
-                            <div class="form-text">Available: {{ money($this->fromAccount->current_balance) }}</div>
-                        @endif
+                    <div class="{{ $mode === 'own' ? 'col-12' : 'col-md-6' }}">
+                        <label class="form-label">{{ $mode === 'own' ? 'Company' : 'From company' }} <span class="text-danger">*</span></label>
+                        <x-searchable-select wire:model.live="from_company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('from_company_id')" />
+                        @error('from_company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-6">
+                    @if ($mode === 'intercompany')
+                        <div class="col-md-6">
+                            <label class="form-label">To company <span class="text-danger">*</span></label>
+                            <x-searchable-select wire:model.live="to_company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('to_company_id')" />
+                            @error('to_company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
+                    <div class="col-md-6">
+                        <label class="form-label">From account <span class="text-danger">*</span></label>
+                        <x-searchable-select wire:model.live="from_account_id" :options="$this->fromAccounts" :placeholder="$from_company_id ? 'Money leaves…' : 'Select a company first'" :disabled="! $from_company_id" :invalid="$errors->has('from_account_id')" />
+                        @error('from_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">To account <span class="text-danger">*</span></label>
+                        @php($toReady = $mode === 'own' ? $from_company_id : $to_company_id)
+                        <x-searchable-select wire:model.live="to_account_id" :options="$this->toAccounts" :placeholder="$toReady ? 'Money arrives…' : 'Select a company first'" :disabled="! $toReady" :invalid="$errors->has('to_account_id')" />
+                        @error('to_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                    </div>
+
+                    @if ($o = $this->owed)
+                        <div class="col-12">
+                            <div class="alert alert-light border py-2 mb-0 fs-13 ams-balance">
+                                <i class="ri-scales-3-line me-1"></i>
+                                @if (Money::isPositive($o['owed']))
+                                    {{ $o['to'] }} already owes {{ $o['from'] }} <strong>{{ money($o['owed']) }}</strong>.
+                                @elseif (Money::isNegative($o['owed']))
+                                    {{ $o['from'] }} owes {{ $o['to'] }} <strong>{{ money(Money::sub(0, $o['owed'])) }}</strong> — this transfer pays it back.
+                                @else
+                                    Nothing is owed between {{ $o['from'] }} and {{ $o['to'] }} right now.
+                                @endif
+                            </div>
+                        </div>
+                    @endif
+
+                    <div class="col-md-4">
+                        <label class="form-label">Amount (Rs.) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model="amount" placeholder="0.00">
+                        @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                    </div>
+                    <div class="col-md-4">
                         <label class="form-label">Date <span class="text-danger">*</span></label>
                         <input type="date" class="form-control @error('date') is-invalid @enderror" wire:model="date" max="{{ now()->toDateString() }}">
                         @error('date') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
-                    <div class="col-12">
+                    <div class="col-md-4">
                         <label class="form-label">Reference</label>
-                        <input type="text" class="form-control" wire:model="reference" placeholder="Cheque # / withdrawal slip">
+                        <input type="text" class="form-control" wire:model="reference" placeholder="ATM slip / IBFT ID">
                     </div>
                     <div class="col-12">
                         <label class="form-label">Notes</label>
                         <textarea class="form-control" rows="2" wire:model="notes"></textarea>
                     </div>
                 </div>
-                @if ($transferId && auth()->user()->needsApproval())
-                    <div class="alert alert-info fs-13 mt-3 mb-0">Edits by staff are applied after admin approval.</div>
-                @endif
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save">Save transfer</button>
+                <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save"><i class="ri-save-3-line me-1"></i>Save transfer</button>
             </div>
         </form>
     </x-modal>

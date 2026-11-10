@@ -3,7 +3,6 @@
 namespace App\Livewire\Concerns;
 
 use App\Exceptions\BusinessRuleException;
-use App\Services\Outcome;
 use Closure;
 use Illuminate\Http\UploadedFile;
 
@@ -32,12 +31,6 @@ trait InteractsWithUi
     protected function toast(string $type, string $message): void
     {
         $this->dispatch('toast', type: $type, message: $message);
-    }
-
-    /** Toast for an action that may have gone to the approval queue. */
-    protected function toastOutcome(Outcome $outcome, string $doneMessage, string $what = 'Your request'): void
-    {
-        $this->toast($outcome->toastType(), $outcome->message($doneMessage, $what));
     }
 
     protected function showModal(string $id): void

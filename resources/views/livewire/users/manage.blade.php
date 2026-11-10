@@ -1,7 +1,7 @@
 <?php
 
 /**
- * User management (admin only). No public sign-up: administrators create staff accounts here.
+ * User management (admin only). No public sign-up. For now every user is an administrator; staff roles come later.
  */
 
 use App\Enums\UserRole;
@@ -17,13 +17,13 @@ uses([InteractsWithUi::class]);
 mount(fn () => abort_unless(auth()->user()->isAdmin(), 403));
 
 state(['userId' => null])->locked();
-state(['name' => '', 'email' => '', 'phone' => '', 'role' => 'staff', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
+state(['name' => '', 'email' => '', 'phone' => '', 'role' => 'admin', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
 
 rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
     'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
     'phone' => ['nullable', 'string', 'max:30'],
-    'role' => ['required', Rule::enum(UserRole::class)],
+    'role' => ['required', Rule::in([UserRole::Admin->value])],
     'is_active' => ['boolean'],
     'password' => [$this->userId ? 'nullable' : 'required', 'confirmed', Password::defaults()],
 ]);
@@ -32,7 +32,7 @@ $users = computed(fn () => User::orderBy('role')->orderBy('name')->get());
 
 $create = function () {
     $this->resetErrorBag();
-    $this->fill(['name' => '', 'email' => '', 'phone' => '', 'role' => 'staff', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
+    $this->fill(['name' => '', 'email' => '', 'phone' => '', 'role' => 'admin', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
     $this->userId = null;
     $this->showModal('userModal');
 };
@@ -121,8 +121,7 @@ $toggleActive = function (int $id) {
             </div>
         </div>
         <div class="card-footer fs-13 text-muted">
-            <strong>Administrators</strong> post everything directly and review approvals.
-            <strong>Staff</strong> can receive cheques and make internal transfers; their clearings, payouts, purchases, edits and deletes wait for approval.
+            Every user is an administrator with full access. Staff accounts with limited rights will be added later.
         </div>
     </div>
 
@@ -145,13 +144,8 @@ $toggleActive = function (int $id) {
                         <input type="text" class="form-control" wire:model="phone">
                     </div>
                     <div class="col-md-6">
-                        <label class="form-label">Role <span class="text-danger">*</span></label>
-                        <select class="form-select @error('role') is-invalid @enderror" wire:model="role">
-                            @foreach (UserRole::cases() as $r)
-                                <option value="{{ $r->value }}">{{ $r->label() }}</option>
-                            @endforeach
-                        </select>
-                        @error('role') <div class="invalid-feedback">{{ $message }}</div> @enderror
+                        <label class="form-label">Role</label>
+                        <div class="form-control bg-body-tertiary">Administrator</div>
                     </div>
                     <div class="col-md-6 d-flex align-items-end">
                         <div class="form-check form-switch mb-2">

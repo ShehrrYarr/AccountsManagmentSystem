@@ -34,9 +34,6 @@
             <div class="header-right hstack gap-3">
                 <div class="hstack gap-0 gap-sm-1">
 
-                    {{-- Live pending-approval counter --}}
-                    <livewire:layout.approval-bell />
-
                     <!-- Theme -->
                     <div class="dropdown features-dropdown d-none d-sm-block">
                         <button type="button" class="btn icon-btn btn-text-primary rounded-circle" data-bs-toggle="dropdown" aria-expanded="false">

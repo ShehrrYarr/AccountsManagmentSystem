@@ -1,15 +1,13 @@
 <?php
 
 /**
- * Generic list + modal CRUD for simple lookup tables (vendors, government departments).
+ * Generic list + modal CRUD for simple lookup tables.
  *
- *   <livewire:master.simple-crud entity="vendors" />
- *   <livewire:master.simple-crud entity="departments" />
+ *   <livewire:master.simple-crud entity="expense-categories" />
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
-use App\Models\GovernmentDepartment;
-use App\Models\Vendor;
+use App\Models\ExpenseCategory;
 use Illuminate\Validation\Rule;
 
 use function Livewire\Volt\{computed, mount, rules, state, uses, usesPagination};
@@ -17,35 +15,19 @@ use function Livewire\Volt\{computed, mount, rules, state, uses, usesPagination}
 uses([InteractsWithUi::class]);
 usesPagination(theme: 'bootstrap');
 
-state(['entity' => 'vendors', 'recordId' => null])->locked();
+state(['entity' => 'expense-categories', 'recordId' => null])->locked();
 state(['search' => '', 'form' => []]);
 
 $config = computed(fn () => match ($this->entity) {
-    'vendors' => [
-        'model' => Vendor::class,
-        'singular' => 'Vendor',
-        'icon' => 'ri-store-2-line',
+    'expense-categories' => [
+        'model' => ExpenseCategory::class,
+        'singular' => 'Category',
+        'icon' => 'ri-price-tag-3-line',
         'fields' => [
-            'name' => ['label' => 'Name', 'required' => true, 'col' => 6],
-            'contact_person' => ['label' => 'Contact person', 'col' => 6],
-            'phone' => ['label' => 'Phone', 'col' => 6],
-            'ntn' => ['label' => 'NTN', 'col' => 6],
-            'address' => ['label' => 'Address', 'col' => 12],
+            'name' => ['label' => 'Category name', 'required' => true, 'col' => 12],
         ],
-        'countRelation' => 'disbursements',
-        'countLabel' => 'Purchases',
-    ],
-    'departments' => [
-        'model' => GovernmentDepartment::class,
-        'singular' => 'Department',
-        'icon' => 'ri-government-line',
-        'fields' => [
-            'name' => ['label' => 'Department name', 'required' => true, 'col' => 12],
-            'code' => ['label' => 'Code / DDO', 'col' => 6],
-            'city' => ['label' => 'City', 'col' => 6],
-        ],
-        'countRelation' => 'cheques',
-        'countLabel' => 'Cheques',
+        'countRelation' => 'expenses',
+        'countLabel' => 'Expenses',
     ],
     default => abort(404),
 });
@@ -109,8 +91,14 @@ $delete = function (int $id) {
         $record->update(['is_active' => false]);
         $this->toast('info', 'It is used on existing records, so it was deactivated instead of deleted.');
     } else {
-        $record->delete();
-        $this->toast('success', $this->config['singular'].' deleted.');
+        try {
+            $record->delete();
+            $this->toast('success', $this->config['singular'].' deleted.');
+        } catch (\Illuminate\Database\QueryException) {
+            // Still referenced by deleted (history) records.
+            $record->update(['is_active' => false]);
+            $this->toast('info', 'It is referenced by older records, so it was deactivated instead of deleted.');
+        }
     }
     unset($this->records);
 };
