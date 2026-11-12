@@ -66,6 +66,46 @@ class ComponentsTest extends TestCase
         $this->assertMoney('60000.00', $this->bank);
     }
 
+    public function test_cheque_deposit_page(): void
+    {
+        $this->get(route('cheques.create', ['company' => $this->company->id, 'department' => $this->dept->id]))
+            ->assertOk()->assertSee('Deposit Government Cheque')->assertSee('deposit another');
+
+        $page = fn () => Volt::test('cheques.register-cheque', ['asPage' => true, 'company' => (string) $this->company->id, 'department' => (string) $this->dept->id]);
+
+        // Prefilled from the URL; the modal events are ignored by the page form.
+        $page()->assertSet('company_id', $this->company->id)
+            ->assertSet('department_id', $this->dept->id)
+            ->assertSet('deposit_account_id', $this->bank->id)
+            ->dispatch('cheque-create')->assertSet('company_id', $this->company->id)
+            ->assertNotDispatched('modal-show');
+
+        // "Save & deposit another" stays on the page, keeping company, bank and dates.
+        $page()->set('cheque_number', '88001')->set('issuing_bank', 'NBP')->set('amount', '40000')
+            ->call('save', true)
+            ->assertHasNoErrors()
+            ->assertNoRedirect()
+            ->assertDispatched('toast', type: 'success')
+            ->assertSet('cheque_number', '')
+            ->assertSet('department_id', null)
+            ->assertSet('company_id', $this->company->id)
+            ->assertSet('deposit_account_id', $this->bank->id);
+
+        // "Save & deposit" goes back to the cheque list.
+        $page()->set('cheque_number', '88002')->set('issuing_bank', 'NBP')->set('amount', '10000')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertRedirect(route('cheques.index'));
+
+        $this->assertSame(2, Cheque::count());
+        $this->assertMoney('50000.00', $this->bank);
+
+        // Rule errors keep you on the page.
+        $page()->set('cheque_number', '88003')->set('issuing_bank', 'NBP')->set('amount', '500')
+            ->set('cheque_date', now()->subMonths(7)->toDateString())->set('date', now()->toDateString())
+            ->call('save')->assertHasErrors(['cheque_date'])->assertNoRedirect();
+    }
+
     public function test_cheque_form_rejects_duplicates_and_expired_cheques(): void
     {
         $this->cheque(['cheque_number' => '555', 'issuing_bank' => 'NBP']);

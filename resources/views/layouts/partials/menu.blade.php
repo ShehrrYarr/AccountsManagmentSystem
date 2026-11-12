@@ -14,7 +14,8 @@
     {!! $item('dashboard', 'ri-dashboard-3-line', 'Dashboard') !!}
 
     <li class="menu-title" role="presentation">Money In</li>
-    {!! $item('cheques.index', 'ri-bank-card-line', 'Govt Cheques', 'cheques.*') !!}
+    {!! $item('cheques.index', 'ri-bank-card-line', 'Govt Cheques') !!}
+    {!! $item('cheques.create', 'ri-add-circle-line', 'Deposit Cheque') !!}
 
     <li class="menu-title" role="presentation">Money Out</li>
     {!! $item('payments.index', 'ri-hand-coin-line', 'Department Payments', 'payments.*') !!}

@@ -4,8 +4,10 @@
  * Enter a government cheque for a department: it is deposited into the company's bank in the
  * same step. Also used to edit one.
  *
- * Open with:  $dispatch('cheque-create')  or  $dispatch('cheque-create', { companyId: 5, departmentId: 2 })
+ * As a modal: $dispatch('cheque-create')  or  $dispatch('cheque-create', { companyId: 5, departmentId: 2 })
  *             $dispatch('cheque-edit', { id: 12 })
+ * As a page:  <livewire:cheques.register-cheque :as-page="true" />  (route cheques.create,
+ *             prefilled from ?company=5&department=2)
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
@@ -17,12 +19,12 @@ use App\Support\Money;
 use App\Support\Options;
 use Illuminate\Validation\Rule;
 
-use function Livewire\Volt\{computed, on, rules, state, uses, usesFileUploads};
+use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesFileUploads};
 
 uses([InteractsWithUi::class]);
 usesFileUploads();
 
-state(['chequeId' => null])->locked();
+state(['chequeId' => null, 'asPage' => false])->locked();
 
 state([
     'company_id' => null,
@@ -113,17 +115,36 @@ $resetForm = function () {
     $this->resetErrorBag();
 };
 
-on(['cheque-create' => function (?int $companyId = null, ?int $departmentId = null) {
+$startNew = function (?int $companyId = null, ?int $departmentId = null) {
     $this->resetForm();
     $this->company_id = $companyId;
     $this->department_id = $departmentId;
     if ($companyId) {
         $this->updatedCompanyId();
     }
+};
+
+// Volt hands props to mount() when one is defined. $company / $department prefill the page form.
+mount(function (bool $asPage = false, $company = null, $department = null) {
+    $this->asPage = $asPage;
+    if ($this->asPage) {
+        $id = fn ($v) => ctype_digit((string) $v) ? (int) $v : null;
+        $this->startNew($id($company), $id($department));
+    }
+});
+
+on(['cheque-create' => function (?int $companyId = null, ?int $departmentId = null) {
+    if ($this->asPage) {
+        return; // the page form is always open; the modal instance handles this event
+    }
+    $this->startNew($companyId, $departmentId);
     $this->showModal('chequeFormModal');
 }]);
 
 on(['cheque-edit' => function (int $id) {
+    if ($this->asPage) {
+        return;
+    }
     $this->resetForm();
     $cheque = Cheque::findOrFail($id);
     $this->chequeId = $cheque->id;
@@ -154,21 +175,40 @@ $addDepartment = function () {
     $this->fill(['newDepartment' => '', 'addingDepartment' => false]);
 };
 
-$save = function () {
+/** $another (page only): stay on the page for the next cheque, keeping company, bank and dates. */
+$save = function (bool $another = false) {
     $data = $this->validate();
     $data['scan_path'] = $this->storeUpload($this->scan, 'cheques');
     unset($data['scan']);
 
-    $ok = $this->attempt(function () use ($data) {
+    $message = $this->attempt(function () use ($data) {
         $cheque = app(ChequeService::class)->save($this->chequeId ? Cheque::findOrFail($this->chequeId) : null, $data, auth()->user());
-        $this->toast('success', $this->chequeId
+
+        return $this->chequeId
             ? "Cheque #{$cheque->cheque_number} updated."
-            : "Cheque #{$cheque->cheque_number}: ".money($cheque->netDeposit()).' deposited into '.$cheque->depositAccount->shortLabel().' for '.$cheque->department->name.'.');
+            : "Cheque #{$cheque->cheque_number}: ".money($cheque->netDeposit()).' deposited into '.$cheque->depositAccount->shortLabel().' for '.$cheque->department->name.'.';
     });
 
-    if ($ok !== false) {
+    if ($message === false) {
+        return;
+    }
+
+    if ($this->asPage && ! $another) {
+        session()->flash('toast', ['type' => 'success', 'message' => $message]);
+        $this->redirectRoute('cheques.index');
+
+        return;
+    }
+
+    $this->toast('success', $message);
+    $this->broadcastChange();
+
+    if ($this->asPage) {
+        $keep = $this->only(['company_id', 'deposit_account_id', 'cheque_date', 'date']);
+        $this->resetForm();
+        $this->fill($keep);
+    } else {
         $this->hideModal('chequeFormModal');
-        $this->broadcastChange();
         $this->resetForm();
     }
 };
@@ -176,10 +216,19 @@ $save = function () {
 ?>
 
 <div>
-    <x-modal id="chequeFormModal" :title="$chequeId ? 'Edit Government Cheque' : 'Deposit Government Cheque'" icon="ri-bank-card-line" size="lg">
+    <x-dynamic-component :component="$asPage ? 'form-card' : 'modal'" :id="$asPage ? 'chequeFormPage' : 'chequeFormModal'"
+        :title="$chequeId ? 'Edit Government Cheque' : 'Deposit Government Cheque'" icon="ri-bank-card-line" size="lg">
         <form wire:submit="save">
-            <div class="modal-body">
+            <div class="{{ $asPage ? 'card-body' : 'modal-body' }}">
                 @error('general') <div class="alert alert-danger">{{ $message }}</div> @enderror
+
+                @if (! $asPage && ! $chequeId)
+                    <div class="text-end mb-2 mt-n2">
+                        <a href="{{ route('cheques.create', array_filter(['company' => $company_id, 'department' => $department_id])) }}" class="fs-12">
+                            <i class="ri-external-link-line"></i> Open as full page
+                        </a>
+                    </div>
+                @endif
 
                 <div class="row g-3">
                     <div class="col-md-6">
@@ -317,13 +366,26 @@ $save = function () {
                     </div>
                 @endif
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
-                    <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Save & deposit' }}</span>
-                    <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
-                </button>
-            </div>
+            @if ($asPage)
+                <div class="card-footer d-flex flex-wrap justify-content-end gap-2">
+                    <a href="{{ route('cheques.index') }}" class="btn btn-light">Cancel</a>
+                    <button type="button" class="btn btn-outline-primary" wire:click="save(true)" wire:loading.attr="disabled" wire:target="save,scan">
+                        <i class="ri-add-line me-1"></i>Save & deposit another
+                    </button>
+                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
+                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>Save & deposit</span>
+                        <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
+                    </button>
+                </div>
+            @else
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
+                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Save & deposit' }}</span>
+                        <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
+                    </button>
+                </div>
+            @endif
         </form>
-    </x-modal>
+    </x-dynamic-component>
 </div>

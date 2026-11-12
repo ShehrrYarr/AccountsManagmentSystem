@@ -6,6 +6,13 @@ if (currentUrl === '/')
 // Function to find the active menu and its parents
 const findActiveMenu = (layout = null) => {
   const mainMenu = document.querySelector('.main-menu');
+  // AMS: the server already marks the active item (by route name); trust it rather than the
+  // URL substring match below, which would also light "/cheques" on "/cheques/deposit".
+  const serverActive = mainMenu.querySelector('.side-menu__item.active[href]');
+  if (serverActive) {
+    openParentMenu(serverActive.closest('.slide-menu'), document.documentElement.getAttribute('data-main-layout'));
+    return;
+  }
   const menuLinks = mainMenu.querySelectorAll('.side-menu__item[href]'); // Select only menu items with href
   for (const menuLink of menuLinks) {
     const menuHref = menuLink.getAttribute('href'); // Get the href of the menu item

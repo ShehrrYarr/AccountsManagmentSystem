@@ -37,6 +37,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Money in / out
     Route::view('/cheques', 'ams.cheques.index')->name('cheques.index');
+    Route::view('/cheques/deposit', 'ams.cheques.create')->name('cheques.create');
     Route::view('/payments', 'ams.payments.index')->name('payments.index');
     Route::view('/supplier-payments', 'ams.supplier-payments.index')->name('supplier-payments.index');
     Route::view('/expenses', 'ams.expenses.index')->name('expenses.index');

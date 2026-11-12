@@ -27,7 +27,7 @@ class PagesRenderTest extends TestCase
     public static function pages(): array
     {
         return [
-            ['/dashboard'], ['/cheques'], ['/payments'], ['/supplier-payments'], ['/expenses'], ['/transfers'],
+            ['/dashboard'], ['/cheques'], ['/cheques/deposit'], ['/payments'], ['/supplier-payments'], ['/expenses'], ['/transfers'],
             ['/companies'], ['/accounts'], ['/departments'], ['/suppliers'], ['/transactions'],
             ['/opening-balances'], ['/expense-categories'], ['/users'], ['/audit-log'], ['/profile'],
         ];
