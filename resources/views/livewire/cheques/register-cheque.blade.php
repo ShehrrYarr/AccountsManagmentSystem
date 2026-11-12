@@ -8,8 +8,9 @@
  *     $dispatch('cheque-create')  or  $dispatch('cheque-create', { companyId: 5, departmentId: 2 })
  *     $dispatch('cheque-edit', { id: 12 })
  * As a page (batch entry): <livewire:cheques.register-cheque :as-page="true" />  (route cheques.create,
- *     prefilled from ?company=5&department=2). "Add to table" collects cheques below the form and
- *     "Save & deposit all" saves them together, all-or-nothing.
+ *     prefilled from ?company=5&department=2). The white "batch details" card (date, company, bank,
+ *     branch, department) stays filled; the light-blue "cheque details" card clears after each
+ *     "Add to table". "Save & deposit all" saves the table together, all-or-nothing, and stays here.
  */
 
 use App\Exceptions\BusinessRuleException;
@@ -60,6 +61,7 @@ state([
     'rowScanPath' => null,     // picture already attached to that row
     'rowScanName' => null,
     'rowErrors' => [],         // index => why the final save rejected it
+    'heldBatch' => null,       // batch details to restore when a row edit ends
 ]);
 
 rules(fn () => ChequeRules::rules($this->chequeId))->messages(ChequeRules::messages())->attributes(ChequeRules::attributes());
@@ -114,9 +116,11 @@ $totals = computed(fn () => [
     'charges' => Money::add(...array_map(fn ($r) => Money::of($r['bank_charges']), $this->rows)),
 ]);
 
+// Page: the company's first bank is picked; modal: only when the company has just one bank.
 $updatedCompanyId = function () {
     unset($this->bankOptions);
-    $this->deposit_account_id = count($this->bankOptions) === 1 ? $this->bankOptions[0]['value'] : null;
+    $banks = $this->bankOptions;
+    $this->deposit_account_id = ($this->asPage || count($banks) === 1) ? ($banks[0]['value'] ?? null) : null;
 };
 
 $resetForm = function () {
@@ -124,7 +128,7 @@ $resetForm = function () {
         'cheque_date' => '', 'company_id' => null, 'deposit_account_id' => null, 'issuing_branch' => '', 'department_id' => null,
         'cheque_number' => '', 'amount' => '', 'bank_charges' => '', 'scan' => null, 'notes' => '', 'deposit_reference' => '',
         'existingScan' => false, 'depositedOn' => null, 'newDepartment' => '', 'addingDepartment' => false,
-        'editingRow' => null, 'rowScanPath' => null, 'rowScanName' => null,
+        'editingRow' => null, 'rowScanPath' => null, 'rowScanName' => null, 'heldBatch' => null,
     ]);
     $this->chequeId = null;
     $this->resetErrorBag();
@@ -140,12 +144,18 @@ $startNew = function (?int $companyId = null, ?int $departmentId = null) {
     }
 };
 
-// Volt hands props to mount() when one is defined. $company / $department prefill the page form.
+// Volt hands props to mount() when one is defined. The page opens with today's date, the first
+// company (and its first bank) and the first department, unless ?company= / ?department= say otherwise.
 mount(function (bool $asPage = false, $company = null, $department = null) {
     $this->asPage = $asPage;
     if ($this->asPage) {
         $id = fn ($v) => ctype_digit((string) $v) ? (int) $v : null;
-        $this->startNew($id($company), $id($department));
+        $this->startNew(
+            $id($company) ?? ($this->companyOptions[0]['value'] ?? null),
+            $id($department) ?? ($this->departmentOptions[0]['value'] ?? null),
+        );
+        $this->cheque_date = now()->toDateString();
+        unset($this->companyOptions, $this->departmentOptions);
     }
 });
 
@@ -265,17 +275,41 @@ $addRow = function () {
         $this->rows[] = $row;
     }
 
-    $this->resetForm();
+    // The batch details stay for the next cheque (or go back to what they were before an edit).
+    $this->finishEdit();
     unset($this->lookups, $this->totals);
+};
+
+/** Clear only the per-cheque fields (the light-blue card). */
+$clearChequeFields = function () {
+    $this->fill([
+        'cheque_number' => '', 'amount' => '', 'bank_charges' => '', 'scan' => null, 'notes' => '', 'deposit_reference' => '',
+        'editingRow' => null, 'rowScanPath' => null, 'rowScanName' => null,
+    ]);
+    $this->resetErrorBag();
+};
+
+/** Leave row-edit mode: restore the batch details held when the edit started, clear the cheque fields. */
+$finishEdit = function () {
+    if ($this->heldBatch !== null) {
+        $this->fill($this->heldBatch);
+        $this->heldBatch = null;
+        unset($this->bankOptions);
+    }
+    $this->clearChequeFields();
+    unset($this->position);
 };
 
 $editRow = function (int $i) {
     if (! isset($this->rows[$i])) {
         return;
     }
+    if ($this->editingRow === null) {
+        $this->heldBatch = $this->only(ChequeRules::BATCH_FIELDS);
+    }
     $row = $this->rows[$i];
-    $this->resetForm();
-    $this->fill(Arr::only($row, ['cheque_date', 'company_id', 'deposit_account_id', 'issuing_branch', 'department_id', 'cheque_number', 'notes', 'deposit_reference']));
+    $this->clearChequeFields();
+    $this->fill(Arr::only($row, [...ChequeRules::BATCH_FIELDS, 'cheque_number', 'notes', 'deposit_reference']));
     $this->fill([
         'amount' => $row['amount'],
         'bank_charges' => Money::isPositive($row['bank_charges']) ? $row['bank_charges'] : '',
@@ -287,7 +321,7 @@ $editRow = function (int $i) {
 };
 
 $cancelEdit = function () {
-    $this->resetForm();
+    $this->finishEdit();
 };
 
 $removeRow = function (int $i) {
@@ -298,7 +332,7 @@ $removeRow = function (int $i) {
         Storage::disk('local')->delete($path);
     }
     if ($this->editingRow === $i) {
-        $this->resetForm();
+        $this->finishEdit();
     } elseif ($this->editingRow !== null && $this->editingRow > $i) {
         $this->editingRow--;
     }
@@ -352,199 +386,201 @@ $saveAll = function () {
         return;
     }
 
+    // Stay on the page for the next batch: empty table, batch details kept.
     $count = count($this->rows);
     $total = $this->totals['amount'];
     $this->rows = [];
-    session()->flash('toast', ['type' => 'success', 'message' => $count.' '.Str::plural('cheque', $count).' of '.money($total).' deposited.']);
-    $this->redirectRoute('cheques.index');
+    $this->rowErrors = [];
+    $this->clearChequeFields();
+    unset($this->lookups, $this->totals, $this->position);
+    $this->toast('success', $count.' '.Str::plural('cheque', $count).' of '.money($total).' deposited.');
+    $this->broadcastChange();
 };
 
 ?>
 
 @php
-    // Compact grid: six fields a row on wide screens for the page, two in the modal.
-    $col = $asPage ? 'col-xxl-2 col-xl-3 col-md-4 col-sm-6' : 'col-md-6';
-    $label = 'form-label fs-12 mb-1';
+    // Page: batch details in one row (department on its own row), cheque details six a row; modal: two a row.
+    $colBatch = $asPage ? 'col-lg-3 col-sm-6' : 'col-md-6';
+    $colDept = $asPage ? 'col-12' : 'col-md-6';
+    $colCheque = $asPage ? 'col-xl-2 col-lg-4 col-sm-6' : 'col-md-6';
+    $label = $asPage ? 'form-label fw-semibold fs-13 mb-1' : 'form-label fs-12 mb-1';
     $req = '<span class="text-danger">*</span>';
 @endphp
 
-<div @if ($asPage) x-data x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
-    <x-dynamic-component :component="$asPage ? 'form-card' : 'modal'" :id="$asPage ? 'chequeFormPage' : 'chequeFormModal'"
-        :title="$chequeId ? 'Edit Government Cheque' : ($asPage ? 'Deposit Government Cheques' : 'Deposit Government Cheque')" icon="ri-bank-card-line" size="lg">
-        <form wire:submit="{{ $asPage ? 'addRow' : 'save' }}">
-            <div class="{{ $asPage ? 'card-body' : 'modal-body' }}">
-                @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
+{{-- The fields are written once and placed into two cards (page) or one list (modal). --}}
+@php(ob_start())
+    {{-- 1. Cheque date --}}
+    <div class="{{ $colBatch }}">
+        <label class="{{ $label }}">Cheque date {!! $req !!}</label>
+        <input type="date" class="form-control form-control-sm @error('cheque_date') is-invalid @enderror" wire:model.live="cheque_date" max="{{ now()->toDateString() }}">
+        @error('cheque_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        @if ($this->expiry && ! $errors->has('cheque_date'))
+            <div class="form-text fs-11 mt-0 {{ $this->expiry['expired'] ? 'text-danger' : '' }}">
+                {{ $this->expiry['expired'] ? 'Expired on' : 'Valid until' }} {{ $this->expiry['date']->format('d M Y') }}
+            </div>
+        @endif
+    </div>
 
-                @if (! $asPage)
-                    <div class="d-flex justify-content-between fs-12 text-muted mb-2">
-                        <span><i class="ri-calendar-check-line"></i> Deposit date: {{ $depositedOn ? \Illuminate\Support\Carbon::parse($depositedOn)->format('d M Y') : 'today, '.now()->format('d M Y') }}</span>
-                        @unless ($chequeId)
-                            <a href="{{ route('cheques.create', array_filter(['company' => $company_id, 'department' => $department_id])) }}"><i class="ri-external-link-line"></i> Open as full page</a>
-                        @endunless
-                    </div>
-                @elseif ($editingRow !== null)
-                    <div class="alert alert-warning py-2 fs-13 mb-2"><i class="ri-edit-line me-1"></i>Editing row {{ $editingRow + 1 }} of the table. <strong>Update row</strong> to keep the changes.</div>
+    {{-- 2. Company --}}
+    <div class="{{ $colBatch }}">
+        <label class="{{ $label }}">Company {!! $req !!}</label>
+        <x-searchable-select wire:model.live="company_id" :options="$this->companyOptions" placeholder="Select company" size="sm" :invalid="$errors->has('company_id')" />
+        @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- 3. Company bank it is deposited into --}}
+    <div class="{{ $colBatch }}">
+        <label class="{{ $label }}">Bank {!! $req !!}</label>
+        <x-searchable-select wire:model="deposit_account_id" :options="$this->bankOptions" size="sm"
+            :placeholder="! $company_id ? 'Select a company first' : (count($this->bankOptions) ? 'Select bank' : 'No bank account')"
+            :disabled="! $company_id" :invalid="$errors->has('deposit_account_id')" />
+        @error('deposit_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+        @if ($company_id && ! count($this->bankOptions))
+            <div class="form-text fs-11 mt-0"><a href="{{ route('accounts.index') }}">Add a bank account</a> first.</div>
+        @endif
+    </div>
+
+    {{-- 4. Branch code on the cheque --}}
+    <div class="{{ $colBatch }}">
+        <label class="{{ $label }}">Branch code</label>
+        <input type="text" class="form-control form-control-sm @error('issuing_branch') is-invalid @enderror" wire:model="issuing_branch" placeholder="Optional">
+        @error('issuing_branch') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
+
+    {{-- 5. Department --}}
+    <div class="{{ $colDept }}">
+        <label class="{{ $label }} d-flex justify-content-between">
+            <span>Department {!! $req !!}</span>
+            <a href="#" class="fs-11 fw-normal" wire:click.prevent="$toggle('addingDepartment')">{{ $addingDepartment ? 'Cancel' : '+ New department' }}</a>
+        </label>
+        @if ($addingDepartment)
+            <div class="input-group input-group-sm has-validation">
+                <input type="text" class="form-control @error('newDepartment') is-invalid @enderror" wire:model="newDepartment" placeholder="Department name" wire:keydown.enter.prevent="addDepartment">
+                <button type="button" class="btn btn-primary" wire:click="addDepartment">Add</button>
+                @error('newDepartment') <div class="invalid-feedback">{{ $message }}</div> @enderror
+            </div>
+        @else
+            <x-searchable-select wire:model.live="department_id" :options="$this->departmentOptions" placeholder="Select department" size="sm" :invalid="$errors->has('department_id')" />
+            @error('department_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+        @endif
+        @if ($this->position !== null && ! $addingDepartment)
+            @php($describe = fn ($b) => Money::isNegative($b) ? 'you hold '.money(Money::sub(0, $b)) : (Money::isZero($b) ? 'settled' : 'owes you '.money($b)))
+            <div class="form-text fs-11 mt-0 ams-balance" title="Department balance with this company{{ $rows ? ', including the cheques in the table' : '' }}">
+                {{ ucfirst($describe($this->position)) }}
+                @if (is_numeric($amount) && $amount > 0)
+                    → {{ $describe(Money::sub($this->position, $amount)) }}
                 @endif
+            </div>
+        @endif
+    </div>
+@php($batchFields = ob_get_clean())
 
-                <div class="row g-2">
-                    {{-- 1. Cheque date --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Cheque date {!! $req !!}</label>
-                        <input type="date" class="form-control form-control-sm @error('cheque_date') is-invalid @enderror" wire:model.live="cheque_date" max="{{ now()->toDateString() }}">
-                        @error('cheque_date') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        @if ($this->expiry && ! $errors->has('cheque_date'))
-                            <div class="form-text fs-11 mt-0 {{ $this->expiry['expired'] ? 'text-danger' : '' }}">
-                                {{ $this->expiry['expired'] ? 'Expired on' : 'Valid until' }} {{ $this->expiry['date']->format('d M Y') }}
-                            </div>
-                        @endif
-                    </div>
+@php(ob_start())
+    {{-- 6. Cheque number --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Cheque number {!! $req !!}</label>
+        <input type="text" class="form-control form-control-sm @error('cheque_number') is-invalid @enderror" wire:model.blur="cheque_number" placeholder="e.g. 12345678">
+        @error('cheque_number') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
 
-                    {{-- 2. Company --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Company {!! $req !!}</label>
-                        <x-searchable-select wire:model.live="company_id" :options="$this->companyOptions" placeholder="Select company" size="sm" :invalid="$errors->has('company_id')" />
-                        @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                    </div>
+    {{-- 7. Amount --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Cheque amount {!! $req !!}</label>
+        <div class="input-group input-group-sm has-validation">
+            <span class="input-group-text">Rs.</span>
+            <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model.live.debounce.400ms="amount" placeholder="0.00">
+            @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        </div>
+    </div>
 
-                    {{-- 3. Company bank it is deposited into --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Bank {!! $req !!}</label>
-                        <x-searchable-select wire:model="deposit_account_id" :options="$this->bankOptions" size="sm"
-                            :placeholder="! $company_id ? 'Select a company first' : (count($this->bankOptions) ? 'Select bank' : 'No bank account')"
-                            :disabled="! $company_id" :invalid="$errors->has('deposit_account_id')" />
-                        @error('deposit_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                        @if ($company_id && ! count($this->bankOptions))
-                            <div class="form-text fs-11 mt-0"><a href="{{ route('accounts.index') }}">Add a bank account</a> first.</div>
-                        @endif
-                    </div>
+    {{-- 8. Bank charges --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Bank charges</label>
+        <div class="input-group input-group-sm has-validation">
+            <span class="input-group-text">Rs.</span>
+            <input type="number" step="0.01" min="0" class="form-control @error('bank_charges') is-invalid @enderror" wire:model.live.debounce.400ms="bank_charges" placeholder="0.00">
+            @error('bank_charges') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        </div>
+        @if ($this->net !== null && Money::isPositive($amount) && Money::isPositive(is_numeric($bank_charges) ? $bank_charges : 0))
+            <div class="form-text fs-11 mt-0">Net to bank: <strong class="text-success">{{ money($this->net) }}</strong></div>
+        @endif
+    </div>
 
-                    {{-- 4. Branch code on the cheque --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Branch code</label>
-                        <input type="text" class="form-control form-control-sm @error('issuing_branch') is-invalid @enderror" wire:model="issuing_branch" placeholder="Optional">
-                        @error('issuing_branch') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
+    {{-- 9. Cheque picture --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Cheque picture</label>
+        <input type="file" class="form-control form-control-sm @error('scan') is-invalid @enderror" wire:model="scan" accept=".jpg,.jpeg,.png,.pdf">
+        <div wire:loading wire:target="scan" class="form-text fs-11 mt-0"><i class="ri-loader-4-line"></i> Uploading…</div>
+        @error('scan') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        @if (! $scan && $existingScan && $chequeId)
+            <div class="form-text fs-11 mt-0"><a href="{{ route('files.show', ['cheque', $chequeId]) }}" target="_blank"><i class="ri-attachment-2"></i> Current picture</a> — upload to replace</div>
+        @elseif (! $scan && $rowScanPath)
+            <div class="form-text fs-11 mt-0 text-truncate"><i class="ri-attachment-2"></i> {{ $rowScanName }} — upload to replace</div>
+        @endif
+    </div>
 
-                    {{-- 5. Department --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }} d-flex justify-content-between">
-                            <span>Department {!! $req !!}</span>
-                            <a href="#" class="fs-11" wire:click.prevent="$toggle('addingDepartment')">{{ $addingDepartment ? 'Cancel' : '+ New' }}</a>
-                        </label>
-                        @if ($addingDepartment)
-                            <div class="input-group input-group-sm has-validation">
-                                <input type="text" class="form-control @error('newDepartment') is-invalid @enderror" wire:model="newDepartment" placeholder="Department name" wire:keydown.enter.prevent="addDepartment">
-                                <button type="button" class="btn btn-primary" wire:click="addDepartment">Add</button>
-                                @error('newDepartment') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                            </div>
-                        @else
-                            <x-searchable-select wire:model.live="department_id" :options="$this->departmentOptions" placeholder="Select department" size="sm" :invalid="$errors->has('department_id')" />
-                            @error('department_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                        @endif
-                        @if ($this->position !== null && ! $addingDepartment)
-                            @php
-                                $describe = fn ($b) => Money::isNegative($b) ? 'you hold '.money(Money::sub(0, $b)) : (Money::isZero($b) ? 'settled' : 'owes you '.money($b));
-                            @endphp
-                            <div class="form-text fs-11 mt-0 ams-balance" title="Department balance with this company{{ $rows ? ', including the cheques in the table' : '' }}">
-                                {{ ucfirst($describe($this->position)) }}
-                                @if (is_numeric($amount) && $amount > 0)
-                                    → {{ $describe(Money::sub($this->position, $amount)) }}
-                                @endif
-                            </div>
-                        @endif
-                    </div>
+    {{-- 10. Notes --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Notes</label>
+        <input type="text" class="form-control form-control-sm @error('notes') is-invalid @enderror" wire:model="notes" placeholder="Bill / invoice ref, remarks">
+        @error('notes') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
 
-                    {{-- 6. Cheque number --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Cheque number {!! $req !!}</label>
-                        <input type="text" class="form-control form-control-sm @error('cheque_number') is-invalid @enderror" wire:model.blur="cheque_number" placeholder="e.g. 12345678">
-                        @error('cheque_number') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
+    {{-- 11. Deposit slip --}}
+    <div class="{{ $colCheque }}">
+        <label class="{{ $label }}">Deposit slip / reference</label>
+        <input type="text" class="form-control form-control-sm @error('deposit_reference') is-invalid @enderror" wire:model="deposit_reference" placeholder="Optional">
+        @error('deposit_reference') <div class="invalid-feedback">{{ $message }}</div> @enderror
+    </div>
+@php($chequeFields = ob_get_clean())
 
-                    {{-- 7. Amount --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Cheque amount {!! $req !!}</label>
-                        <div class="input-group input-group-sm has-validation">
-                            <span class="input-group-text">Rs.</span>
-                            <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model.live.debounce.400ms="amount" placeholder="0.00">
-                            @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-                    </div>
+<div @if ($asPage) x-data x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+    @if ($asPage)
+        <form wire:submit="addRow" id="chequeFormPage">
+            @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
 
-                    {{-- 8. Bank charges --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Bank charges</label>
-                        <div class="input-group input-group-sm has-validation">
-                            <span class="input-group-text">Rs.</span>
-                            <input type="number" step="0.01" min="0" class="form-control @error('bank_charges') is-invalid @enderror" wire:model.live.debounce.400ms="bank_charges" placeholder="0.00">
-                            @error('bank_charges') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        </div>
-                        @if ($this->net !== null && Money::isPositive($amount) && Money::isPositive(is_numeric($bank_charges) ? $bank_charges : 0))
-                            <div class="form-text fs-11 mt-0">Net to bank: <strong class="text-success">{{ money($this->net) }}</strong></div>
-                        @endif
-                    </div>
-
-                    {{-- 9. Cheque picture --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Cheque picture</label>
-                        <input type="file" class="form-control form-control-sm @error('scan') is-invalid @enderror" wire:model="scan" accept=".jpg,.jpeg,.png,.pdf">
-                        <div wire:loading wire:target="scan" class="form-text fs-11 mt-0"><i class="ri-loader-4-line"></i> Uploading…</div>
-                        @error('scan') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                        @if (! $scan && $existingScan && $chequeId)
-                            <div class="form-text fs-11 mt-0"><a href="{{ route('files.show', ['cheque', $chequeId]) }}" target="_blank"><i class="ri-attachment-2"></i> Current picture</a> — upload to replace</div>
-                        @elseif (! $scan && $rowScanPath)
-                            <div class="form-text fs-11 mt-0 text-truncate"><i class="ri-attachment-2"></i> {{ $rowScanName }} — upload to replace</div>
-                        @endif
-                    </div>
-
-                    {{-- 10. Notes --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Notes</label>
-                        <input type="text" class="form-control form-control-sm @error('notes') is-invalid @enderror" wire:model="notes" placeholder="Bill / invoice ref, remarks">
-                        @error('notes') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
-
-                    {{-- 11. Deposit slip --}}
-                    <div class="{{ $col }}">
-                        <label class="{{ $label }}">Deposit slip / reference</label>
-                        <input type="text" class="form-control form-control-sm @error('deposit_reference') is-invalid @enderror" wire:model="deposit_reference" placeholder="Optional">
-                        @error('deposit_reference') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
-
-                    @if ($asPage)
-                        <div class="{{ $col }} d-flex align-items-end gap-2">
-                            <button type="submit" class="btn btn-sm btn-primary flex-grow-1" wire:loading.attr="disabled" wire:target="addRow,scan">
-                                <span wire:loading.remove wire:target="addRow">
-                                    <i class="{{ $editingRow !== null ? 'ri-check-line' : 'ri-add-line' }} me-1"></i>{{ $editingRow !== null ? 'Update row' : 'Add to table' }}
-                                </span>
-                                <span wire:loading wire:target="addRow"><i class="ri-loader-4-line me-1"></i>Checking…</span>
-                            </button>
-                            @if ($editingRow !== null)
-                                <button type="button" class="btn btn-sm btn-light" wire:click="cancelEdit">Cancel</button>
-                            @endif
-                        </div>
+            {{-- Batch details: stay the same from one cheque to the next --}}
+            <div class="card mb-3" id="chequeBatchDetails">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2 py-2">
+                    <h5 class="card-title mb-0 me-auto d-flex align-items-center gap-2"><i class="ri-pushpin-line text-primary"></i>Batch details</h5>
+                    <span class="fs-12 text-muted">Stay the same for every cheque you add · Deposit date: today, {{ now()->format('d M Y') }}</span>
+                </div>
+                <div class="card-body">
+                    @if ($editingRow !== null)
+                        <div class="alert alert-warning py-2 fs-13 mb-2"><i class="ri-edit-line me-1"></i>Editing row {{ $editingRow + 1 }}: both cards show that row. <strong>Update row</strong> or <strong>Cancel</strong> brings your batch details back.</div>
                     @endif
+                    <div class="row g-2">{!! $batchFields !!}</div>
                 </div>
             </div>
 
-            @unless ($asPage)
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
-                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Save & deposit' }}</span>
-                        <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
-                    </button>
+            {{-- Cheque details: cleared after each "Add to table" --}}
+            <div class="card mb-3 bg-primary-subtle border border-primary-subtle" id="chequeDetails">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2 py-2 bg-transparent border-primary-subtle">
+                    <h5 class="card-title mb-0 me-auto d-flex align-items-center gap-2"><i class="ri-bank-card-line text-primary"></i>Cheque details</h5>
+                    <span class="fs-12 text-muted">Cleared after each cheque is added</span>
                 </div>
-            @endunless
+                <div class="card-body">
+                    <div class="row g-2">{!! $chequeFields !!}</div>
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        @if ($editingRow !== null)
+                            <button type="button" class="btn btn-sm btn-light" wire:click="cancelEdit">Cancel</button>
+                        @endif
+                        <button type="submit" class="btn btn-sm btn-primary px-4" wire:loading.attr="disabled" wire:target="addRow,scan">
+                            <span wire:loading.remove wire:target="addRow">
+                                <i class="{{ $editingRow !== null ? 'ri-check-line' : 'ri-add-line' }} me-1"></i>{{ $editingRow !== null ? 'Update row '.($editingRow + 1) : 'Add to table' }}
+                            </span>
+                            <span wire:loading wire:target="addRow"><i class="ri-loader-4-line me-1"></i>Checking…</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </form>
-    </x-dynamic-component>
 
-    @if ($asPage)
         {{-- Cheques waiting to be saved --}}
         <div class="card" id="chequeBatch">
             <div class="card-header d-flex align-items-center gap-2">
                 <h5 class="card-title mb-0 me-auto">Cheques to deposit <span class="badge bg-primary-subtle text-primary ms-1">{{ count($rows) }}</span></h5>
-                <span class="fs-12 text-muted d-none d-md-inline"><i class="ri-calendar-check-line"></i> Deposit date: today, {{ now()->format('d M Y') }}</span>
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-hover align-middle mb-0 fs-13">
@@ -588,7 +624,7 @@ $saveAll = function () {
                             <tr>
                                 <td colspan="13" class="text-center text-muted py-4">
                                     <i class="ri-inbox-line fs-24 d-block mb-1 opacity-50"></i>
-                                    Fill in a cheque above and click <strong>Add to table</strong>. Add as many as you need, then save them together.
+                                    Fill in the cheque details and click <strong>Add to table</strong>. Add as many as you need, then save them together.
                                 </td>
                             </tr>
                         @endforelse
@@ -608,12 +644,36 @@ $saveAll = function () {
             </div>
             <div class="card-footer d-flex flex-wrap align-items-center justify-content-end gap-2">
                 <a href="{{ route('cheques.index') }}" class="btn btn-light me-auto"
-                    @if ($rows) x-on:click="if (! confirm('Leave without saving the cheques in the table?')) $event.preventDefault()" @endif>Cancel</a>
+                    @if ($rows) x-on:click="if (! confirm('Leave without saving the cheques in the table?')) $event.preventDefault()" @endif>Back to cheques</a>
                 <button type="button" class="btn btn-primary" wire:click="saveAll" wire:loading.attr="disabled" wire:target="saveAll,addRow,scan" @disabled(! $rows)>
                     <span wire:loading.remove wire:target="saveAll"><i class="ri-save-3-line me-1"></i>Save &amp; deposit all</span>
                     <span wire:loading wire:target="saveAll"><i class="ri-loader-4-line me-1"></i>Saving…</span>
                 </button>
             </div>
         </div>
+    @else
+        <x-modal id="chequeFormModal" :title="$chequeId ? 'Edit Government Cheque' : 'Deposit Government Cheque'" icon="ri-bank-card-line" size="lg">
+            <form wire:submit="save">
+                <div class="modal-body">
+                    @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
+
+                    <div class="d-flex justify-content-between fs-12 text-muted mb-2">
+                        <span><i class="ri-calendar-check-line"></i> Deposit date: {{ $depositedOn ? \Illuminate\Support\Carbon::parse($depositedOn)->format('d M Y') : 'today, '.now()->format('d M Y') }}</span>
+                        @unless ($chequeId)
+                            <a href="{{ route('cheques.create', array_filter(['company' => $company_id, 'department' => $department_id])) }}"><i class="ri-external-link-line"></i> Open as full page</a>
+                        @endunless
+                    </div>
+
+                    <div class="row g-2">{!! $batchFields !!}{!! $chequeFields !!}</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
+                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Save & deposit' }}</span>
+                        <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
+                    </button>
+                </div>
+            </form>
+        </x-modal>
     @endif
 </div>

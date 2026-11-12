@@ -10,6 +10,9 @@ use Illuminate\Validation\Rule;
  */
 class ChequeRules
 {
+    /** Deposit page: fields that stay the same from one cheque to the next. */
+    public const BATCH_FIELDS = ['cheque_date', 'company_id', 'deposit_account_id', 'issuing_branch', 'department_id'];
+
     /** @return array<string, mixed> */
     public static function rules(?int $ignoreId = null, bool $withScan = true): array
     {

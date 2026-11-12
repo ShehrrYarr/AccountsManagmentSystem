@@ -77,7 +77,7 @@ class ComponentsTest extends TestCase
     public function test_cheque_deposit_page_builds_a_table_and_saves_it_together(): void
     {
         $this->get(route('cheques.create', ['company' => $this->company->id, 'department' => $this->dept->id]))
-            ->assertOk()->assertSee('Deposit Government Cheques')->assertSee('Add to table')->assertDontSee('Drawn on');
+            ->assertOk()->assertSee('Batch details')->assertSee('Cheque details')->assertSee('Add to table')->assertDontSee('Drawn on');
 
         $page = Volt::test('cheques.register-cheque', ['asPage' => true, 'company' => (string) $this->company->id, 'department' => (string) $this->dept->id]);
 
@@ -102,13 +102,25 @@ class ComponentsTest extends TestCase
             return $c;
         };
 
-        // Add to table: nothing is saved yet and every field is cleared.
-        $fill($page, '88001', '40000', ['bank_charges' => '50', 'notes' => 'Bill 12'])->call('addRow')
+        // Add to table: nothing is saved yet; the cheque details clear, the batch details stay.
+        $fill($page, '88001', '40000', ['bank_charges' => '50', 'notes' => 'Bill 12', 'deposit_reference' => 'S-1', 'issuing_branch' => '0423'])->call('addRow')
             ->assertHasNoErrors()
-            ->assertSet('cheque_number', '')->assertSet('company_id', null)->assertSet('cheque_date', '')
+            ->assertSet('cheque_number', '')->assertSet('amount', '')->assertSet('bank_charges', '')->assertSet('notes', '')->assertSet('deposit_reference', '')
+            ->assertSet('cheque_date', now()->subDays(5)->toDateString())->assertSet('company_id', $this->company->id)
+            ->assertSet('deposit_account_id', $this->bank->id)->assertSet('issuing_branch', '0423')->assertSet('department_id', $this->dept->id)
             ->assertCount('rows', 1)
             ->assertSee('#88001')->assertSee('39,950.00');
         $this->assertSame(0, Cheque::count());
+
+        // Editing a row loads both cards; Cancel brings the batch details back.
+        $other = $this->makeDepartment('Police Dept');
+        $page->set('cheque_date', now()->subDays(2)->toDateString())->set('department_id', $other->id)->set('issuing_branch', '')
+            ->call('editRow', 0)
+            ->assertSet('cheque_date', now()->subDays(5)->toDateString())->assertSet('department_id', $this->dept->id)
+            ->assertSet('issuing_branch', '0423')->assertSet('cheque_number', '88001')
+            ->call('cancelEdit')
+            ->assertSet('editingRow', null)->assertSet('cheque_number', '')
+            ->assertSet('cheque_date', now()->subDays(2)->toDateString())->assertSet('department_id', $other->id)->assertSet('issuing_branch', '');
 
         // A number already in the table is refused.
         $fill($page, '88001', '100')->call('addRow')->assertHasErrors('cheque_number')->assertCount('rows', 1);
@@ -116,22 +128,51 @@ class ComponentsTest extends TestCase
         $fill($page, '88002', '10000')->call('addRow')->assertHasNoErrors()->assertCount('rows', 2)
             ->assertSee('50,000.00'); // table total
 
-        // Edit a row in the form, then update it.
-        $page->call('editRow', 1)->assertSet('cheque_number', '88002')->assertSet('editingRow', 1)
+        // Edit a row in the form, then update it; the batch details return afterwards.
+        $page->set('department_id', $other->id)
+            ->call('editRow', 1)->assertSet('cheque_number', '88002')->assertSet('editingRow', 1)->assertSet('department_id', $this->dept->id)
             ->assertSee('Update row')
             ->set('amount', '12000')->call('addRow')->assertHasNoErrors()
-            ->assertSet('editingRow', null)->assertSet('rows.1.amount', '12000.00')->assertCount('rows', 2);
+            ->assertSet('editingRow', null)->assertSet('rows.1.amount', '12000.00')->assertSet('rows.1.department_id', $this->dept->id)
+            ->assertSet('department_id', $other->id)->assertCount('rows', 2);
 
         // Remove a row.
         $fill($page, '88003', '700')->call('addRow')->assertCount('rows', 3);
         $page->call('removeRow', 2)->assertCount('rows', 2)->assertDontSee('#88003');
 
-        // Final save: both deposited today, then back to the list.
-        $page->call('saveAll')->assertHasNoErrors()->assertRedirect(route('cheques.index'));
+        // Final save: both deposited today; stay on the page with an empty table and the batch details kept.
+        $page->call('saveAll')->assertHasNoErrors()->assertNoRedirect()
+            ->assertDispatched('toast', type: 'success')->assertDispatched('transaction-updated')
+            ->assertCount('rows', 0)
+            ->assertSet('company_id', $this->company->id)->assertSet('department_id', $this->dept->id) // as last filled for 88003
+            ->assertSet('cheque_date', now()->subDays(5)->toDateString());
 
         $this->assertSame(['88001', '88002'], Cheque::orderBy('cheque_number')->pluck('cheque_number')->all());
         $this->assertSame([now()->toDateString()], Cheque::pluck('date')->map->toDateString()->unique()->values()->all());
         $this->assertMoney('51950.00', $this->bank);
+    }
+
+    public function test_cheque_deposit_page_opens_with_defaults(): void
+    {
+        // Alphabetically first company / department; the company's first bank; today's date.
+        $first = $this->makeCompany('Aaa Enterprises');
+        $this->makeBank($first, 'UBL Main');
+        $firstBank = $this->makeBank($first, 'Askari Current');
+        $firstDept = $this->makeDepartment('Agriculture Dept');
+
+        $page = Volt::test('cheques.register-cheque', ['asPage' => true])
+            ->assertSet('cheque_date', now()->toDateString())
+            ->assertSet('company_id', $first->id)
+            ->assertSet('deposit_account_id', $firstBank->id)
+            ->assertSet('department_id', $firstDept->id);
+
+        // Switching company picks that company's first bank.
+        $page->set('company_id', $this->company->id)->assertSet('deposit_account_id', $this->bank->id);
+
+        // The modal still starts empty and only preselects a company's sole bank.
+        Volt::test('cheques.register-cheque')->dispatch('cheque-create')
+            ->assertSet('company_id', null)->assertSet('cheque_date', '')
+            ->set('company_id', $first->id)->assertSet('deposit_account_id', null);
     }
 
     public function test_cheque_batch_is_all_or_nothing(): void
@@ -159,7 +200,7 @@ class ComponentsTest extends TestCase
         // Fix the row and save again.
         $page->call('editRow', 1)->set('cheque_number', '91003')->call('addRow')->assertHasNoErrors()
             ->assertSet('rowErrors', [])
-            ->call('saveAll')->assertRedirect(route('cheques.index'));
+            ->call('saveAll')->assertNoRedirect()->assertCount('rows', 0)->assertSet('rowErrors', []);
         $this->assertSame(3, Cheque::count());
 
         // Saving an empty table does nothing.
