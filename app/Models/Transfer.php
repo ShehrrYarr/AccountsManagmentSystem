@@ -15,6 +15,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 /**
  * Money moved between two accounts.
  *
+ * Each side names its company (from_company_id / to_company_id): a bank says it itself, and the
+ * admin's cash in hand is shared, so the form asks which company the cash side is for.
+ *
  *   Same company       : Dr To account / Cr From account     (ATM withdrawal, cash deposit, bank to bank)
  *   Between companies  : A: Dr Inter-company(B) / Cr From account
  *                        B: Dr To account       / Cr Inter-company(A)
@@ -24,7 +27,7 @@ class Transfer extends Model implements PostsToLedger
 {
     use Auditable, HasTransactions, SoftDeletes;
 
-    protected $fillable = ['from_account_id', 'to_account_id', 'amount', 'date', 'reference', 'notes', 'created_by'];
+    protected $fillable = ['from_company_id', 'from_account_id', 'to_company_id', 'to_account_id', 'amount', 'date', 'reference', 'notes', 'created_by'];
 
     protected function casts(): array
     {
@@ -41,9 +44,19 @@ class Transfer extends Model implements PostsToLedger
         return $this->belongsTo(Account::class, 'to_account_id')->withTrashed();
     }
 
+    public function fromCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'from_company_id')->withTrashed();
+    }
+
+    public function toCompany(): BelongsTo
+    {
+        return $this->belongsTo(Company::class, 'to_company_id')->withTrashed();
+    }
+
     public function isInterCompany(): bool
     {
-        return $this->fromAccount->company_id !== $this->toAccount->company_id;
+        return (int) $this->from_company_id !== (int) $this->to_company_id;
     }
 
     /** Plain-language kind of move, e.g. "Cash withdrawal". */
@@ -67,7 +80,7 @@ class Transfer extends Model implements PostsToLedger
         $ref = $this->reference ? " — ref {$this->reference}" : '';
 
         return $this->isInterCompany()
-            ? "Transfer from {$from->company->name} ({$from->shortLabel()}) to {$to->company->name} ({$to->shortLabel()}){$ref}"
+            ? "Transfer from {$this->fromCompany?->name} ({$from->shortLabel()}) to {$this->toCompany?->name} ({$to->shortLabel()}){$ref}"
             : "{$this->kind()}: {$from->shortLabel()} → {$to->shortLabel()}{$ref}";
     }
 
@@ -77,13 +90,13 @@ class Transfer extends Model implements PostsToLedger
         $to = $this->toAccount;
 
         $lines = [
-            ['account' => LedgerAccount::Money, 'debit' => $this->amount, 'company_id' => $to->company_id, 'account_id' => $to->id],
-            ['account' => LedgerAccount::Money, 'credit' => $this->amount, 'company_id' => $from->company_id, 'account_id' => $from->id],
+            ['account' => LedgerAccount::Money, 'debit' => $this->amount, 'company_id' => $this->to_company_id, 'account_id' => $to->id],
+            ['account' => LedgerAccount::Money, 'credit' => $this->amount, 'company_id' => $this->from_company_id, 'account_id' => $from->id],
         ];
 
         if ($this->isInterCompany()) {
-            $lines[] = ['account' => LedgerAccount::InterCompany, 'debit' => $this->amount, 'company_id' => $from->company_id, 'counterparty_company_id' => $to->company_id];
-            $lines[] = ['account' => LedgerAccount::InterCompany, 'credit' => $this->amount, 'company_id' => $to->company_id, 'counterparty_company_id' => $from->company_id];
+            $lines[] = ['account' => LedgerAccount::InterCompany, 'debit' => $this->amount, 'company_id' => $this->from_company_id, 'counterparty_company_id' => $this->to_company_id];
+            $lines[] = ['account' => LedgerAccount::InterCompany, 'credit' => $this->amount, 'company_id' => $this->to_company_id, 'counterparty_company_id' => $this->from_company_id];
         }
 
         return [[
@@ -91,8 +104,8 @@ class Transfer extends Model implements PostsToLedger
             'date' => $this->date,
             'lines' => $lines,
             'attributes' => [
-                'company_id' => $from->company_id,
-                'counterparty_company_id' => $this->isInterCompany() ? $to->company_id : null,
+                'company_id' => $this->from_company_id,
+                'counterparty_company_id' => $this->isInterCompany() ? $this->to_company_id : null,
                 'account_id' => $from->id,
                 'to_account_id' => $to->id,
                 'amount' => $this->amount,

@@ -76,7 +76,7 @@ $accountOptions = computed(fn () => $this->company_id
     ? Options::accounts((int) $this->company_id, $this->method === 'bank_transfer' ? 'bank' : null, $this->account_id)
     : []);
 
-$cashAccount = computed(fn () => $this->company_id ? Account::where('company_id', $this->company_id)->cash()->first() : null);
+$cashAccount = computed(fn () => $this->company_id ? Account::adminCash() : null); // shared by every company
 
 $deptBalance = computed(fn () => $this->company_id && $this->department_id
     ? Balances::departmentBalance((int) $this->department_id, (int) $this->company_id)
@@ -266,7 +266,7 @@ $save = function () {
                             <label class="form-label">Paid from</label>
                             <div class="form-control bg-body-tertiary ams-balance">
                                 @if ($this->cashAccount)
-                                    Cash in hand · <strong>{{ money($this->cashAccount->current_balance) }}</strong>
+                                    Admin cash in hand · <strong>{{ money($this->cashAccount->current_balance) }}</strong>
                                 @else
                                     <span class="text-muted">Select a company</span>
                                 @endif

@@ -40,7 +40,7 @@ trait BuildsLedgerFixtures
         $this->actingAs($this->admin);
 
         $this->company = $this->makeCompany('Al-Noor Traders');
-        $this->cash = $this->company->cashAccount;
+        $this->cash = Account::adminCash();
         $this->bank = $this->makeBank($this->company, 'HBL Current');
         $this->dept = Department::create(['name' => 'Health Dept', 'is_active' => true]);
         $this->supplier = Supplier::create(['name' => 'Office Mart', 'is_active' => true]);

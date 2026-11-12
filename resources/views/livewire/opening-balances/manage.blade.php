@@ -29,13 +29,14 @@ rules(fn () => [
     'notes' => ['nullable', 'string', 'max:255'],
 ]);
 
-$accounts = computed(fn () => Account::with('company')->whereHas('company')
+// Company bank accounts (their opening lives on the account). Cash openings are rows below.
+$accounts = computed(fn () => Account::with('company')->banks()->whereHas('company')
     ->when($this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
-    ->orderBy('company_id')->orderBy('type')->orderBy('name')->get());
+    ->orderBy('company_id')->orderBy('name')->get());
 
-$openings = computed(fn () => OpeningBalance::with(['company', 'department', 'supplier'])
+$openings = computed(fn () => OpeningBalance::with(['company', 'department', 'supplier', 'account'])
     ->when($this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
-    ->orderBy('company_id')->orderByDesc('department_id')->get());
+    ->orderBy('company_id')->orderByDesc('account_id')->orderByDesc('department_id')->get());
 
 $companyOptions = computed(fn () => Options::companies());
 
@@ -56,7 +57,7 @@ $edit = function (int $id) {
     $o = OpeningBalance::findOrFail($id);
     $this->recordId = $o->id;
     $this->fill([
-        'company_id' => $o->company_id, 'party' => $o->department_id ? 'department' : 'supplier',
+        'company_id' => $o->company_id, 'party' => $o->account_id ? 'cash' : ($o->department_id ? 'department' : 'supplier'),
         'department_id' => $o->department_id, 'supplier_id' => $o->supplier_id,
         'direction' => Money::isNegative($o->amount) ? 'held' : 'owes',
         'amount' => Money::isNegative($o->amount) ? Money::sub(0, $o->amount) : $o->amount,
@@ -69,7 +70,9 @@ $save = function () {
     $data = $this->validate();
     $amount = Money::of($data['amount']);
     $data['amount'] = $this->party === 'department' && $this->direction === 'held' ? Money::sub(0, $amount) : $amount;
-    $data[$this->party === 'department' ? 'supplier_id' : 'department_id'] = null;
+    $data['department_id'] = $this->party === 'department' ? $data['department_id'] : null;
+    $data['supplier_id'] = $this->party === 'supplier' ? $data['supplier_id'] : null;
+    $data['account_id'] = $this->party === 'cash' ? Account::adminCash()->id : null;
 
     $ok = $this->attempt(function () use ($data) {
         $o = app(DealService::class)->saveOpening($this->recordId ? OpeningBalance::findOrFail($this->recordId) : null, $data);
@@ -94,6 +97,7 @@ $delete = function (int $id) {
     <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
         <div style="min-width:220px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
         <div class="ms-auto d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-success" wire:click="create('cash')"><i class="ri-wallet-3-line me-1"></i>Cash in hand</button>
             <button type="button" class="btn btn-sm btn-primary" wire:click="create('department')"><i class="ri-government-line me-1"></i>Department balance</button>
             <button type="button" class="btn btn-sm btn-primary" wire:click="create('supplier')"><i class="ri-truck-line me-1"></i>Supplier balance</button>
         </div>
@@ -102,7 +106,7 @@ $delete = function (int $id) {
     <div class="row g-3">
         <div class="col-xl-5">
             <div class="card h-100 mb-0">
-                <div class="card-header"><h5 class="card-title mb-0">Cash &amp; bank opening balances</h5></div>
+                <div class="card-header"><h5 class="card-title mb-0">Bank opening balances</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 ams-table">
                         <thead class="table-light"><tr><th>Account</th><th class="money">Opening</th><th></th></tr></thead>
@@ -114,7 +118,7 @@ $delete = function (int $id) {
                                     <td class="text-end"><button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('account-edit', { id: {{ $a->id }} })"><i class="ri-edit-line"></i></button></td>
                                 </tr>
                             @empty
-                                <x-empty-row :colspan="3" icon="ri-safe-2-line" message="No accounts yet." />
+                                <x-empty-row :colspan="3" icon="ri-safe-2-line" message="No bank accounts yet." />
                             @endforelse
                         </tbody>
                     </table>
@@ -123,7 +127,7 @@ $delete = function (int $id) {
         </div>
         <div class="col-xl-7">
             <div class="card h-100 mb-0">
-                <div class="card-header"><h5 class="card-title mb-0">Department &amp; supplier opening balances</h5></div>
+                <div class="card-header"><h5 class="card-title mb-0">Cash, department &amp; supplier opening balances</h5></div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 ams-table">
                         <thead class="table-light"><tr><th>Party</th><th class="d-none d-md-table-cell">Company</th><th class="money">Balance</th><th></th></tr></thead>
@@ -131,7 +135,7 @@ $delete = function (int $id) {
                             @forelse ($this->openings as $o)
                                 <tr wire:key="ob-{{ $o->id }}">
                                     <td>
-                                        <span class="badge {{ $o->department_id ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning' }}">{{ $o->department_id ? 'Department' : 'Supplier' }}</span>
+                                        <span class="badge {{ $o->account_id ? 'bg-success-subtle text-success' : ($o->department_id ? 'bg-info-subtle text-info' : 'bg-warning-subtle text-warning') }}">{{ $o->account_id ? 'Admin cash' : ($o->department_id ? 'Department' : 'Supplier') }}</span>
                                         <span class="fw-medium">{{ $o->partyName() }}</span>
                                         <div class="fs-12 text-muted d-md-none">{{ $o->company->name }}</div>
                                         @if ($o->notes)<div class="fs-12 text-muted">{{ $o->notes }}</div>@endif
@@ -140,7 +144,7 @@ $delete = function (int $id) {
                                     <td class="money">
                                         {{ money(Money::isNegative($o->amount) ? Money::sub(0, $o->amount) : $o->amount) }}
                                         <div class="fs-11 text-muted">
-                                            {{ $o->supplier_id ? 'you owe them' : (Money::isNegative($o->amount) ? 'you hold' : 'owes you') }} · {{ $o->date->format('d M Y') }}
+                                            {{ $o->account_id ? 'cash held for this company' : ($o->supplier_id ? 'you owe them' : (Money::isNegative($o->amount) ? 'you hold' : 'owes you')) }} · {{ $o->date->format('d M Y') }}
                                         </div>
                                     </td>
                                     <td class="text-end text-nowrap">
@@ -150,7 +154,7 @@ $delete = function (int $id) {
                                     </td>
                                 </tr>
                             @empty
-                                <x-empty-row :colspan="4" icon="ri-flag-line" message="No department or supplier opening balances." />
+                                <x-empty-row :colspan="4" icon="ri-flag-line" message="No cash, department or supplier opening balances." />
                             @endforelse
                         </tbody>
                     </table>
@@ -159,7 +163,7 @@ $delete = function (int $id) {
         </div>
     </div>
 
-    <x-modal id="openingModal" :title="($recordId ? 'Edit ' : 'Add ').($party === 'department' ? 'Department' : 'Supplier').' Opening Balance'" icon="ri-flag-line" size="md">
+    <x-modal id="openingModal" :title="($recordId ? 'Edit ' : 'Add ').match ($party) { 'cash' => 'Cash in Hand', 'department' => 'Department', default => 'Supplier' }.' Opening Balance'" icon="ri-flag-line" size="md">
         <form wire:submit="save">
             <div class="modal-body">
                 <div class="row g-3">
@@ -168,7 +172,11 @@ $delete = function (int $id) {
                         <x-searchable-select wire:model="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
                         @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
-                    @if ($party === 'department')
+                    @if ($party === 'cash')
+                        <div class="col-12">
+                            <div class="form-text mt-0"><i class="ri-wallet-3-line"></i> Cash in the <strong>admin cash in hand</strong> that belonged to this company on the opening date.</div>
+                        </div>
+                    @elseif ($party === 'department')
                         <div class="col-12">
                             <label class="form-label">Department <span class="text-danger">*</span></label>
                             <x-searchable-select wire:model="department_id" :options="Options::departments($department_id)" placeholder="Select department" :invalid="$errors->has('department_id')" />

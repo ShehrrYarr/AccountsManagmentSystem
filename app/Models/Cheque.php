@@ -10,7 +10,10 @@ use App\Models\Contracts\PostsToLedger;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -56,6 +59,35 @@ class Cheque extends Model implements PostsToLedger
     public function depositAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'deposit_account_id')->withTrashed();
+    }
+
+    /** Who received (entered) the cheque: the admin or an agent. */
+    public function receiver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(ChequeChangeRequest::class);
+    }
+
+    /** The agent's request waiting for the admin, if any. */
+    public function pendingRequest(): HasOne
+    {
+        return $this->hasOne(ChequeChangeRequest::class)->where('status', ChequeChangeRequest::PENDING)->latestOfMany();
+    }
+
+    /** The most recent request (to show the agent its outcome). */
+    public function latestRequest(): HasOne
+    {
+        return $this->hasOne(ChequeChangeRequest::class)->latestOfMany();
+    }
+
+    /** Cheques a user may see: the admin sees all, an agent only those they received. */
+    public function scopeVisibleTo(Builder $q, ?User $user): Builder
+    {
+        return $user?->isAdmin() ? $q : $q->where('created_by', $user?->id ?? 0);
     }
 
     /** What actually landed in the bank. */

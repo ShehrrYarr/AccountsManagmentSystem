@@ -44,7 +44,9 @@ class StatementService
         $subject = $this->subject($kind, $id);
         $from = $from ? Carbon::parse($from)->startOfDay() : null;
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
-        $company = $kind === 'company' ? $subject : ($kind === 'account' ? $subject->company : ($companyId ? Company::withTrashed()->find($companyId) : null));
+        $company = $kind === 'company' ? $subject : (($kind === 'account' ? $subject->company : null) ?? ($companyId ? Company::withTrashed()->find($companyId) : null));
+        // The admin's cash is shared by every company: its statement can be narrowed to one.
+        $sharedCash = $kind === 'account' && $subject->isAdminCash();
 
         $meta = match ($kind) {
             'account' => [
@@ -53,7 +55,8 @@ class StatementService
                 'debit' => 'Money in', 'credit' => 'Money out', 'balance' => 'Balance', 'sign' => 1,
                 'note' => null,
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
-                    ->where('journal_ledger_entries.account_id', $id),
+                    ->where('journal_ledger_entries.account_id', $id)
+                    ->when($sharedCash && $companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
             ],
             'department' => [
                 'title' => 'Department Ledger',
@@ -151,7 +154,8 @@ class StatementService
             'name' => $meta['name'],
             'labels' => ['debit' => $meta['debit'], 'credit' => $meta['credit'], 'balance' => $meta['balance']],
             'note' => $meta['note'],
-            'showCompany' => in_array($kind, ['department', 'supplier'], true) && ! $companyId,
+            'showCompany' => (in_array($kind, ['department', 'supplier'], true) || $sharedCash) && ! $companyId,
+            'companyFilter' => in_array($kind, ['department', 'supplier'], true) || $sharedCash,
             'showAmount' => $kind === 'company',
             'from' => $from,
             'to' => $to,

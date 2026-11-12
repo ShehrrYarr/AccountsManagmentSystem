@@ -67,16 +67,14 @@ $baseQuery = computed(function () {
     $company = $this->companyId ?? $this->filterCompany;
 
     return Transfer::query()
-        ->when($company, fn ($q) => $q->where(fn ($q) => $q
-            ->whereHas('fromAccount', fn ($a) => $a->where('company_id', $company))
-            ->orWhereHas('toAccount', fn ($a) => $a->where('company_id', $company))))
-        ->when($this->filterKind === 'own', fn ($q) => $q->whereRaw('(select company_id from accounts where accounts.id = transfers.from_account_id) = (select company_id from accounts where accounts.id = transfers.to_account_id)'))
-        ->when($this->filterKind === 'intercompany', fn ($q) => $q->whereRaw('(select company_id from accounts where accounts.id = transfers.from_account_id) <> (select company_id from accounts where accounts.id = transfers.to_account_id)'))
+        ->when($company, fn ($q) => $q->where(fn ($q) => $q->where('from_company_id', $company)->orWhere('to_company_id', $company)))
+        ->when($this->filterKind === 'own', fn ($q) => $q->whereColumn('from_company_id', 'to_company_id'))
+        ->when($this->filterKind === 'intercompany', fn ($q) => $q->whereColumn('from_company_id', '<>', 'to_company_id'))
         ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
         ->when($this->to, fn ($q) => $q->whereDate('date', '<=', $this->to));
 });
 
-$rows = computed(fn () => (clone $this->baseQuery)->with(['fromAccount.company', 'toAccount.company'])
+$rows = computed(fn () => (clone $this->baseQuery)->with(['fromAccount', 'toAccount', 'fromCompany', 'toCompany'])
     ->orderByDesc('date')->orderByDesc('id')->paginate(15, pageName: 'trPage'));
 
 $companyOptions = computed(fn () => Options::companies());
@@ -94,7 +92,7 @@ $owed = computed(function () {
     }
     $owed = Balances::owedBetween((int) $this->from_company_id, (int) $this->to_company_id);
     if ($this->recordId && ($old = Transfer::with(['fromAccount', 'toAccount'])->find($this->recordId)) && $old->isInterCompany()) {
-        $owed = $old->fromAccount->company_id == $this->from_company_id ? Money::sub($owed, $old->amount) : Money::add($owed, $old->amount);
+        $owed = $old->from_company_id == $this->from_company_id ? Money::sub($owed, $old->amount) : Money::add($owed, $old->amount);
     }
 
     return ['owed' => $owed, 'from' => Company::find($this->from_company_id)?->name, 'to' => Company::find($this->to_company_id)?->name];
@@ -120,8 +118,8 @@ $edit = function (int $id) {
     $this->recordId = $t->id;
     $this->fill([
         'mode' => $t->isInterCompany() ? 'intercompany' : 'own',
-        'from_company_id' => $t->fromAccount->company_id, 'from_account_id' => $t->from_account_id,
-        'to_company_id' => $t->isInterCompany() ? $t->toAccount->company_id : null, 'to_account_id' => $t->to_account_id,
+        'from_company_id' => $t->from_company_id, 'from_account_id' => $t->from_account_id,
+        'to_company_id' => $t->isInterCompany() ? $t->to_company_id : null, 'to_account_id' => $t->to_account_id,
         'amount' => $t->amount, 'date' => $t->date->toDateString(), 'reference' => $t->reference ?? '', 'notes' => $t->notes ?? '',
     ]);
     $this->showModal('transferModal');
@@ -181,11 +179,11 @@ $delete = function (int $id) {
                                 <td class="fs-13">
                                     <span class="badge {{ $t->isInterCompany() ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary' }}">{{ $t->kind() }}</span>
                                     <div class="mt-1">
-                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->fromAccount->company->name }}</span> · @endif{{ $t->fromAccount->shortLabel() }}
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->fromCompany?->name }}</span> · @endif{{ $t->fromAccount->shortLabel() }}
                                         <i class="ri-arrow-right-line text-muted"></i>
-                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->toAccount->company->name }}</span> · @endif{{ $t->toAccount->shortLabel() }}
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->toCompany?->name }}</span> · @endif{{ $t->toAccount->shortLabel() }}
                                     </div>
-                                    @if (! $t->isInterCompany() && ! $companyId)<div class="fs-12 text-muted">{{ $t->fromAccount->company->name }}</div>@endif
+                                    @if (! $t->isInterCompany() && ! $companyId)<div class="fs-12 text-muted">{{ $t->fromCompany?->name }}</div>@endif
                                 </td>
                                 <td class="fs-13 d-none d-md-table-cell">{{ $t->reference ?: '—' }}</td>
                                 <td class="money fw-semibold">{{ money($t->amount) }}</td>
@@ -217,7 +215,7 @@ $delete = function (int $id) {
                 </div>
                 <p class="fs-13 text-muted">
                     {{ $mode === 'own'
-                        ? 'ATM / cash withdrawal (bank → cash), cash deposit (cash → bank) or bank to bank, inside the same company.'
+                        ? 'ATM / cash withdrawal (bank → admin cash), cash deposit (admin cash → bank) or bank to bank, for one company.'
                         : 'Money sent from one of your companies to another. The receiving company will owe the sender until it is sent back.' }}
                 </p>
 

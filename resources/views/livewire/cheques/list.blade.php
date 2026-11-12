@@ -3,10 +3,16 @@
 /**
  * Government cheque register (every cheque is already deposited): live filters, summary tiles,
  * pagination and row actions. Embeddable on a company or department page via the locked ids.
+ *
+ * The admin sees every cheque (with who received it) and edits / deletes directly. An agent sees
+ * only the cheques they received; their edits and deletes become requests for the admin.
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\Cheque;
+use App\Models\ChequeChangeRequest;
+use App\Models\User;
+use App\Services\ChequeApprovalService;
 use App\Services\ChequeService;
 use App\Support\Money;
 use App\Support\Options;
@@ -22,6 +28,7 @@ state([
     'search' => '',
     'filterCompany' => null,
     'filterDepartment' => null,
+    'filterReceiver' => null,
     'from' => '',
     'to' => '',
     'perPage' => 15,
@@ -30,7 +37,7 @@ state([
 ]);
 
 $updated = function ($property) {
-    if (in_array($property, ['search', 'filterCompany', 'filterDepartment', 'from', 'to', 'perPage'], true)) {
+    if (in_array($property, ['search', 'filterCompany', 'filterDepartment', 'filterReceiver', 'from', 'to', 'perPage'], true)) {
         $this->resetPage('chequesPage');
     }
 };
@@ -42,7 +49,11 @@ $sortBy = function (string $field) {
 };
 
 // Filtered query (clone before use — computed values are cached per request).
+$isAdmin = computed(fn () => (bool) auth()->user()?->isAdmin());
+
 $baseQuery = computed(fn () => Cheque::query()
+    ->visibleTo(auth()->user())
+    ->when($this->isAdmin && $this->filterReceiver, fn ($q) => $q->where('created_by', $this->filterReceiver))
     ->when($this->companyId ?? $this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
     ->when($this->departmentId ?? $this->filterDepartment, fn ($q, $id) => $q->where('department_id', $id))
     ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
@@ -57,12 +68,12 @@ $baseQuery = computed(fn () => Cheque::query()
     }));
 
 $cheques = computed(fn () => (clone $this->baseQuery)
-    ->with(['company', 'department', 'depositAccount'])
+    ->with(['company', 'department', 'depositAccount', 'receiver', 'pendingRequest', 'latestRequest'])
     ->orderBy($this->sortField, $this->sortDir)->orderByDesc('id')
     ->paginate($this->perPage, pageName: 'chequesPage'));
 
 $summary = computed(function () {
-    $month = Cheque::query()
+    $month = Cheque::query()->visibleTo(auth()->user())
         ->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
         ->when($this->departmentId, fn ($q, $id) => $q->where('department_id', $id))
         ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()]);
@@ -78,12 +89,15 @@ $summary = computed(function () {
 
 $companyOptions = computed(fn () => Options::companies());
 $departmentOptions = computed(fn () => Options::departments());
+$receiverOptions = computed(fn () => User::query()->whereIn('role', ['admin', 'agent'])->orderBy('role')->orderBy('name')->get()
+    ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name, 'hint' => $u->role->label()])->all());
 
 on(['transaction-updated' => function () {
     unset($this->baseQuery, $this->cheques, $this->summary);
 }]);
 
 $delete = function (int $id) {
+    abort_unless($this->isAdmin, 403);
     $cheque = Cheque::findOrFail($id);
     if ($this->attempt(fn () => app(ChequeService::class)->delete($cheque)) !== false) {
         $this->toast('success', "Cheque #{$cheque->cheque_number} deleted and removed from {$cheque->depositAccount?->shortLabel()}.");
@@ -91,8 +105,32 @@ $delete = function (int $id) {
     }
 };
 
+// Agent: ask the admin to delete one of their cheques.
+$requestDelete = function (int $id, ?string $reason = null) {
+    $cheque = Cheque::visibleTo(auth()->user())->findOrFail($id);
+    if ($this->attempt(fn () => app(ChequeApprovalService::class)->requestDelete($cheque, auth()->user(), $reason)) !== false) {
+        $this->toast('success', "Delete of cheque #{$cheque->cheque_number} sent to the admin for approval.");
+        unset($this->cheques);
+        $this->dispatch('approval-updated');
+    }
+};
+
+// Agent: withdraw their pending request.
+$withdrawRequest = function (int $requestId) {
+    $request = ChequeChangeRequest::findOrFail($requestId);
+    if ($this->attempt(fn () => app(ChequeApprovalService::class)->cancel($request, auth()->user())) !== false) {
+        $this->toast('success', 'Request withdrawn.');
+        unset($this->cheques);
+        $this->dispatch('approval-updated');
+    }
+};
+
+on(['approval-updated' => function () {
+    unset($this->cheques);
+}]);
+
 $clearFilters = function () {
-    $this->fill(['search' => '', 'filterCompany' => null, 'filterDepartment' => null, 'from' => '', 'to' => '']);
+    $this->fill(['search' => '', 'filterCompany' => null, 'filterDepartment' => null, 'filterReceiver' => null, 'from' => '', 'to' => '']);
     $this->resetPage('chequesPage');
 };
 
@@ -129,13 +167,18 @@ $clearFilters = function () {
                     <x-searchable-select wire:model.live="filterDepartment" :options="$this->departmentOptions" placeholder="All departments" size="sm" />
                 </div>
             @endunless
+            @if ($this->isAdmin)
+                <div style="min-width:170px">
+                    <x-searchable-select wire:model.live="filterReceiver" :options="$this->receiverOptions" placeholder="Received by anyone" size="sm" />
+                </div>
+            @endif
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Deposited from" aria-label="Deposited from">
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="Deposited to" aria-label="Deposited to">
             <button type="button" class="btn btn-sm btn-light" wire:click="clearFilters" title="Reset filters"><i class="ri-refresh-line"></i></button>
         </div>
 
         <div class="card-body p-0">
-            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,filterCompany,filterDepartment,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
+            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,filterCompany,filterDepartment,filterReceiver,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
                 <table class="table table-hover align-middle mb-0 ams-table">
                     <thead class="table-light">
                         <tr>
@@ -164,25 +207,57 @@ $clearFilters = function () {
                                     </div>
                                 </td>
                                 <td class="d-none d-md-table-cell">
-                                    <a href="{{ route('departments.show', $c->department_id) }}" class="text-body fw-medium">{{ $c->department->name }}</a>
-                                    <div class="fs-12"><a href="{{ route('companies.show', $c->company_id) }}" class="text-muted">{{ $c->company->name }}</a></div>
+                                    @if ($this->isAdmin)
+                                        <a href="{{ route('departments.show', $c->department_id) }}" class="text-body fw-medium">{{ $c->department->name }}</a>
+                                        <div class="fs-12"><a href="{{ route('companies.show', $c->company_id) }}" class="text-muted">{{ $c->company->name }}</a></div>
+                                    @else
+                                        <div class="fw-medium">{{ $c->department->name }}</div>
+                                        <div class="fs-12 text-muted">{{ $c->company->name }}</div>
+                                    @endif
                                 </td>
                                 <td class="fs-13 d-none d-lg-table-cell">
                                     {{ $c->depositAccount?->shortLabel() }}
                                     @if ($c->deposit_reference)<div class="fs-12 text-muted">Slip {{ $c->deposit_reference }}</div>@endif
                                 </td>
-                                <td class="fs-13 d-none d-md-table-cell text-nowrap">{{ $c->date->format('d M Y') }}</td>
+                                <td class="fs-13 d-none d-md-table-cell text-nowrap">
+                                    {{ $c->date->format('d M Y') }}
+                                    @if ($this->isAdmin)
+                                        <div class="fs-12 text-muted" title="Received by"><i class="ri-user-line"></i> {{ $c->receiver?->name ?? '—' }}</div>
+                                    @endif
+                                </td>
                                 <td class="money d-none d-md-table-cell">
                                     <span class="fw-semibold">{{ money($c->amount) }}</span>
                                     @if (Money::isPositive($c->bank_charges))<div class="fs-11 text-muted">charges {{ money($c->bank_charges) }}</div>@endif
                                 </td>
                                 <td class="text-end text-nowrap">
-                                    @if ($c->scan_path)
-                                        <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('files.show', ['cheque', $c->id]) }}" target="_blank" title="View scan"><i class="ri-attachment-2"></i></a>
+                                    @php($pending = $c->pendingRequest)
+                                    @php($latest = $c->latestRequest)
+                                    @if ($pending)
+                                        @if ($this->isAdmin)
+                                            <a href="{{ route('approvals.index') }}" class="badge bg-warning-subtle text-warning me-1" title="An agent asked to {{ $pending->action }} this cheque">{{ ucfirst($pending->action) }} pending</a>
+                                        @else
+                                            <span class="badge bg-warning-subtle text-warning me-1" title="Waiting for the admin">{{ ucfirst($pending->action) }} pending</span>
+                                        @endif
+                                    @elseif (! $this->isAdmin && $latest?->status === ChequeChangeRequest::REJECTED)
+                                        <span class="badge bg-danger-subtle text-danger me-1" title="{{ $latest->decision_note ?: 'No reason given' }}">{{ ucfirst($latest->action) }} rejected</span>
                                     @endif
-                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line"></i></button>
-                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
-                                        x-on:click="amsConfirm(@js('Delete cheque #'.$c->cheque_number.'? It will be removed from the bank and the department ledger.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))"><i class="ri-delete-bin-line"></i></button>
+
+                                    @if ($c->scan_path)
+                                        <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('files.show', ['cheque', $c->id]) }}" target="_blank" title="View picture"><i class="ri-attachment-2"></i></a>
+                                    @endif
+
+                                    @if ($this->isAdmin)
+                                        <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line"></i></button>
+                                        <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
+                                            x-on:click="amsConfirm(@js('Delete cheque #'.$c->cheque_number.'? It will be removed from the bank and the department ledger.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))"><i class="ri-delete-bin-line"></i></button>
+                                    @elseif ($pending)
+                                        <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Withdraw my request"
+                                            x-on:click="amsConfirm('Withdraw your request for this cheque?', 'Withdraw').then(ok => ok && $wire.withdrawRequest({{ $pending->id }}))"><i class="ri-arrow-go-back-line"></i></button>
+                                    @else
+                                        <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Ask the admin to edit" wire:click="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line"></i></button>
+                                        <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Ask the admin to delete"
+                                            x-on:click="amsConfirm(@js('Ask the admin to delete cheque #'.$c->cheque_number.'? It stays until the admin approves.'), 'Send request').then(ok => ok && $wire.requestDelete({{ $c->id }}))"><i class="ri-delete-bin-line"></i></button>
+                                    @endif
                                 </td>
                             </tr>
                         @empty

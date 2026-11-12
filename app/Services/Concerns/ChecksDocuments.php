@@ -22,13 +22,16 @@ trait ChecksDocuments
         return $amount;
     }
 
-    /** The account must exist, belong to the company and (optionally) be of the given type. */
+    /**
+     * The account must exist, be usable by the company (one of its banks, or the admin's cash in
+     * hand, which every company shares) and (optionally) be of the given type.
+     */
     protected function accountOf(int $companyId, mixed $accountId, ?AccountType $type = null, string $field = 'account_id', ?int $keepId = null): Account
     {
         $account = Account::with('company')->find($accountId);
 
-        if (! $account || $account->company_id !== $companyId) {
-            throw new BusinessRuleException('Choose one of this company’s own accounts.', $field);
+        if (! $account || ($account->company_id !== $companyId && ! $account->isAdminCash())) {
+            throw new BusinessRuleException('Choose one of this company’s banks or the admin cash in hand.', $field);
         }
 
         if ($type && $account->type !== $type) {
@@ -42,13 +45,9 @@ trait ChecksDocuments
         return $account;
     }
 
+    /** Cash for any company comes from the admin's single cash in hand. */
     protected function cashAccountOf(int $companyId): Account
     {
-        $cash = Account::where('company_id', $companyId)->where('type', AccountType::Cash)->first();
-        if (! $cash) {
-            throw new BusinessRuleException('This company has no cash in hand account.', 'company_id');
-        }
-
-        return $cash;
+        return Account::adminCash();
     }
 }

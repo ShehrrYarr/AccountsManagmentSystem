@@ -7,13 +7,13 @@ enum UserRole: string
     use HasOptions;
 
     case Admin = 'admin';
-    case Staff = 'staff';
+    case Agent = 'agent';
 
     public function label(): string
     {
         return match ($this) {
             self::Admin => 'Administrator',
-            self::Staff => 'Staff',
+            self::Agent => 'Agent',
         };
     }
 }

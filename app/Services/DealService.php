@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\BusinessRuleException;
+use App\Models\Account;
 use App\Models\DealClosing;
 use App\Models\OpeningBalance;
 use App\Support\Money;
@@ -47,15 +48,23 @@ class DealService
     public function saveOpening(?OpeningBalance $opening, array $data): OpeningBalance
     {
         $opening ??= new OpeningBalance(['created_by' => auth()->id()]);
-        $opening->fill(Arr::only($data, ['company_id', 'department_id', 'supplier_id', 'amount', 'date', 'notes']));
+        $opening->fill(Arr::only($data, ['company_id', 'department_id', 'supplier_id', 'account_id', 'amount', 'date', 'notes']));
         $opening->amount = Money::of($opening->amount);
 
-        if (! $opening->department_id === ! $opening->supplier_id) {
-            throw new BusinessRuleException('Choose either a department or a supplier.', 'party');
+        if (count(array_filter([$opening->department_id, $opening->supplier_id, $opening->account_id])) !== 1) {
+            throw new BusinessRuleException('Choose a department, a supplier or cash in hand.', 'party');
+        }
+
+        if ($opening->account_id && ! Account::find($opening->account_id)?->isAdminCash()) {
+            throw new BusinessRuleException('A cash opening balance goes on the admin cash in hand.', 'party');
         }
 
         if (Money::isZero($opening->amount)) {
             throw new BusinessRuleException('Amount cannot be zero.', 'amount');
+        }
+
+        if ($opening->account_id && Money::isNegative($opening->amount)) {
+            throw new BusinessRuleException('Cash in hand cannot open below zero.', 'amount');
         }
 
         if ($opening->supplier_id && Money::isNegative($opening->amount)) {
@@ -65,6 +74,7 @@ class DealService
         $duplicate = OpeningBalance::where('company_id', $opening->company_id)
             ->when($opening->department_id, fn ($q) => $q->where('department_id', $opening->department_id))
             ->when($opening->supplier_id, fn ($q) => $q->where('supplier_id', $opening->supplier_id))
+            ->when($opening->account_id, fn ($q) => $q->where('account_id', $opening->account_id))
             ->when($opening->exists, fn ($q) => $q->whereKeyNot($opening->id))
             ->exists();
 

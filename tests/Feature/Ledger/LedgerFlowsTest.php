@@ -55,16 +55,53 @@ class LedgerFlowsTest extends TestCase
 
     // ---------------------------------------------------------------- companies & accounts
 
-    public function test_a_new_company_gets_one_cash_in_hand_with_its_opening_balance(): void
+    public function test_companies_share_the_admin_cash_in_hand(): void
     {
-        $co = $this->makeCompany('Zamzam Enterprises', '25000');
+        $co = $this->makeCompany('Zamzam Enterprises');
+        $this->assertCount(0, $co->accounts, 'a company has no cash account of its own');
+        $this->assertTrue($this->cash->isAdminCash());
 
-        $this->assertCount(1, $co->accounts);
-        $this->assertTrue($co->cashAccount->isCash());
-        $this->assertMoney('25000.00', $co->cashAccount);
+        // Cash openings are per company, on the admin's cash.
+        $deals = app(\App\Services\DealService::class);
+        $deals->saveOpening(null, ['company_id' => $this->company->id, 'account_id' => $this->cash->id, 'amount' => '30000', 'date' => now()->subMonth()->toDateString()]);
+        $deals->saveOpening(null, ['company_id' => $co->id, 'account_id' => $this->cash->id, 'amount' => '20000', 'date' => now()->subMonth()->toDateString()]);
+        $this->assertMoney('50000.00', $this->cash);
+        $this->assertSame('30000.00', Balances::money($this->company->id)['cash']);
+        $this->assertSame('20000.00', Balances::money($co->id)['cash']);
+        $this->assertSame('50000.00', Balances::money()['cash']);
+
+        // Zamzam pays cash for a department: the admin's cash goes down, Zamzam's share too.
+        $this->pay(['company_id' => $co->id, 'method' => 'cash', 'account_id' => null, 'amount' => '5000']);
+        $this->assertMoney('45000.00', $this->cash);
+        $this->assertSame('15000.00', Balances::money($co->id)['cash']);
+
+        try {
+            app(MasterDataService::class)->saveAccount(null, ['company_id' => $co->id, 'type' => 'cash', 'name' => 'Company cash']);
+            $this->fail('A company cash account was allowed.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('bank accounts only', $e->getMessage());
+        }
 
         $this->expectException(BusinessRuleException::class);
-        app(MasterDataService::class)->saveAccount(null, ['company_id' => $co->id, 'type' => 'cash', 'name' => 'Second cash']);
+        $deals->saveOpening(null, ['company_id' => $co->id, 'account_id' => $this->cash->id, 'amount' => '-10', 'date' => now()->toDateString()]);
+    }
+
+    public function test_agents_have_their_own_accounts_kept_out_of_the_books(): void
+    {
+        $agent = \App\Models\User::factory()->create(['name' => 'Bilal']);
+        $master = app(MasterDataService::class);
+        $cash = $master->ensureAgentCash($agent, $this->admin);
+        $this->assertSame($cash->id, $master->ensureAgentCash($agent)->id, 'one cash in hand per agent');
+
+        $bank = $master->saveAccount(null, ['agent_id' => $agent->id, 'type' => 'bank', 'name' => 'Meezan', 'bank_name' => 'Meezan Bank', 'opening_balance' => '9999'], $this->admin);
+        $this->assertTrue($bank->addedByAdmin());
+        $this->assertSame('0.00', (string) $bank->opening_balance, 'agent accounts are not used yet');
+        $this->assertSame(0, Transaction::count() - Transaction::where('source_type', '!=', 'account')->count());
+        $this->assertNotContains($bank->id, array_column(\App\Support\Options::accounts(), 'value'));
+        $this->assertNotContains($cash->id, array_column(\App\Support\Options::accounts($this->company->id), 'value'));
+
+        $this->expectException(BusinessRuleException::class);
+        $master->deleteAccount($cash);
     }
 
     public function test_changing_an_opening_balance_reposts_it(): void
@@ -233,9 +270,17 @@ class LedgerFlowsTest extends TestCase
         $this->assertMoney('35000.00', $this->bank);
         $this->assertMoney('25000.00', $otherBank);
 
-        // Zamzam sends 10,000 back into Al-Noor's cash.
-        $svc->save(null, ['from_account_id' => $otherBank->id, 'to_account_id' => $this->cash->id, 'amount' => '10000', 'date' => now()->toDateString()]);
+        // Zamzam sends 10,000 back into the admin's cash, for Al-Noor.
+        $t = $svc->save(null, ['from_account_id' => $otherBank->id, 'to_company_id' => $this->company->id, 'to_account_id' => $this->cash->id, 'amount' => '10000', 'date' => now()->toDateString()]);
         $this->assertSame('15000.00', Balances::owedBetween($this->company->id, $other->id));
+        $this->assertTrue($t->isInterCompany());
+        $this->assertSame('10000.00', Balances::money($this->company->id)['cash']);
+
+        // An ATM withdrawal stays inside one company.
+        $atm = $svc->save(null, ['from_account_id' => $this->bank->id, 'to_account_id' => $this->cash->id, 'amount' => '5000', 'date' => now()->toDateString()]);
+        $this->assertFalse($atm->isInterCompany());
+        $this->assertSame('Cash withdrawal', $atm->kind());
+        $this->assertSame('15000.00', Balances::money($this->company->id)['cash']);
     }
 
     public function test_editing_a_transfer_to_overdraw_is_blocked_and_rolled_back(): void

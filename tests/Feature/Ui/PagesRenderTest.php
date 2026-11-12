@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Ui;
 
+use App\Models\Cheque;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -27,7 +28,7 @@ class PagesRenderTest extends TestCase
     public static function pages(): array
     {
         return [
-            ['/dashboard'], ['/cheques'], ['/cheques/deposit'], ['/payments'], ['/supplier-payments'], ['/expenses'], ['/transfers'],
+            ['/dashboard'], ['/approvals'], ['/cheques'], ['/cheques/deposit'], ['/payments'], ['/supplier-payments'], ['/expenses'], ['/transfers'],
             ['/companies'], ['/accounts'], ['/departments'], ['/suppliers'], ['/transactions'],
             ['/opening-balances'], ['/expense-categories'], ['/users'], ['/audit-log'], ['/profile'],
         ];
@@ -83,13 +84,35 @@ class PagesRenderTest extends TestCase
         $this->get('/login')->assertOk()->assertSee('Sign In');
     }
 
-    public function test_inactive_users_and_non_admins_are_signed_out(): void
+    public function test_inactive_users_are_signed_out(): void
     {
-        $staff = User::factory()->create();
-        $this->actingAs($staff)->get('/dashboard')->assertRedirect('/login');
+        $agent = User::factory()->create(['is_active' => false]);
+        $this->actingAs($agent)->get('/cheques')->assertRedirect('/login');
         $this->assertGuest();
 
         $this->admin->update(['is_active' => false]);
         $this->actingAs($this->admin->fresh())->get('/dashboard')->assertRedirect('/login');
+    }
+
+    public function test_agents_only_reach_their_cheques_and_accounts(): void
+    {
+        $agent = User::factory()->create(['name' => 'Bilal Agent']);
+        $this->actingAs($agent);
+
+        $this->get('/')->assertRedirect(route('cheques.index'));
+        $this->get('/cheques')->assertOk()->assertSee('My Govt Cheques')->assertDontSee('Received by anyone');
+        $this->get('/cheques/deposit')->assertOk()->assertSee('Batch details')->assertDontSee('+ New department');
+        $this->get('/my-accounts')->assertOk()->assertSee('My cash &amp; bank accounts', false);
+        $this->get('/profile')->assertOk();
+
+        foreach (['/dashboard', '/approvals', '/payments', '/transfers', '/companies', '/accounts', '/departments', '/suppliers',
+            '/transactions', '/opening-balances', '/expense-categories', '/users', '/audit-log',
+            "/statements/company/{$this->company->id}/print", "/accounts/{$this->bank->id}"] as $url) {
+            $this->get($url)->assertForbidden();
+        }
+
+        // Pictures: only of cheques they received.
+        $theirs = Cheque::first(); // entered by the admin in setUp
+        $this->get(route('files.show', ['cheque', $theirs->id]))->assertForbidden();
     }
 }

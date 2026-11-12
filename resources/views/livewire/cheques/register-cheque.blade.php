@@ -20,6 +20,7 @@ use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\Department;
 use App\Services\Balances;
+use App\Services\ChequeApprovalService;
 use App\Services\ChequeService;
 use App\Support\ChequeRules;
 use App\Support\Money;
@@ -62,6 +63,7 @@ state([
     'rowScanName' => null,
     'rowErrors' => [],         // index => why the final save rejected it
     'heldBatch' => null,       // batch details to restore when a row edit ends
+    'changeReason' => '',      // agent editing a saved cheque: why (sent with the request)
 ]);
 
 rules(fn () => ChequeRules::rules($this->chequeId))->messages(ChequeRules::messages())->attributes(ChequeRules::attributes());
@@ -127,7 +129,7 @@ $resetForm = function () {
     $this->fill([
         'cheque_date' => '', 'company_id' => null, 'deposit_account_id' => null, 'issuing_branch' => '', 'department_id' => null,
         'cheque_number' => '', 'amount' => '', 'bank_charges' => '', 'scan' => null, 'notes' => '', 'deposit_reference' => '',
-        'existingScan' => false, 'depositedOn' => null, 'newDepartment' => '', 'addingDepartment' => false,
+        'existingScan' => false, 'depositedOn' => null, 'newDepartment' => '', 'addingDepartment' => false, 'changeReason' => '',
         'editingRow' => null, 'rowScanPath' => null, 'rowScanName' => null, 'heldBatch' => null,
     ]);
     $this->chequeId = null;
@@ -171,8 +173,14 @@ on(['cheque-edit' => function (int $id) {
     if ($this->asPage) {
         return;
     }
+    // An agent may only open their own cheque, and only when no change is already waiting.
+    $cheque = Cheque::visibleTo(auth()->user())->findOrFail($id);
+    if (! $this->isAdmin && $cheque->pendingRequest()->exists()) {
+        $this->toast('error', 'A change to this cheque is already waiting for the admin.');
+
+        return;
+    }
     $this->resetForm();
-    $cheque = Cheque::findOrFail($id);
     $this->chequeId = $cheque->id;
     $this->fill([
         'cheque_date' => $cheque->cheque_date->toDateString(),
@@ -192,7 +200,11 @@ on(['cheque-edit' => function (int $id) {
     $this->showModal('chequeFormModal');
 }]);
 
+$isAdmin = computed(fn () => (bool) auth()->user()?->isAdmin());
+
+// Only the admin adds departments.
 $addDepartment = function () {
+    abort_unless($this->isAdmin, 403);
     $this->validate(['newDepartment' => ['required', 'string', 'max:255', 'unique:departments,name']], [], ['newDepartment' => 'department name']);
     $dept = Department::create(['name' => trim($this->newDepartment), 'is_active' => true]);
     unset($this->departmentOptions);
@@ -209,6 +221,25 @@ $save = function () {
     $this->validate();
     $data = $this->formData();
     $data['scan_path'] = $this->storeUpload($this->scan, 'cheques');
+
+    // An agent's edit of a saved cheque waits for the admin.
+    if ($this->chequeId && ! $this->isAdmin) {
+        $cheque = Cheque::visibleTo(auth()->user())->findOrFail($this->chequeId);
+        $sent = $this->attempt(fn () => app(ChequeApprovalService::class)->requestEdit($cheque, $data, auth()->user(), trim($this->changeReason) ?: null));
+        if ($sent === false) {
+            if ($data['scan_path']) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($data['scan_path']);
+            }
+
+            return;
+        }
+        $this->toast('success', "Change to cheque #{$cheque->cheque_number} sent to the admin for approval.");
+        $this->dispatch('approval-updated');
+        $this->hideModal('chequeFormModal');
+        $this->resetForm();
+
+        return;
+    }
 
     $message = $this->attempt(function () use ($data) {
         $cheque = app(ChequeService::class)->save($this->chequeId ? Cheque::findOrFail($this->chequeId) : null, $data, auth()->user());
@@ -452,7 +483,9 @@ $saveAll = function () {
     <div class="{{ $colDept }}">
         <label class="{{ $label }} d-flex justify-content-between">
             <span>Department {!! $req !!}</span>
-            <a href="#" class="fs-11 fw-normal" wire:click.prevent="$toggle('addingDepartment')">{{ $addingDepartment ? 'Cancel' : '+ New department' }}</a>
+            @if ($this->isAdmin)
+                <a href="#" class="fs-11 fw-normal" wire:click.prevent="$toggle('addingDepartment')">{{ $addingDepartment ? 'Cancel' : '+ New department' }}</a>
+            @endif
         </label>
         @if ($addingDepartment)
             <div class="input-group input-group-sm has-validation">
@@ -652,7 +685,7 @@ $saveAll = function () {
             </div>
         </div>
     @else
-        <x-modal id="chequeFormModal" :title="$chequeId ? 'Edit Government Cheque' : 'Deposit Government Cheque'" icon="ri-bank-card-line" size="lg">
+        <x-modal id="chequeFormModal" :title="$chequeId ? ($this->isAdmin ? 'Edit Government Cheque' : 'Request a Change to this Cheque') : 'Deposit Government Cheque'" icon="ri-bank-card-line" size="lg">
             <form wire:submit="save">
                 <div class="modal-body">
                     @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
@@ -664,12 +697,23 @@ $saveAll = function () {
                         @endunless
                     </div>
 
+                    @if ($chequeId && ! $this->isAdmin)
+                        <div class="alert alert-info py-2 fs-13 mb-2"><i class="ri-shield-check-line me-1"></i>Your changes go to the admin for approval. The cheque stays as it is until then.</div>
+                    @endif
+
                     <div class="row g-2">{!! $batchFields !!}{!! $chequeFields !!}</div>
+
+                    @if ($chequeId && ! $this->isAdmin)
+                        <div class="mt-2">
+                            <label class="form-label fs-12 mb-1">Why the change? <span class="text-muted">(optional, shown to the admin)</span></label>
+                            <input type="text" class="form-control form-control-sm" wire:model="changeReason" maxlength="500" placeholder="e.g. Wrong amount entered">
+                        </div>
+                    @endif
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary" wire:loading.attr="disabled" wire:target="save,scan">
-                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? 'Save changes' : 'Save & deposit' }}</span>
+                        <span wire:loading.remove wire:target="save"><i class="ri-save-3-line me-1"></i>{{ $chequeId ? ($this->isAdmin ? 'Save changes' : 'Send for approval') : 'Save & deposit' }}</span>
                         <span wire:loading wire:target="save"><i class="ri-loader-4-line me-1"></i>Saving…</span>
                     </button>
                 </div>

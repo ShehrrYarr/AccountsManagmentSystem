@@ -356,10 +356,18 @@ class ComponentsTest extends TestCase
     public function test_companies_accounts_departments_suppliers_and_openings(): void
     {
         Volt::test('companies.list')
-            ->call('create')->set('name', 'Crescent Supplies')->set('cash_opening', '12000')
+            ->call('create')->set('name', 'Crescent Supplies')
             ->call('save')->assertHasNoErrors();
         $crescent = Company::where('name', 'Crescent Supplies')->firstOrFail();
-        $this->assertMoney('12000.00', $crescent->cashAccount);
+        $this->assertCount(0, $crescent->accounts);
+
+        // Its starting cash, held in the admin's cash in hand.
+        Volt::test('opening-balances.manage')
+            ->call('create', 'cash')
+            ->set('company_id', $crescent->id)->set('amount', '12000')
+            ->call('save')->assertHasNoErrors();
+        $this->assertMoney('12000.00', $this->cash);
+        $this->assertSame('12000.00', Balances::money($crescent->id)['cash']);
 
         Volt::test('accounts.manage')
             ->dispatch('account-create', companyId: $crescent->id)
@@ -375,7 +383,7 @@ class ComponentsTest extends TestCase
             ->set('company_id', $crescent->id)->set('department_id', Department::where('name', 'Irrigation Dept')->value('id'))
             ->set('direction', 'held')->set('amount', '4000')
             ->call('save')->assertHasNoErrors();
-        $this->assertSame('-4000.00', (string) OpeningBalance::first()->amount);
+        $this->assertSame('-4000.00', (string) OpeningBalance::whereNotNull('department_id')->first()->amount);
 
         Volt::test('opening-balances.manage')
             ->call('create', 'supplier')

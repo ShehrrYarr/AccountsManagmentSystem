@@ -46,7 +46,7 @@ on(['transaction-updated' => function () {
     @php($d = $this->data)
     <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Cash in hand" :value="money($d['money']['cash'])" icon="ri-wallet-3-line" color="success" :hint="'Bank '.money($d['money']['bank'])" />
+            <x-stat-card label="Admin cash (net)" :value="money($d['money']['cash'])" icon="ri-wallet-3-line" color="success" :hint="'Bank '.money($d['money']['bank']).' · share of the admin cash'" />
         </div>
         <div class="col-sm-6 col-xl-3">
             <x-stat-card label="Cheques this month" :value="money($d['cheques']['amount'])" icon="ri-bank-card-line" color="warning" :hint="$d['cheques']['count'].' deposited in '.now()->format('F')" />
@@ -63,7 +63,7 @@ on(['transaction-updated' => function () {
         <div class="col-lg-7">
             <div class="card h-100 mb-0">
                 <div class="card-header d-flex align-items-center">
-                    <h5 class="card-title mb-0 me-auto">Cash &amp; bank accounts</h5>
+                    <h5 class="card-title mb-0 me-auto">Bank accounts</h5>
                     <button type="button" class="btn btn-sm btn-light" x-data x-on:click="Livewire.dispatch('account-create', { companyId: {{ $d['company']->id }} })"><i class="ri-add-line me-1"></i>Bank account</button>
                 </div>
                 <div class="list-group list-group-flush">

@@ -1,7 +1,7 @@
 <!-- START SIDEBAR -->
 <aside class="app-sidebar">
     <div class="app-sidebar-logo px-6 justify-content-center align-items-center">
-        <a href="{{ route('dashboard') }}">
+        <a href="{{ route('home') }}">
             <img height="35" class="app-sidebar-logo-default" alt="Logo" src="{{ asset('assets/images/light-logo.png') }}">
             <img height="40" class="app-sidebar-logo-minimize" alt="Logo" src="{{ asset('assets/images/Favicon.png') }}">
         </a>
@@ -17,7 +17,7 @@
 <div class="offcanvas offcanvas-md offcanvas-start small-screen-sidebar" data-bs-scroll="true" tabindex="-1" id="smallScreenSidebar" aria-labelledby="smallScreenSidebarLabel">
     <div class="offcanvas-header hstack border-bottom">
         <div class="app-sidebar-logo">
-            <a href="{{ route('dashboard') }}">
+            <a href="{{ route('home') }}">
                 <img height="35" class="app-sidebar-logo-default h-25px" alt="Logo" src="{{ asset('assets/images/light-logo.png') }}">
                 <img height="40" class="app-sidebar-logo-minimize" alt="Logo" src="{{ asset('assets/images/Favicon.png') }}">
             </a>

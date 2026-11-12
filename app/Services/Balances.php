@@ -99,14 +99,35 @@ class Balances
         return Money::of(self::interCompany($creditor)[$debtor] ?? 0);
     }
 
-    /** @return array{cash: string, bank: string, total: string} */
+    /**
+     * Cash and bank money. Overall: the admin's cash in hand + every company bank (agents' accounts
+     * are not counted yet). For one company: its banks + its net share of the admin's cash (what
+     * the admin's cash holds for it; negative when the admin's cash was spent for it).
+     *
+     * @return array{cash: string, bank: string, total: string}
+     */
     public static function money(?int $companyId = null): array
     {
-        $accounts = Account::query()->when($companyId, fn ($q) => $q->where('company_id', $companyId))->get(['type', 'current_balance']);
-        $cash = Money::of($accounts->where('type', AccountType::Cash)->sum('current_balance'));
-        $bank = Money::of($accounts->where('type', AccountType::Bank)->sum('current_balance'));
+        $bank = Money::of(Account::query()->banks()->whereNotNull('company_id')
+            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))->sum('current_balance'));
+
+        $cash = $companyId
+            ? self::adminCashFor($companyId)
+            : Money::of(Account::query()->adminCashOnly()->sum('current_balance'));
 
         return ['cash' => $cash, 'bank' => $bank, 'total' => Money::add($cash, $bank)];
+    }
+
+    /** The company's net share of the admin's cash in hand, from the journal. */
+    public static function adminCashFor(int $companyId): string
+    {
+        $cashIds = Account::withTrashed()->adminCashOnly()->pluck('id');
+
+        return Money::of(JournalLedgerEntry::posted()
+            ->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
+            ->whereIn('journal_ledger_entries.account_id', $cashIds)
+            ->where('journal_ledger_entries.company_id', $companyId)
+            ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as b')->value('b'));
     }
 
     /**

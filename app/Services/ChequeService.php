@@ -57,10 +57,13 @@ class ChequeService
         });
     }
 
-    /** Run every check a save would, without saving (used before adding a cheque to the batch table). */
-    public function check(array $data): Cheque
+    /**
+     * Run every check a save would, without saving: before adding a cheque to the batch table,
+     * or before an agent's edit request (on a copy of the saved cheque).
+     */
+    public function check(array $data, ?Cheque $cheque = null): Cheque
     {
-        return $this->prepare(null, $data, null);
+        return $this->prepare($cheque ? clone $cheque : null, $data, null);
     }
 
     public function delete(Cheque $cheque): void

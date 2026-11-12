@@ -44,7 +44,7 @@ on(['transaction-updated' => function () {
 <div class="card">
     <div class="card-header d-flex flex-wrap gap-2 align-items-center">
         <h5 class="card-title mb-0 me-auto">{{ $this->statement['title'] }}</h5>
-        @if (in_array($kind, ['department', 'supplier'], true) && ! $companyId)
+        @if ($this->statement['companyFilter'] && ! $companyId)
             <div style="min-width:180px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
         @endif
         <div class="btn-group btn-group-sm" role="group" aria-label="Period">

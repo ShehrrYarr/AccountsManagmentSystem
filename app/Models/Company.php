@@ -12,7 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * One of MY companies. Each has exactly one cash in hand account plus any number of bank accounts.
+ * One of MY companies. A company has bank accounts only; cash is the admin's single cash in hand
+ * (Account::adminCash()), shared by every company.
  */
 class Company extends Model
 {
@@ -28,11 +29,6 @@ class Company extends Model
     public function accounts(): HasMany
     {
         return $this->hasMany(Account::class);
-    }
-
-    public function cashAccount(): HasOne
-    {
-        return $this->hasOne(Account::class)->where('type', AccountType::Cash);
     }
 
     public function bankAccounts(): HasMany

@@ -1,12 +1,16 @@
 <?php
 
 /**
- * User management (admin only). No public sign-up. For now every user is an administrator; staff roles come later.
+ * Users & agents (admin only). No public sign-up.
+ *   Administrator: full access.
+ *   Agent: works on the admin's behalf; enters govt cheques (sees only their own), keeps their
+ *          own cash in hand (created automatically) and bank accounts.
  */
 
 use App\Enums\UserRole;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\User;
+use App\Services\MasterDataService;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -23,16 +27,17 @@ rules(fn () => [
     'name' => ['required', 'string', 'max:255'],
     'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->userId)],
     'phone' => ['nullable', 'string', 'max:30'],
-    'role' => ['required', Rule::in([UserRole::Admin->value])],
+    'role' => ['required', Rule::in([UserRole::Admin->value, UserRole::Agent->value])],
     'is_active' => ['boolean'],
     'password' => [$this->userId ? 'nullable' : 'required', 'confirmed', Password::defaults()],
 ]);
 
-$users = computed(fn () => User::orderBy('role')->orderBy('name')->get());
+$users = computed(fn () => User::query()->whereIn('role', [UserRole::Admin, UserRole::Agent])
+    ->withCount(['cheques', 'agentAccounts'])->orderBy('role')->orderBy('name')->get());
 
-$create = function () {
+$create = function (string $role = 'agent') {
     $this->resetErrorBag();
-    $this->fill(['name' => '', 'email' => '', 'phone' => '', 'role' => 'admin', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
+    $this->fill(['name' => '', 'email' => '', 'phone' => '', 'role' => $role === 'admin' ? 'admin' : 'agent', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
     $this->userId = null;
     $this->showModal('userModal');
 };
@@ -67,6 +72,12 @@ $save = function () {
         $user = User::create($data);
         $user->forceFill(['email_verified_at' => now()])->save();
     }
+
+    // Every agent has a cash in hand.
+    if ($user->isAgent()) {
+        app(MasterDataService::class)->ensureAgentCash($user, auth()->user());
+    }
+
     $this->toast('success', "{$user->name} saved.");
     $this->hideModal('userModal');
     unset($this->users);
@@ -85,13 +96,14 @@ $toggleActive = function (int $id) {
 <div>
     <div class="card">
         <div class="card-header d-flex align-items-center">
-            <h5 class="card-title mb-0 me-auto">Users</h5>
-            <button type="button" class="btn btn-sm btn-primary" wire:click="create"><i class="ri-user-add-line me-1"></i>New User</button>
+            <h5 class="card-title mb-0 me-auto">Users &amp; Agents</h5>
+            <button type="button" class="btn btn-sm btn-light" wire:click="create('admin')"><i class="ri-shield-user-line me-1"></i>New Administrator</button>
+            <button type="button" class="btn btn-sm btn-primary ms-2" wire:click="create('agent')"><i class="ri-user-add-line me-1"></i>New Agent</button>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+                    <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Role</th><th class="d-none d-md-table-cell">Cheques received</th><th>Status</th><th class="d-none d-md-table-cell">Last sign-in</th><th></th></tr></thead>
                     <tbody>
                         @foreach ($this->users as $u)
                             <tr wire:key="user-{{ $u->id }}">
@@ -103,10 +115,19 @@ $toggleActive = function (int $id) {
                                     </div>
                                 </td>
                                 <td class="fs-13">{{ $u->email }}</td>
-                                <td><span class="badge {{ $u->isAdmin() ? 'bg-primary-subtle text-primary' : 'bg-info-subtle text-info' }}">{{ $u->role->label() }}</span></td>
+                                <td>
+                                    <span class="badge {{ $u->isAdmin() ? 'bg-primary-subtle text-primary' : 'bg-info-subtle text-info' }}">{{ $u->role->label() }}</span>
+                                    @if ($u->isAgent())
+                                        <div class="fs-11 text-muted">{{ $u->agent_accounts_count }} {{ \Illuminate\Support\Str::plural('account', $u->agent_accounts_count) }}</div>
+                                    @endif
+                                </td>
+                                <td class="d-none d-md-table-cell fs-13">{{ $u->cheques_count }}</td>
                                 <td><span class="badge {{ $u->is_active ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ $u->is_active ? 'Active' : 'Inactive' }}</span></td>
-                                <td class="fs-13">{{ $u->last_login_at?->diffForHumans() ?? 'Never' }}</td>
+                                <td class="d-none d-md-table-cell fs-13">{{ $u->last_login_at?->diffForHumans() ?? 'Never' }}</td>
                                 <td class="text-end text-nowrap">
+                                    @if ($u->isAgent())
+                                        <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('accounts.index') }}#agent-{{ $u->id }}" title="Cash & bank accounts"><i class="ri-wallet-3-line"></i></a>
+                                    @endif
                                     <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="edit({{ $u->id }})"><i class="ri-edit-line"></i></button>
                                     @if ($u->id !== auth()->id())
                                         <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="toggleActive({{ $u->id }})" title="{{ $u->is_active ? 'Deactivate' : 'Activate' }}">
@@ -121,11 +142,11 @@ $toggleActive = function (int $id) {
             </div>
         </div>
         <div class="card-footer fs-13 text-muted">
-            Every user is an administrator with full access. Staff accounts with limited rights will be added later.
+            Administrators have full access. Agents only enter govt cheques (and see their own), and keep their own cash in hand and bank accounts; their edits and deletes of saved cheques need your approval.
         </div>
     </div>
 
-    <x-modal id="userModal" :title="$userId ? 'Edit User' : 'New User'" icon="ri-user-settings-line" size="md">
+    <x-modal id="userModal" :title="($userId ? 'Edit ' : 'New ').($role === 'agent' ? 'Agent' : 'Administrator')" icon="ri-user-settings-line" size="md">
         <form wire:submit="save">
             <div class="modal-body">
                 <div class="row g-3">
@@ -145,7 +166,11 @@ $toggleActive = function (int $id) {
                     </div>
                     <div class="col-md-6">
                         <label class="form-label">Role</label>
-                        <div class="form-control bg-body-tertiary">Administrator</div>
+                        <select class="form-select @error('role') is-invalid @enderror" wire:model.live="role" @disabled($userId === auth()->id())>
+                            <option value="agent">Agent</option>
+                            <option value="admin">Administrator</option>
+                        </select>
+                        @error('role') <div class="invalid-feedback">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-md-6 d-flex align-items-end">
                         <div class="form-check form-switch mb-2">
@@ -163,11 +188,12 @@ $toggleActive = function (int $id) {
                         <input type="password" class="form-control" wire:model="password_confirmation" autocomplete="new-password">
                     </div>
                     @if ($userId)<div class="col-12 form-text mt-1">Leave the password blank to keep the current one.</div>@endif
+                    @if ($role === 'agent' && ! $userId)<div class="col-12 form-text mt-1"><i class="ri-wallet-3-line"></i> A cash in hand is created for the agent. Add their bank accounts on the Cash &amp; Bank page.</div>@endif
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save user</button>
+                <button type="submit" class="btn btn-primary">Save {{ $role === 'agent' ? 'agent' : 'administrator' }}</button>
             </div>
         </form>
     </x-modal>

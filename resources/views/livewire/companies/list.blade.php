@@ -1,8 +1,8 @@
 <?php
 
 /**
- * My companies: where each one's money is (cash, banks), cheques this month and what is owed,
- * plus a create / edit modal. Creating a company also creates its cash in hand.
+ * My companies: where each one's money is (its banks, and its net share of the admin's cash in
+ * hand), cheques this month and what is owed, plus a create / edit modal.
  */
 
 use App\Enums\AccountType;
@@ -42,20 +42,23 @@ rules(fn () => [
 $rows = computed(function () {
     $companies = Company::query()->when(! $this->showInactive, fn ($q) => $q->where('is_active', true))->orderBy('name')->get();
 
-    $money = Account::query()->selectRaw('company_id, type, SUM(current_balance) as total')->groupBy('company_id', 'type')->get()
-        ->groupBy('company_id');
+    $banks = Account::query()->banks()->whereNotNull('company_id')->selectRaw('company_id, SUM(current_balance) as total')->groupBy('company_id')->pluck('total', 'company_id');
+    $cash = \App\Models\JournalLedgerEntry::posted()
+        ->where('journal_ledger_entries.ledger_account', \App\Enums\LedgerAccount::Money->value)
+        ->whereIn('journal_ledger_entries.account_id', Account::withTrashed()->adminCashOnly()->pluck('id'))
+        ->groupBy('journal_ledger_entries.company_id')
+        ->selectRaw('journal_ledger_entries.company_id as cid, SUM(debit) - SUM(credit) as total')->pluck('total', 'cid');
     $cheques = Cheque::whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()])->selectRaw('company_id, SUM(amount) as total, COUNT(*) as n')->groupBy('company_id')->get()->keyBy('company_id');
     $depts = Balances::departments()->groupBy('company_id');
     $suppliers = Balances::suppliers()->groupBy('company_id');
 
-    return $companies->map(function (Company $c) use ($money, $cheques, $depts, $suppliers) {
-        $m = $money->get($c->id, collect())->keyBy(fn ($r) => $r->type instanceof AccountType ? $r->type->value : $r->type);
+    return $companies->map(function (Company $c) use ($banks, $cash, $cheques, $depts, $suppliers) {
         $d = $depts->get($c->id, collect());
 
         return (object) [
             'company' => $c,
-            'cash' => Money::of($m['cash']->total ?? 0),
-            'bank' => Money::of($m['bank']->total ?? 0),
+            'cash' => Money::of($cash[$c->id] ?? 0),
+            'bank' => Money::of($banks[$c->id] ?? 0),
             'chequesAmount' => Money::of($cheques[$c->id]->total ?? 0),
             'chequesCount' => (int) ($cheques[$c->id]->n ?? 0),
             'deptsOwe' => Money::add(...$d->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
@@ -92,7 +95,7 @@ $save = function () {
     }
     $ok = $this->attempt(function () use ($data) {
         $saved = app(MasterDataService::class)->saveCompany($this->companyId ? Company::findOrFail($this->companyId) : null, $data);
-        $this->toast('success', $this->companyId ? "{$saved->name} saved." : "{$saved->name} created with its cash in hand. Add its bank accounts next.");
+        $this->toast('success', $this->companyId ? "{$saved->name} saved." : "{$saved->name} created. Add its bank accounts next.");
     });
     if ($ok !== false) {
         $this->hideModal('companyModal');
@@ -125,7 +128,7 @@ $delete = function (int $id) {
                     <thead class="table-light">
                         <tr>
                             <th>Company</th>
-                            <th class="money d-none d-md-table-cell">Cash in hand</th>
+                            <th class="money d-none d-md-table-cell" title="This company's net share of the admin cash in hand">Admin cash (net)</th>
                             <th class="money d-none d-md-table-cell">Bank</th>
                             <th class="money d-none d-lg-table-cell">Cheques this month</th>
                             <th class="money d-none d-lg-table-cell" title="Departments that owe this company (spent more than cheques received)">Depts owe</th>
@@ -213,18 +216,7 @@ $delete = function (int $id) {
                         <input type="text" class="form-control" wire:model="address">
                     </div>
                     @unless ($companyId)
-                        <div class="col-md-6">
-                            <label class="form-label">Cash in hand today (opening)</label>
-                            <div class="input-group"><span class="input-group-text">Rs.</span>
-                                <input type="number" step="0.01" min="0" class="form-control @error('cash_opening') is-invalid @enderror" wire:model="cash_opening">
-                            </div>
-                            @error('cash_opening') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Opening date</label>
-                            <input type="date" class="form-control" wire:model="opening_date">
-                        </div>
-                        <div class="col-12"><div class="form-text mt-0"><i class="ri-information-line"></i> A "Cash in hand" account is created automatically. Add bank accounts on the Cash &amp; Bank page.</div></div>
+                        <div class="col-12"><div class="form-text mt-0"><i class="ri-information-line"></i> Companies have bank accounts only (add them on the Cash &amp; Bank page); cash is the admin's cash in hand.</div></div>
                     @endunless
                     <div class="col-12">
                         <label class="form-label">Notes</label>

@@ -5,7 +5,7 @@
 
             <div class="header-left hstack gap-3">
                 <div class="app-sidebar-logo app-horizontal-logo justify-content-center align-items-center">
-                    <a href="{{ route('dashboard') }}">
+                    <a href="{{ route('home') }}">
                         <img height="35" class="app-sidebar-logo-default" alt="Logo" src="{{ asset('assets/images/light-logo.png') }}">
                         <img height="40" class="app-sidebar-logo-minimize" alt="Logo" src="{{ asset('assets/images/Favicon.png') }}">
                     </a>
@@ -59,6 +59,11 @@
                         <span class="icon-on"><i class="ri-fullscreen-exit-line fs-16"></i></span>
                         <span class="icon-off"><i class="ri-fullscreen-line fs-16"></i></span>
                     </button>
+
+                    @can('admin')
+                        <!-- Agents' change requests waiting for approval -->
+                        <livewire:approvals.bell />
+                    @endcan
                 </div>
 
                 <!-- Profile -->
@@ -80,7 +85,7 @@
                         <span class="dropdown-header fs-12">{{ auth()->user()->email }}</span>
                         <a class="dropdown-item" href="{{ route('profile') }}"><i class="ri-user-settings-line me-2"></i>My Profile</a>
                         @can('admin')
-                            <a class="dropdown-item" href="{{ route('users.index') }}"><i class="ri-team-line me-2"></i>Users</a>
+                            <a class="dropdown-item" href="{{ route('users.index') }}"><i class="ri-team-line me-2"></i>Users &amp; Agents</a>
                             <a class="dropdown-item" href="{{ route('audit.index') }}"><i class="ri-history-line me-2"></i>Audit Log</a>
                         @endcan
                         <div class="dropdown-divider"></div>

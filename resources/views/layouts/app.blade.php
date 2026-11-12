@@ -28,7 +28,7 @@
                     <h4 class="mb-1 fw-semibold">@yield('page-title')</h4>
                     <nav>
                         <ol class="breadcrumb breadcrumb-arrow mb-0">
-                            <li class="breadcrumb-item"><a href="{{ route('dashboard') }}">Home</a></li>
+                            <li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li>
                             @hasSection('breadcrumb-parent')
                                 <li class="breadcrumb-item">@yield('breadcrumb-parent')</li>
                             @endif

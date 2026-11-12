@@ -24,24 +24,37 @@ class Options
     }
 
     /**
-     * @param  int|null  $companyId  only this company's accounts (labels without the company name)
+     * Accounts a company can use: the admin's cash in hand (shared by all companies) first, then
+     * company banks. Agents' accounts are never offered here.
+     *
+     * @param  int|null  $companyId  only this company's banks (labels without the company name)
      * @param  'bank'|'cash'|null  $type
      */
     public static function accounts(?int $companyId = null, ?string $type = null, ?int $include = null): array
     {
         return Account::query()
             ->with('company')
-            ->whereHas('company')
+            ->business()
+            ->where(fn ($q) => $q->whereNull('company_id')->orWhereHas('company'))
             ->where(fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhere('id', $include)))
-            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+            ->when($companyId, fn ($q) => $q->where(fn ($q) => $q->where('company_id', $companyId)->orWhereNull('company_id')))
             ->when($type, fn ($q) => $q->where('type', AccountType::from($type)))
-            ->orderBy('company_id')->orderBy('type')->orderBy('name')
+            ->orderByRaw('company_id IS NOT NULL')->orderBy('company_id')->orderBy('type')->orderBy('name')
             ->get()
             ->map(fn (Account $a) => [
                 'value' => $a->id,
                 'label' => $companyId ? $a->shortLabel() : $a->label(),
                 'hint' => money($a->current_balance),
             ])->all();
+    }
+
+    public static function agents(?int $include = null): array
+    {
+        return \App\Models\User::query()
+            ->where('role', \App\Enums\UserRole::Agent)
+            ->where(fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhere('id', $include)))
+            ->orderBy('name')->get(['id', 'name', 'phone'])
+            ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name, 'hint' => $u->phone])->all();
     }
 
     public static function departments(?int $include = null): array

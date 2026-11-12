@@ -9,6 +9,7 @@ use App\Models\Department;
 use App\Models\ExpenseCategory;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Services\ChequeApprovalService;
 use App\Services\ChequeService;
 use App\Services\DealService;
 use App\Services\MasterDataService;
@@ -22,6 +23,9 @@ use Illuminate\Database\Seeder;
  *
  * Three of my companies, five government departments, three suppliers, about four months of
  * cheques, payments, purchases (paid and on credit), transfers, expenses and one closed deal.
+ * Cash is the admin's single cash in hand (with a cash opening per company). Two agents, each with
+ * a cash in hand and a bank account, have received a few cheques; one has a change waiting for
+ * approval. Demo agents sign in with the password "password".
  */
 class DemoDataSeeder extends Seeder
 {
@@ -37,9 +41,15 @@ class DemoDataSeeder extends Seeder
         $opening = now()->subDays(120)->toDateString();
 
         // ---------------------------------------------------------------- companies & accounts
-        $noor = $master->saveCompany(null, ['name' => 'Al-Noor Traders', 'ntn' => '4217893-1', 'phone' => '0300-1234567', 'address' => 'Hall Road, Lahore', 'is_active' => true, 'cash_opening' => 150000, 'opening_date' => $opening]);
-        $zamzam = $master->saveCompany(null, ['name' => 'Zamzam Enterprises', 'ntn' => '3520187-6', 'phone' => '0321-7654321', 'address' => 'GT Road, Gujranwala', 'is_active' => true, 'cash_opening' => 80000, 'opening_date' => $opening]);
-        $crescent = $master->saveCompany(null, ['name' => 'Crescent Supplies', 'ntn' => '6110452-3', 'phone' => '0333-5551122', 'address' => 'Saddar, Rawalpindi', 'is_active' => true, 'cash_opening' => 50000, 'opening_date' => $opening]);
+        $noor = $master->saveCompany(null, ['name' => 'Al-Noor Traders', 'ntn' => '4217893-1', 'phone' => '0300-1234567', 'address' => 'Hall Road, Lahore', 'is_active' => true]);
+        $zamzam = $master->saveCompany(null, ['name' => 'Zamzam Enterprises', 'ntn' => '3520187-6', 'phone' => '0321-7654321', 'address' => 'GT Road, Gujranwala', 'is_active' => true]);
+        $crescent = $master->saveCompany(null, ['name' => 'Crescent Supplies', 'ntn' => '6110452-3', 'phone' => '0333-5551122', 'address' => 'Saddar, Rawalpindi', 'is_active' => true]);
+
+        // The admin's cash in hand, with what it held for each company on the opening date.
+        $adminCash = Account::adminCash();
+        foreach ([[$noor, 150000], [$zamzam, 80000], [$crescent, 50000]] as [$company, $amount]) {
+            app(DealService::class)->saveOpening(null, ['company_id' => $company->id, 'account_id' => $adminCash->id, 'amount' => $amount, 'date' => $opening]);
+        }
 
         $bank = fn (Company $c, string $name, string $bankName, string $number, int $amount) => $master->saveAccount(null, [
             'company_id' => $c->id, 'type' => 'bank', 'name' => $name, 'bank_name' => $bankName, 'branch' => 'Main Branch',
@@ -51,7 +61,7 @@ class DemoDataSeeder extends Seeder
         $zamzamUbl = $bank($zamzam, 'UBL Current', 'UBL', '2290-4471-889', 300000);
         $crescentMeezan = $bank($crescent, 'Meezan Current', 'Meezan Bank', '0102-5566-7781', 200000);
 
-        $cash = fn (Company $c) => Account::where('company_id', $c->id)->cash()->first();
+        $cash = fn () => $adminCash;
 
         // ---------------------------------------------------------------- customers & suppliers
         $dept = fn (string $name, string $code, string $city) => Department::firstOrCreate(['name' => $name], ['code' => $code, 'city' => $city, 'is_active' => true]);
@@ -92,19 +102,43 @@ class DemoDataSeeder extends Seeder
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'goods', 'supplier_id' => $electronics->id, 'on_credit' => true, 'amount' => 90000, 'date' => $day(64), 'item_description' => 'Traffic signal controllers (3)']);
         $cheques->save(null, $this->cheque($zamzam, $highways, $zamzamUbl, 320000, $day(22), $day(20), 200, 'DS-44107'));
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $municipal->id, 'method' => 'cash', 'amount' => 25000, 'date' => $day(15), 'received_by' => 'Naveed (clerk)']);
-        $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 40000, 'date' => $day(12), 'notes' => 'Part repayment']);
-        $transfers->save(null, ['from_account_id' => $cash($zamzam)->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
+        $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_company_id' => $noor->id, 'to_account_id' => $cash()->id, 'amount' => 40000, 'date' => $day(12), 'notes' => 'Part repayment']);
+        $transfers->save(null, ['from_company_id' => $zamzam->id, 'from_account_id' => $cash()->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
 
         // ---------------------------------------------------------------- Crescent ↔ Agriculture
-        $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $cash($crescent)->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
+        $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $cash()->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
         $cheques->save(null, $this->cheque($crescent, $agri, $crescentMeezan, 45000, $day(12), $day(10)));
 
         // ---------------------------------------------------------------- own transfers & expenses
-        $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 50000, 'date' => $day(45), 'reference' => 'ATM']);
+        $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $cash()->id, 'amount' => 50000, 'date' => $day(45), 'reference' => 'ATM']);
         $category = fn (string $name) => ExpenseCategory::where('name', $name)->value('id');
-        $payments->saveExpense(null, ['company_id' => $noor->id, 'expense_category_id' => $category('Fuel'), 'account_id' => $cash($noor)->id, 'amount' => 8500, 'date' => $day(20), 'description' => 'Delivery van diesel']);
+        $payments->saveExpense(null, ['company_id' => $noor->id, 'expense_category_id' => $category('Fuel'), 'account_id' => $cash()->id, 'amount' => 8500, 'date' => $day(20), 'description' => 'Delivery van diesel']);
         $payments->saveExpense(null, ['company_id' => $zamzam->id, 'expense_category_id' => $category('Office rent'), 'account_id' => $zamzamUbl->id, 'amount' => 35000, 'date' => $day(5), 'description' => 'Office rent for the month']);
-        $payments->saveExpense(null, ['company_id' => $crescent->id, 'expense_category_id' => $category('Utilities'), 'account_id' => $cash($crescent)->id, 'amount' => 6200, 'date' => $day(3), 'description' => 'Electricity bill']);
+        $payments->saveExpense(null, ['company_id' => $crescent->id, 'expense_category_id' => $category('Utilities'), 'account_id' => $cash()->id, 'amount' => 6200, 'date' => $day(3), 'description' => 'Electricity bill']);
+
+        // ---------------------------------------------------------------- agents
+        $admin = auth()->user();
+        $agent = function (string $name, string $email, string $phone) use ($master, $admin) {
+            $user = User::firstOrCreate(['email' => $email], [
+                'name' => $name, 'phone' => $phone, 'password' => 'password', 'role' => UserRole::Agent, 'is_active' => true,
+            ]);
+            $master->ensureAgentCash($user, $admin);
+
+            return $user;
+        };
+        $bilal = $agent('Bilal Ahmed', 'bilal.agent@ams.test', '0301-4445566');
+        $usman = $agent('Usman Tariq', 'usman.agent@ams.test', '0312-7788990');
+
+        // One bank account added by the admin, one by the agent himself.
+        $master->saveAccount(null, ['agent_id' => $bilal->id, 'type' => 'bank', 'name' => 'Meezan Savings', 'bank_name' => 'Meezan Bank', 'account_title' => $bilal->name, 'account_number' => '0211-0044-5521', 'is_active' => true], $admin);
+        $master->saveAccount(null, ['agent_id' => $usman->id, 'type' => 'bank', 'name' => 'JazzCash Wallet', 'bank_name' => 'JazzCash', 'account_title' => $usman->name, 'account_number' => '0312-7788990', 'is_active' => true], $usman);
+
+        $cheques->save(null, $this->cheque($noor, $health, $noorHbl, 95000, $day(8), $day(6), 100, 'DS-90021'), $bilal);
+        $byUsman = $cheques->save(null, $this->cheque($zamzam, $municipal, $zamzamUbl, 60000, $day(5), $day(3)), $usman);
+        $cheques->save(null, $this->cheque($crescent, $agri, $crescentMeezan, 38000, $day(2), $day(1)), $usman);
+
+        // Usman typed the wrong amount and asked the admin to fix it.
+        app(ChequeApprovalService::class)->requestEdit($byUsman, ['amount' => 66000] + $byUsman->only(['cheque_date', 'company_id', 'deposit_account_id', 'department_id', 'cheque_number']), $usman, 'Amount is 66,000 on the cheque, I typed 60,000');
 
         auth()->logout();
     }

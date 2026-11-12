@@ -13,17 +13,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * A department or supplier balance carried over from before the system, for one company.
- * Cash and bank opening balances live on the account itself.
+ * A balance carried over from before the system, for one company:
  *
  *   Department: amount > 0 → it owes me; amount < 0 → I hold its money.
  *   Supplier:   amount > 0 → I owe it.
+ *   Cash:       account_id = the admin's cash in hand; amount > 0 is the cash held for this company.
+ *
+ * Bank opening balances live on the bank account itself.
  */
 class OpeningBalance extends Model implements PostsToLedger
 {
     use Auditable, HasTransactions, SoftDeletes;
 
-    protected $fillable = ['company_id', 'department_id', 'supplier_id', 'amount', 'date', 'notes', 'created_by'];
+    protected $fillable = ['company_id', 'department_id', 'supplier_id', 'account_id', 'amount', 'date', 'notes', 'created_by'];
 
     protected function casts(): array
     {
@@ -45,9 +47,19 @@ class OpeningBalance extends Model implements PostsToLedger
         return $this->belongsTo(Supplier::class);
     }
 
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class)->withTrashed();
+    }
+
+    public function isCash(): bool
+    {
+        return (bool) $this->account_id;
+    }
+
     public function partyName(): string
     {
-        return $this->department?->name ?? $this->supplier?->name ?? '?';
+        return $this->department?->name ?? $this->supplier?->name ?? ($this->account_id ? 'Cash in hand' : '?');
     }
 
     public function ledgerPostings(): array
@@ -55,7 +67,10 @@ class OpeningBalance extends Model implements PostsToLedger
         $abs = Money::isNegative($this->amount) ? Money::sub(0, $this->amount) : Money::of($this->amount);
         $equity = ['account' => LedgerAccount::OpeningEquity, 'company_id' => $this->company_id];
 
-        if ($this->department_id) {
+        if ($this->account_id) {
+            $party = ['account' => LedgerAccount::Money, 'company_id' => $this->company_id, 'account_id' => $this->account_id];
+            $owesMe = true; // cash held: Dr cash / Cr opening equity
+        } elseif ($this->department_id) {
             $party = ['account' => LedgerAccount::Department, 'company_id' => $this->company_id, 'department_id' => $this->department_id];
             $owesMe = ! Money::isNegative($this->amount);
         } else {
@@ -75,6 +90,7 @@ class OpeningBalance extends Model implements PostsToLedger
                 'company_id' => $this->company_id,
                 'department_id' => $this->department_id,
                 'supplier_id' => $this->supplier_id,
+                'to_account_id' => $this->account_id,
                 'amount' => $abs,
                 'description' => "Opening balance — {$this->partyName()}",
                 'notes' => $this->notes,

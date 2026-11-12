@@ -54,7 +54,7 @@ on(['transaction-updated' => function () {
     @php($m = $this->metrics)
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-4 col-xxl">
-            <x-stat-card label="Cash in hand" :value="money($m['money']['cash'])" icon="ri-wallet-3-line" color="success" hint="Physical cash" :href="route('accounts.index')" />
+            <x-stat-card label="Admin cash in hand" :value="money($m['money']['cash'])" icon="ri-wallet-3-line" color="success" :hint="$company ? 'Net share for this company' : 'Physical cash'" :href="route('accounts.index')" />
         </div>
         <div class="col-sm-6 col-xl-4 col-xxl">
             <x-stat-card label="In banks" :value="money($m['money']['bank'])" icon="ri-bank-line" color="primary" :hint="'Total money '.money($m['money']['total'])" :href="route('accounts.index')" />

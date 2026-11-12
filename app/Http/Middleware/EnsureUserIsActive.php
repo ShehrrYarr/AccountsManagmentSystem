@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Signs out users who were deactivated, and (for now) anyone who is not an administrator:
- * staff accounts are not enabled yet.
+ * Signs out users who were deactivated or who have no role in AMS (only administrators and
+ * agents may sign in).
  */
 class EnsureUserIsActive
 {
@@ -17,13 +17,13 @@ class EnsureUserIsActive
     {
         $user = $request->user();
 
-        if ($user && (! $user->is_active || ! $user->isAdmin())) {
+        if ($user && (! $user->is_active || ! ($user->isAdmin() || $user->isAgent()))) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
             return redirect()->route('login')->with('status', $user->is_active
-                ? 'Staff accounts are not enabled yet. Please ask an administrator.'
+                ? 'Your account has no access. Please ask an administrator.'
                 : 'Your account has been deactivated.');
         }
 

@@ -37,7 +37,7 @@ $login = function () {
     session()->regenerate();
     Auth::user()->forceFill(['last_login_at' => now()])->saveQuietly();
 
-    $this->redirectIntended(route('dashboard'));
+    $this->redirectIntended(route('home'));
 };
 
 ?>
