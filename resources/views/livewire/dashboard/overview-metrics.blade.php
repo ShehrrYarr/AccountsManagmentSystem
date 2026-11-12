@@ -19,7 +19,12 @@ $metrics = computed(function () {
 
     return [
         'money' => Balances::money($companyId),
-        'cheques' => Balances::chequesInHand($companyId),
+        'cheques' => (function () use ($companyId) {
+            $q = \App\Models\Cheque::query()->when($companyId, fn ($q) => $q->where('company_id', $companyId))
+                ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()]);
+
+            return ['amount' => Money::of((clone $q)->sum('amount')), 'count' => (clone $q)->count()];
+        })(),
         'deptsOwe' => Money::add(...$depts->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
         'deptsOweCount' => $depts->filter(fn ($r) => Money::isPositive($r->balance))->unique('department_id')->count(),
         'deptsHeld' => Money::sub(0, Money::add(...$depts->filter(fn ($r) => Money::isNegative($r->balance))->pluck('balance')->all())),
@@ -55,7 +60,7 @@ on(['transaction-updated' => function () {
             <x-stat-card label="In banks" :value="money($m['money']['bank'])" icon="ri-bank-line" color="primary" :hint="'Total money '.money($m['money']['total'])" :href="route('accounts.index')" />
         </div>
         <div class="col-sm-6 col-xl-4 col-xxl">
-            <x-stat-card label="Cheques in hand" :value="money($m['cheques']['amount'])" icon="ri-time-line" color="warning" :hint="$m['cheques']['count'].' to deposit'" :href="route('cheques.index')" />
+            <x-stat-card label="Cheques this month" :value="money($m['cheques']['amount'])" icon="ri-bank-card-line" color="warning" :hint="$m['cheques']['count'].' deposited in '.now()->format('F')" :href="route('cheques.index')" />
         </div>
         <div class="col-sm-6 col-xl-4 col-xxl">
             <x-stat-card label="Departments owe you" :value="money($m['deptsOwe'])" icon="ri-government-line" color="danger" :hint="'You hold '.money($m['deptsHeld']).' for others'" :href="route('departments.index')" />

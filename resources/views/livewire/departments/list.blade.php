@@ -31,16 +31,12 @@ rules(fn () => [
 
 $rows = computed(function () {
     $balances = Balances::departments($this->filterCompany ? (int) $this->filterCompany : null)->groupBy('department_id');
-    $cheques = \App\Models\Cheque::inHand()
-        ->when($this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
-        ->selectRaw('department_id, SUM(amount) as total')->groupBy('department_id')->pluck('total', 'department_id');
-
     return Department::query()
         ->when($this->search, fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', "%{$this->search}%")
             ->orWhere('code', 'like', "%{$this->search}%")->orWhere('city', 'like', "%{$this->search}%")))
         ->when($this->filter !== 'inactive', fn ($q) => $q->where('is_active', true), fn ($q) => $q->where('is_active', false))
         ->orderBy('name')->get()
-        ->map(function (Department $d) use ($balances, $cheques) {
+        ->map(function (Department $d) use ($balances) {
             $b = $balances->get($d->id, collect());
 
             return (object) [
@@ -48,7 +44,6 @@ $rows = computed(function () {
                 'spent' => Money::add(...$b->pluck('spent')->all()),
                 'received' => Money::add(...$b->pluck('received')->all()),
                 'balance' => Money::add(...$b->pluck('balance')->all()),
-                'inHand' => Money::of($cheques[$d->id] ?? 0),
             ];
         })
         ->when($this->filter === 'owe', fn ($c) => $c->filter(fn ($r) => Money::isPositive($r->balance)))
@@ -139,7 +134,6 @@ $delete = function (int $id) {
                             <th class="money d-none d-md-table-cell">Spent for them</th>
                             <th class="money d-none d-md-table-cell">Cheques received</th>
                             <th class="money">Balance</th>
-                            <th class="money d-none d-lg-table-cell">Cheques in hand</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -161,7 +155,6 @@ $delete = function (int $id) {
                                         <span class="text-muted">settled</span>
                                     @endif
                                 </td>
-                                <td class="money d-none d-lg-table-cell">{{ Money::isPositive($r->inHand) ? money($r->inHand) : '—' }}</td>
                                 <td class="text-end text-nowrap">
                                     <a href="{{ route('departments.show', $r->department) }}" class="btn btn-sm btn-light" title="Open ledger"><i class="ri-book-open-line"></i><span class="d-none d-xl-inline ms-1">Ledger</span></a>
                                     <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="edit({{ $r->department->id }})"><i class="ri-edit-line"></i></button>
@@ -170,7 +163,7 @@ $delete = function (int $id) {
                                 </td>
                             </tr>
                         @empty
-                            <x-empty-row :colspan="6" icon="ri-government-line" message="No departments here." />
+                            <x-empty-row :colspan="5" icon="ri-government-line" message="No departments here." />
                         @endforelse
                     </tbody>
                 </table>

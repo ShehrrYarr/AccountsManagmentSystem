@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Ledger;
 
-use App\Enums\ChequeStatus;
 use App\Enums\TransactionStatus;
 use App\Exceptions\BusinessRuleException;
 use App\Models\JournalLedgerEntry;
@@ -79,69 +78,73 @@ class LedgerFlowsTest extends TestCase
 
     // ---------------------------------------------------------------- cheques
 
-    public function test_receiving_a_cheque_credits_the_department_immediately(): void
+    public function test_a_cheque_is_deposited_in_one_step(): void
     {
-        $this->receiveCheque(['amount' => '50000']);
+        $cheque = $this->cheque(['amount' => '50000', 'bank_charges' => '150']);
 
-        $this->assertSame('-50000.00', Balances::departmentBalance($this->dept->id, $this->company->id));
-        $this->assertSame(['count' => 1, 'amount' => '50000.00'], Balances::chequesInHand($this->company->id));
-        $this->assertMoney('0.00', $this->bank);
-    }
-
-    public function test_depositing_puts_the_net_amount_in_the_bank_and_books_charges(): void
-    {
-        $cheque = $this->deposit($this->receiveCheque(['amount' => '50000']), ['bank_charges' => '150']);
-
-        $this->assertSame(ChequeStatus::Deposited, $cheque->status);
         $this->assertMoney('49850.00', $this->bank);
-        $this->assertSame(['count' => 0, 'amount' => '0.00'], Balances::chequesInHand());
+        $this->assertSame('-50000.00', Balances::departmentBalance($this->dept->id, $this->company->id), 'department sees the full cheque');
         $this->assertSame('150.00', Balances::profit($this->company->id)['charges']);
-        $this->assertSame('-50000.00', Balances::departmentBalance($this->dept->id), 'department sees the full cheque');
+        $this->assertSame(1, $cheque->transactions()->count(), 'one journal transaction per cheque');
+        $this->assertStringContainsString('deposited into HBL Current (bank charges Rs. 150.00)', $cheque->transactions()->first()->description);
     }
 
     public function test_a_cheque_can_only_go_into_the_same_companys_bank(): void
     {
         $other = $this->makeCompany('Zamzam Enterprises');
         $otherBank = $this->makeBank($other);
-        $cheque = $this->receiveCheque();
 
         try {
-            $this->deposit($cheque, ['deposit_account_id' => $otherBank->id]);
+            $this->cheque(['deposit_account_id' => $otherBank->id]);
             $this->fail('Deposit into another company was allowed.');
         } catch (BusinessRuleException $e) {
             $this->assertSame('deposit_account_id', $e->field);
         }
 
         $this->expectException(BusinessRuleException::class);
-        $this->deposit($cheque->fresh(), ['deposit_account_id' => $this->cash->id]);
+        $this->cheque(['deposit_account_id' => $this->cash->id]);
     }
 
-    public function test_editing_undoing_and_deleting_cheques_rebuild_the_ledger(): void
+    public function test_expired_and_post_dated_cheques_are_blocked(): void
+    {
+        $this->cheque(['cheque_date' => now()->subMonths(6)->toDateString(), 'date' => now()->toDateString()]); // last valid day
+
+        try {
+            $this->cheque(['cheque_date' => now()->subMonths(6)->subDay()->toDateString(), 'date' => now()->toDateString()]);
+            $this->fail('Expired cheque was accepted.');
+        } catch (BusinessRuleException $e) {
+            $this->assertSame('cheque_date', $e->field);
+            $this->assertStringContainsString('expired', $e->getMessage());
+        }
+
+        $this->expectException(BusinessRuleException::class);
+        $this->cheque(['cheque_date' => now()->toDateString(), 'date' => now()->subDay()->toDateString()]);
+    }
+
+    public function test_editing_and_deleting_cheques_rebuild_the_ledger(): void
     {
         $svc = app(ChequeService::class);
         $cheque = $this->fundBank('80000');
+        $mcb = $this->makeBank($this->company, 'MCB Current');
 
-        $svc->save($cheque, ['amount' => '90000']);
-        $this->assertMoney('90000.00', $this->bank);
+        $svc->save($cheque, ['amount' => '90000', 'deposit_account_id' => $mcb->id]);
+        $this->assertMoney('0.00', $this->bank);
+        $this->assertMoney('90000.00', $mcb);
         $this->assertSame('-90000.00', Balances::departmentBalance($this->dept->id));
 
-        $svc->undoDeposit($cheque->fresh());
-        $this->assertMoney('0.00', $this->bank);
-        $this->assertSame(1, Balances::chequesInHand()['count']);
-
         $svc->delete($cheque->fresh());
+        $this->assertMoney('0.00', $mcb);
         $this->assertSame('0.00', Balances::departmentBalance($this->dept->id));
-        $this->assertSame(0, Balances::chequesInHand()['count']);
         $this->assertSoftDeleted($cheque);
     }
 
-    public function test_undoing_a_deposit_is_blocked_when_the_money_was_already_spent(): void
+    public function test_deleting_a_cheque_is_blocked_when_the_money_was_already_spent(): void
     {
         $cheque = $this->fundBank('50000');
         $this->pay(['amount' => '40000']);
 
         $this->expectException(BusinessRuleException::class);
-        app(ChequeService::class)->undoDeposit($cheque->fresh());
+        app(ChequeService::class)->delete($cheque->fresh());
     }
 
     // ---------------------------------------------------------------- spending for departments
@@ -278,7 +281,7 @@ class LedgerFlowsTest extends TestCase
 
         // A second department where I spent more than the cheque: loss.
         $edu = $this->makeDepartment();
-        $this->receiveCheque(['department_id' => $edu->id, 'amount' => '1000']);
+        $this->cheque(['department_id' => $edu->id, 'amount' => '1000']);
         $this->pay(['department_id' => $edu->id, 'amount' => '1500']);
         $loss = app(DealService::class)->close(null, ['company_id' => $this->company->id, 'department_id' => $edu->id, 'date' => now()->toDateString()]);
         $this->assertSame('-500.00', (string) $loss->amount);
@@ -320,19 +323,19 @@ class LedgerFlowsTest extends TestCase
         $other = $this->makeCompany('Zamzam Enterprises');
         $otherBank = $this->makeBank($other);
 
-        $this->receiveCheque(['amount' => '10000']);
-        $this->receiveCheque(['company_id' => $other->id, 'amount' => '4000']);
+        $this->cheque(['amount' => '10000']);
+        $this->cheque(['company_id' => $other->id, 'deposit_account_id' => $otherBank->id, 'amount' => '4000']);
 
         $this->assertSame('-10000.00', Balances::departmentBalance($this->dept->id, $this->company->id));
         $this->assertSame('-4000.00', Balances::departmentBalance($this->dept->id, $other->id));
         $this->assertSame('-14000.00', Balances::departmentBalance($this->dept->id));
         $this->assertCount(2, Balances::departments(departmentId: $this->dept->id));
-        $this->assertSame(0, Money::cmp($otherBank->fresh()->current_balance, 0));
+        $this->assertMoney('4000.00', $otherBank);
     }
 
     public function test_voided_history_is_kept(): void
     {
-        $cheque = $this->receiveCheque(['amount' => '1000']);
+        $cheque = $this->cheque(['amount' => '1000']);
         app(ChequeService::class)->save($cheque, ['amount' => '2000']);
 
         $this->assertSame(1, Transaction::where('status', TransactionStatus::Void)->count());

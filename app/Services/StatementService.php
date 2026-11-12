@@ -77,7 +77,7 @@ class StatementService
                 'title' => 'Company Ledger',
                 'name' => $subject->name,
                 'debit' => 'Money in', 'credit' => 'Money out', 'balance' => 'Cash + bank', 'sign' => 1,
-                'note' => 'Every transaction of the company. Rows without money in or out (cheques received, goods on credit, deal closings) change other balances, not cash or bank.',
+                'note' => 'Every transaction of the company. Rows without money in or out (goods on credit, deal closings) change other balances, not cash or bank.',
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
                     ->where('journal_ledger_entries.company_id', $id),
             ],

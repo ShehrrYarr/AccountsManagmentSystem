@@ -1,11 +1,10 @@
 <?php
 
 /**
- * Government cheque register: live filters, summary tiles, pagination and row actions.
- * Embeddable on a company or department page via the locked companyId / departmentId.
+ * Government cheque register (every cheque is already deposited): live filters, summary tiles,
+ * pagination and row actions. Embeddable on a company or department page via the locked ids.
  */
 
-use App\Enums\ChequeStatus;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\Cheque;
 use App\Services\ChequeService;
@@ -21,24 +20,23 @@ state(['companyId' => null, 'departmentId' => null])->locked();
 
 state([
     'search' => '',
-    'status' => 'all',
     'filterCompany' => null,
     'filterDepartment' => null,
     'from' => '',
     'to' => '',
     'perPage' => 15,
-    'sortField' => 'received_date',
+    'sortField' => 'date',
     'sortDir' => 'desc',
 ]);
 
 $updated = function ($property) {
-    if (in_array($property, ['search', 'status', 'filterCompany', 'filterDepartment', 'from', 'to', 'perPage'], true)) {
+    if (in_array($property, ['search', 'filterCompany', 'filterDepartment', 'from', 'to', 'perPage'], true)) {
         $this->resetPage('chequesPage');
     }
 };
 
 $sortBy = function (string $field) {
-    abort_unless(in_array($field, ['cheque_number', 'amount', 'received_date', 'expiry_date', 'status'], true), 400);
+    abort_unless(in_array($field, ['cheque_number', 'amount', 'date', 'cheque_date'], true), 400);
     $this->sortDir = $this->sortField === $field && $this->sortDir === 'asc' ? 'desc' : 'asc';
     $this->sortField = $field;
 };
@@ -47,13 +45,13 @@ $sortBy = function (string $field) {
 $baseQuery = computed(fn () => Cheque::query()
     ->when($this->companyId ?? $this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
     ->when($this->departmentId ?? $this->filterDepartment, fn ($q, $id) => $q->where('department_id', $id))
-    ->when($this->status !== 'all' && $this->status !== '', fn ($q) => $q->where('status', $this->status))
-    ->when($this->from, fn ($q) => $q->whereDate('received_date', '>=', $this->from))
-    ->when($this->to, fn ($q) => $q->whereDate('received_date', '<=', $this->to))
+    ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
+    ->when($this->to, fn ($q) => $q->whereDate('date', '<=', $this->to))
     ->when($this->search, function ($q) {
         $s = '%'.trim($this->search).'%';
         $q->where(fn ($q) => $q->where('cheque_number', 'like', $s)
             ->orWhere('issuing_bank', 'like', $s)
+            ->orWhere('deposit_reference', 'like', $s)
             ->orWhereHas('company', fn ($c) => $c->where('name', 'like', $s))
             ->orWhereHas('department', fn ($d) => $d->where('name', 'like', $s)));
     }));
@@ -64,17 +62,17 @@ $cheques = computed(fn () => (clone $this->baseQuery)
     ->paginate($this->perPage, pageName: 'chequesPage'));
 
 $summary = computed(function () {
-    $scope = fn () => Cheque::query()
+    $month = Cheque::query()
         ->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
-        ->when($this->departmentId, fn ($q, $id) => $q->where('department_id', $id));
-    $inHand = $scope()->inHand();
+        ->when($this->departmentId, fn ($q, $id) => $q->where('department_id', $id))
+        ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()]);
 
     return [
-        'inHandCount' => (clone $inHand)->count(),
-        'inHandAmount' => Money::of((clone $inHand)->sum('amount')),
-        'nearExpiry' => (clone $inHand)->whereDate('expiry_date', '<=', now()->addDays(Cheque::EXPIRY_WARNING_DAYS))->count(),
-        'depositedMonth' => Money::of($scope()->deposited()->whereBetween('deposited_date', [now()->startOfMonth()->toDateString(), now()->toDateString()])->sum('amount')),
+        'monthAmount' => Money::of((clone $month)->sum('amount')),
+        'monthCount' => (clone $month)->count(),
         'filteredTotal' => Money::of((clone $this->baseQuery)->sum('amount')),
+        'filteredCount' => (clone $this->baseQuery)->count(),
+        'filteredCharges' => Money::of((clone $this->baseQuery)->sum('bank_charges')),
     ];
 });
 
@@ -85,24 +83,16 @@ on(['transaction-updated' => function () {
     unset($this->baseQuery, $this->cheques, $this->summary);
 }]);
 
-$undoDeposit = function (int $id) {
-    $cheque = Cheque::findOrFail($id);
-    if ($this->attempt(fn () => app(ChequeService::class)->undoDeposit($cheque)) !== false) {
-        $this->toast('success', "Cheque #{$cheque->cheque_number} is back in hand.");
-        $this->broadcastChange();
-    }
-};
-
 $delete = function (int $id) {
     $cheque = Cheque::findOrFail($id);
     if ($this->attempt(fn () => app(ChequeService::class)->delete($cheque)) !== false) {
-        $this->toast('success', "Cheque #{$cheque->cheque_number} deleted.");
+        $this->toast('success', "Cheque #{$cheque->cheque_number} deleted and removed from {$cheque->depositAccount?->shortLabel()}.");
         $this->broadcastChange();
     }
 };
 
 $clearFilters = function () {
-    $this->fill(['search' => '', 'status' => 'all', 'filterCompany' => null, 'filterDepartment' => null, 'from' => '', 'to' => '']);
+    $this->fill(['search' => '', 'filterCompany' => null, 'filterDepartment' => null, 'from' => '', 'to' => '']);
     $this->resetPage('chequesPage');
 };
 
@@ -110,17 +100,14 @@ $clearFilters = function () {
 
 <div>
     <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Cheques in hand" :value="money($this->summary['inHandAmount'])" icon="ri-time-line" color="warning" :hint="$this->summary['inHandCount'].' not yet deposited'" />
+        <div class="col-sm-6 col-xl-4">
+            <x-stat-card label="Deposited this month" :value="money($this->summary['monthAmount'])" icon="ri-checkbox-circle-line" color="success" :hint="$this->summary['monthCount'].' cheque(s) · '.now()->format('F Y')" />
         </div>
-        <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Expiring within {{ Cheque::EXPIRY_WARNING_DAYS }} days" :value="$this->summary['nearExpiry']" icon="ri-alarm-warning-line" color="danger" hint="Includes already expired" />
+        <div class="col-sm-6 col-xl-4">
+            <x-stat-card label="Total of filtered list" :value="money($this->summary['filteredTotal'])" icon="ri-filter-3-line" color="info" :hint="$this->summary['filteredCount'].' cheque(s)'" />
         </div>
-        <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Deposited this month" :value="money($this->summary['depositedMonth'])" icon="ri-checkbox-circle-line" color="success" />
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Total of filtered list" :value="money($this->summary['filteredTotal'])" icon="ri-filter-3-line" color="info" />
+        <div class="col-sm-6 col-xl-4">
+            <x-stat-card label="Bank charges (filtered)" :value="money($this->summary['filteredCharges'])" icon="ri-bank-line" color="warning" hint="Deducted by banks on deposit" />
         </div>
     </div>
 
@@ -129,15 +116,9 @@ $clearFilters = function () {
             <div class="flex-grow-1" style="min-width:220px">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text bg-transparent"><i class="ri-search-line text-muted"></i></span>
-                    <input type="search" class="form-control" placeholder="Search cheque #, bank, company, department…" aria-label="Search cheques" wire:model.live.debounce.350ms="search">
+                    <input type="search" class="form-control" placeholder="Search cheque #, bank, slip, company, department…" aria-label="Search cheques" wire:model.live.debounce.350ms="search">
                 </div>
             </div>
-            <select class="form-select form-select-sm w-auto" wire:model.live="status" aria-label="Status">
-                <option value="all">All statuses</option>
-                @foreach (ChequeStatus::cases() as $s)
-                    <option value="{{ $s->value }}">{{ $s->label() }}</option>
-                @endforeach
-            </select>
             @unless ($companyId)
                 <div style="min-width:190px">
                     <x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" />
@@ -148,22 +129,21 @@ $clearFilters = function () {
                     <x-searchable-select wire:model.live="filterDepartment" :options="$this->departmentOptions" placeholder="All departments" size="sm" />
                 </div>
             @endunless
-            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Received from" aria-label="Received from">
-            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="Received to" aria-label="Received to">
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" title="Deposited from" aria-label="Deposited from">
+            <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" title="Deposited to" aria-label="Deposited to">
             <button type="button" class="btn btn-sm btn-light" wire:click="clearFilters" title="Reset filters"><i class="ri-refresh-line"></i></button>
         </div>
 
         <div class="card-body p-0">
-            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,status,filterCompany,filterDepartment,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
+            <div class="table-responsive" wire:loading.class="ams-loading" wire:target="search,filterCompany,filterDepartment,from,to,sortBy,gotoPage,nextPage,previousPage,perPage">
                 <table class="table table-hover align-middle mb-0 ams-table">
                     <thead class="table-light">
                         <tr>
                             <x-sort-th field="cheque_number" :sort="$sortField" :dir="$sortDir">Cheque #</x-sort-th>
                             <th class="d-none d-md-table-cell">Department → Company</th>
-                            <x-sort-th field="received_date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Received</x-sort-th>
-                            <x-sort-th field="expiry_date" :sort="$sortField" :dir="$sortDir" class="d-none d-lg-table-cell">Valid until</x-sort-th>
+                            <th class="d-none d-lg-table-cell">Deposited into</th>
+                            <x-sort-th field="date" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Date</x-sort-th>
                             <x-sort-th field="amount" :sort="$sortField" :dir="$sortDir" class="money d-none d-md-table-cell">Amount</x-sort-th>
-                            <x-sort-th field="status" :sort="$sortField" :dir="$sortDir" class="d-none d-md-table-cell">Status</x-sort-th>
                             <th class="text-end">Actions</th>
                         </tr>
                     </thead>
@@ -173,73 +153,38 @@ $clearFilters = function () {
                                 <td>
                                     <div class="fw-semibold">#{{ $c->cheque_number }}</div>
                                     <div class="fs-12 text-muted">{{ $c->issuing_bank }}{{ $c->issuing_branch ? ' · '.$c->issuing_branch : '' }}</div>
+                                    <div class="fs-11 text-muted">Cheque date {{ $c->cheque_date->format('d M Y') }}</div>
                                     {{-- Phones: the other columns folded into this cell --}}
                                     <div class="d-md-none mt-1 fs-13">
                                         <div class="fw-medium">{{ $c->department->name }}</div>
-                                        <div class="text-muted">{{ $c->company->name }}</div>
-                                        <div class="fw-semibold">{{ money($c->amount) }}</div>
-                                        <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
-                                        @if ($c->isExpired())<span class="badge bg-danger-subtle text-danger">Expired</span>@endif
+                                        <div class="text-muted">{{ $c->company->name }} → {{ $c->depositAccount?->shortLabel() }}</div>
+                                        <div><span class="fw-semibold">{{ money($c->amount) }}</span> · {{ $c->date->format('d M Y') }}</div>
                                     </div>
                                 </td>
                                 <td class="d-none d-md-table-cell">
                                     <a href="{{ route('departments.show', $c->department_id) }}" class="text-body fw-medium">{{ $c->department->name }}</a>
                                     <div class="fs-12"><a href="{{ route('companies.show', $c->company_id) }}" class="text-muted">{{ $c->company->name }}</a></div>
                                 </td>
-                                <td class="fs-13 d-none d-md-table-cell text-nowrap">{{ $c->received_date->format('d M Y') }}</td>
-                                <td class="fs-13 d-none d-lg-table-cell text-nowrap">
-                                    @if ($c->isExpired())
-                                        <span class="text-danger" title="Expired"><i class="ri-error-warning-fill"></i> {{ $c->expiry_date->format('d M Y') }}</span>
-                                    @elseif ($c->isNearExpiry())
-                                        <span class="text-warning" title="Expiring soon"><i class="ri-alarm-warning-line"></i> {{ $c->expiry_date->format('d M Y') }}</span>
-                                    @else
-                                        {{ $c->expiry_date->format('d M Y') }}
-                                    @endif
+                                <td class="fs-13 d-none d-lg-table-cell">
+                                    {{ $c->depositAccount?->shortLabel() }}
+                                    @if ($c->deposit_reference)<div class="fs-12 text-muted">Slip {{ $c->deposit_reference }}</div>@endif
                                 </td>
-                                <td class="money fw-semibold d-none d-md-table-cell">{{ money($c->amount) }}</td>
-                                <td class="d-none d-md-table-cell">
-                                    <span class="badge {{ $c->status->badge() }}">{{ $c->status->label() }}</span>
-                                    @if ($c->isDeposited())
-                                        <div class="fs-11 text-muted mt-1">→ {{ $c->depositAccount?->shortLabel() }}, {{ $c->deposited_date->format('d M') }}
-                                            @if (Money::isPositive($c->bank_charges))<br>charges {{ money($c->bank_charges) }}@endif
-                                        </div>
-                                    @endif
+                                <td class="fs-13 d-none d-md-table-cell text-nowrap">{{ $c->date->format('d M Y') }}</td>
+                                <td class="money d-none d-md-table-cell">
+                                    <span class="fw-semibold">{{ money($c->amount) }}</span>
+                                    @if (Money::isPositive($c->bank_charges))<div class="fs-11 text-muted">charges {{ money($c->bank_charges) }}</div>@endif
                                 </td>
                                 <td class="text-end text-nowrap">
-                                    @unless ($c->isDeposited())
-                                        <button type="button" class="btn btn-sm btn-success" wire:click="$dispatch('cheque-deposit', { id: {{ $c->id }} })">
-                                            <i class="ri-bank-line me-1"></i>Deposit
-                                        </button>
-                                    @endunless
-                                    <div class="dropdown d-inline-block">
-                                        <button class="btn btn-sm btn-light icon-btn-sm" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions"><i class="ri-more-2-fill"></i></button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
-                                            @if ($c->scan_path)
-                                                <li><a class="dropdown-item" href="{{ route('files.show', ['cheque', $c->id]) }}" target="_blank"><i class="ri-attachment-2 me-2"></i>View scan</a></li>
-                                            @endif
-                                            <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line me-2"></i>Edit cheque</a></li>
-                                            @if ($c->isDeposited())
-                                                <li><a class="dropdown-item" href="#" wire:click.prevent="$dispatch('cheque-deposit', { id: {{ $c->id }} })"><i class="ri-bank-line me-2"></i>Edit deposit</a></li>
-                                                <li>
-                                                    <a class="dropdown-item text-warning" href="#"
-                                                        x-on:click.prevent="amsConfirm(@js('Put cheque #'.$c->cheque_number.' back in hand? The deposit will be removed from '.$c->depositAccount?->shortLabel().'.'), 'Undo deposit').then(ok => ok && $wire.undoDeposit({{ $c->id }}))">
-                                                        <i class="ri-arrow-go-back-line me-2"></i>Undo deposit
-                                                    </a>
-                                                </li>
-                                            @endif
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <a class="dropdown-item text-danger" href="#"
-                                                    x-on:click.prevent="amsConfirm(@js('Delete cheque #'.$c->cheque_number.'? Its ledger entries will be voided.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))">
-                                                    <i class="ri-delete-bin-line me-2"></i>Delete
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
+                                    @if ($c->scan_path)
+                                        <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('files.show', ['cheque', $c->id]) }}" target="_blank" title="View scan"><i class="ri-attachment-2"></i></a>
+                                    @endif
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('cheque-edit', { id: {{ $c->id }} })"><i class="ri-edit-line"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
+                                        x-on:click="amsConfirm(@js('Delete cheque #'.$c->cheque_number.'? It will be removed from the bank and the department ledger.'), 'Delete').then(ok => ok && $wire.delete({{ $c->id }}))"><i class="ri-delete-bin-line"></i></button>
                                 </td>
                             </tr>
                         @empty
-                            <x-empty-row :colspan="7" icon="ri-bank-card-line" message="No cheques match these filters." />
+                            <x-empty-row :colspan="6" icon="ri-bank-card-line" message="No cheques match these filters." />
                         @endforelse
                     </tbody>
                 </table>

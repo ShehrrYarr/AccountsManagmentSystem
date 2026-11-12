@@ -20,7 +20,7 @@ class PagesRenderTest extends TestCase
         parent::setUp();
         $this->setUpLedger();
         $this->fundBank('50000');
-        $this->receiveCheque();
+        $this->cheque(['department_id' => $this->makeDepartment()->id, 'amount' => '20000']);
         $this->pay(['method' => 'goods', 'supplier_id' => $this->supplier->id, 'on_credit' => true, 'account_id' => null, 'amount' => '7000', 'item_description' => 'Chairs']);
     }
 

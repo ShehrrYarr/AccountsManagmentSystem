@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Ui;
 
-use App\Enums\ChequeStatus;
 use App\Models\Cheque;
 use App\Models\Company;
 use App\Models\DealClosing;
@@ -34,63 +33,68 @@ class ComponentsTest extends TestCase
         $this->setUpLedger();
     }
 
-    public function test_receive_and_deposit_a_cheque(): void
+    public function test_entering_a_cheque_deposits_it(): void
     {
         Volt::test('cheques.register-cheque')
             ->call('save')
-            ->assertHasErrors(['company_id', 'department_id', 'cheque_number', 'issuing_bank', 'amount']);
+            ->assertHasErrors(['company_id', 'department_id', 'cheque_number', 'issuing_bank', 'amount', 'deposit_account_id']);
 
         Volt::test('cheques.register-cheque')
             ->dispatch('cheque-create', companyId: $this->company->id, departmentId: $this->dept->id)
             ->assertSet('company_id', $this->company->id)
+            ->assertSet('deposit_account_id', $this->bank->id) // the company's only bank is preselected
             ->set('cheque_number', '77001')
             ->set('issuing_bank', 'National Bank of Pakistan')
             ->set('amount', '60000')
+            ->set('bank_charges', '100')
             ->assertSee('settled')
+            ->assertSee('59,900.00')
             ->call('save')
             ->assertHasNoErrors()
             ->assertDispatched('transaction-updated');
 
         $cheque = Cheque::firstOrFail();
-        $this->assertSame(ChequeStatus::InHand, $cheque->status);
+        $this->assertSame(now()->toDateString(), $cheque->date->toDateString());
+        $this->assertMoney('59900.00', $this->bank);
         $this->assertSame('-60000.00', Balances::departmentBalance($this->dept->id));
 
-        Volt::test('cheques.deposit-cheque')
-            ->dispatch('cheque-deposit', id: $cheque->id)
-            ->assertSet('deposit_account_id', $this->bank->id) // the only bank is preselected
-            ->set('bank_charges', '100')
-            ->assertSee('59,900.00')
-            ->call('save')
-            ->assertHasNoErrors();
-
-        $this->assertMoney('59900.00', $this->bank);
-        $this->assertTrue($cheque->fresh()->isDeposited());
-    }
-
-    public function test_duplicate_cheque_numbers_are_rejected_per_bank(): void
-    {
-        $this->receiveCheque(['cheque_number' => '555', 'issuing_bank' => 'NBP']);
-
         Volt::test('cheques.register-cheque')
-            ->set('company_id', $this->company->id)->set('department_id', $this->dept->id)
-            ->set('cheque_number', '555')->set('issuing_bank', 'NBP')->set('amount', '10')
-            ->set('cheque_date', now()->toDateString())->set('received_date', now()->toDateString())
-            ->call('save')
-            ->assertHasErrors(['cheque_number' => 'unique']);
+            ->dispatch('cheque-edit', id: $cheque->id)
+            ->assertSet('deposit_account_id', $this->bank->id)
+            ->set('bank_charges', '')
+            ->call('save')->assertHasNoErrors();
+        $this->assertMoney('60000.00', $this->bank);
     }
 
-    public function test_cheque_list_undo_and_delete(): void
+    public function test_cheque_form_rejects_duplicates_and_expired_cheques(): void
+    {
+        $this->cheque(['cheque_number' => '555', 'issuing_bank' => 'NBP']);
+
+        $form = fn () => Volt::test('cheques.register-cheque')
+            ->dispatch('cheque-create', companyId: $this->company->id, departmentId: $this->dept->id)
+            ->set('issuing_bank', 'NBP')->set('amount', '10');
+
+        $form()->set('cheque_number', '555')->call('save')->assertHasErrors(['cheque_number' => 'unique']);
+
+        $form()->set('cheque_number', '556')->set('cheque_date', now()->subMonths(7)->toDateString())
+            ->assertSee('Expired on')
+            ->call('save')->assertHasErrors(['cheque_date'])->assertDispatched('toast', type: 'error');
+
+        $this->assertSame(1, Cheque::count());
+    }
+
+    public function test_cheque_list_and_delete(): void
     {
         $cheque = $this->fundBank('5000');
 
         Volt::test('cheques.list')
             ->assertSee('#'.$cheque->cheque_number)
-            ->call('undoDeposit', $cheque->id)
+            ->assertSee('HBL Current')
+            ->call('delete', $cheque->id)
             ->assertDispatched('transaction-updated');
-        $this->assertFalse($cheque->fresh()->isDeposited());
 
-        Volt::test('cheques.list')->call('delete', $cheque->id);
         $this->assertSoftDeleted($cheque);
+        $this->assertMoney('0.00', $this->bank);
     }
 
     public function test_payment_form_handles_all_three_methods(): void
@@ -252,8 +256,8 @@ class ComponentsTest extends TestCase
         $this->assertSame('18000.00', $bank['closing']);
 
         $company = app(StatementService::class)->build('company', $this->company->id);
-        $this->assertCount(3, $company['rows'], 'cheque received (no money), deposit, payment');
-        $this->assertNull($company['rows'][0]['debit']);
+        $this->assertCount(2, $company['rows'], 'cheque deposit, payment');
+        $this->assertSame(['30000.00', null], array_column($company['rows'], 'debit'));
         $this->assertSame('18000.00', $company['closing']);
 
         $filtered = app(StatementService::class)->build('department', $this->dept->id, null, now()->toDateString());
@@ -271,7 +275,7 @@ class ComponentsTest extends TestCase
         Volt::test('dashboard.overview-metrics')->assertSee('25,000.00')
             ->set('company', $this->company->id)->assertDispatched('dashboard-company');
         Volt::test('dashboard.charts')->assertOk()->dispatch('dashboard-company', company: $this->company->id)->assertDispatched('charts-refresh');
-        Volt::test('dashboard.attention')->assertSee('everything is deposited');
+        Volt::test('dashboard.attention')->assertSee('Latest cheques')->assertSee('25,000.00');
 
         Volt::test('transactions.datatable')
             ->assertSee('deposited into HBL Current')

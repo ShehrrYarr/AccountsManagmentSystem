@@ -11,7 +11,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Government cheques received for a department, deposited into the same company's bank.
+        // Government cheques for a department, deposited into the same company's bank in one step.
         Schema::create('cheques', function (Blueprint $table) {
             $table->id();
             $table->foreignId('company_id')->constrained()->restrictOnDelete();
@@ -21,23 +21,18 @@ return new class extends Migration
             $table->string('issuing_branch')->nullable();
             $table->decimal('amount', 15, 2);
             $table->date('cheque_date');
-            $table->date('expiry_date')->comment('Cheque date + 6 months');
-            $table->date('received_date')->index();
-            $table->string('scan_path')->nullable();
-            $table->string('status', 20)->default('in_hand')->index();
-            $table->text('notes')->nullable();
-
-            $table->foreignId('deposit_account_id')->nullable()->constrained('accounts')->restrictOnDelete();
-            $table->date('deposited_date')->nullable();
+            $table->date('date')->index()->comment('Deposit date (also the date it was received)');
+            $table->foreignId('deposit_account_id')->constrained('accounts')->restrictOnDelete();
             $table->decimal('bank_charges', 15, 2)->default(0);
             $table->string('deposit_reference')->nullable();
-
+            $table->string('scan_path')->nullable();
+            $table->text('notes')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();
             $table->softDeletes();
 
             $table->index(['issuing_bank', 'cheque_number']);
-            $table->index(['company_id', 'status']);
+            $table->index(['company_id', 'date']);
         });
 
         // Money spent for a department: cash handed over, bank transfer, or goods purchased.

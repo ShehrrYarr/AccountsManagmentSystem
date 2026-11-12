@@ -7,7 +7,6 @@ enum TransactionType: string
     use HasOptions;
 
     case OpeningBalance = 'opening_balance';
-    case ChequeReceived = 'cheque_received';
     case ChequeDeposit = 'cheque_deposit';
     case DepartmentPayment = 'department_payment';
     case GoodsPurchase = 'goods_purchase';
@@ -21,8 +20,7 @@ enum TransactionType: string
     {
         return match ($this) {
             self::OpeningBalance => 'Opening Balance',
-            self::ChequeReceived => 'Cheque Received',
-            self::ChequeDeposit => 'Cheque Deposit',
+            self::ChequeDeposit => 'Govt Cheque',
             self::DepartmentPayment => 'Paid to Department',
             self::GoodsPurchase => 'Goods Purchase',
             self::SupplierPayment => 'Supplier Payment',
@@ -37,7 +35,6 @@ enum TransactionType: string
     {
         return match ($this) {
             self::OpeningBalance => 'bg-secondary-subtle text-secondary',
-            self::ChequeReceived => 'bg-info-subtle text-info',
             self::ChequeDeposit => 'bg-success-subtle text-success',
             self::DepartmentPayment, self::GoodsPurchase => 'bg-warning-subtle text-warning',
             self::SupplierPayment, self::Expense => 'bg-danger-subtle text-danger',

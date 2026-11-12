@@ -77,14 +77,12 @@ class DemoDataSeeder extends Seeder
         // ---------------------------------------------------------------- Al-Noor ↔ Health Office: spent first, cheque later, deal closed
         $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'method' => 'goods', 'supplier_id' => $furniture->id, 'on_credit' => true, 'amount' => 180000, 'date' => $day(90), 'item_description' => '30 office chairs and 6 desks', 'reference' => 'INV-2231']);
         $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'method' => 'cash', 'amount' => 40000, 'date' => $day(85), 'received_by' => 'Dr. Imran (store officer)']);
-        $c = $cheques->save(null, $this->cheque($noor, $health, 250000, $day(62), $day(60)));
-        $cheques->deposit($c, ['deposit_account_id' => $noorHbl->id, 'deposited_date' => $day(58), 'bank_charges' => 150, 'deposit_reference' => 'DS-88120']);
+        $cheques->save(null, $this->cheque($noor, $health, $noorHbl, 250000, $day(62), $day(58), 150, 'DS-88120'));
         $payments->saveSupplierPayment(null, ['company_id' => $noor->id, 'supplier_id' => $furniture->id, 'account_id' => $noorHbl->id, 'amount' => 120000, 'date' => $day(55), 'reference' => 'CHQ-00412']);
         $deals->close(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'date' => $day(50), 'notes' => 'Furniture supply order complete']);
 
         // ---------------------------------------------------------------- Al-Noor ↔ School: cheque first, spending after
-        $c = $cheques->save(null, $this->cheque($noor, $school, 120000, $day(42), $day(40)));
-        $cheques->deposit($c, ['deposit_account_id' => $noorMcb->id, 'deposited_date' => $day(38)]);
+        $cheques->save(null, $this->cheque($noor, $school, $noorMcb, 120000, $day(42), $day(38)));
         $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $school->id, 'method' => 'bank_transfer', 'account_id' => $noorMcb->id, 'amount' => 70000, 'date' => $day(30), 'reference' => 'IBFT-559021']);
         $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $school->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $noorHbl->id, 'amount' => 35000, 'date' => $day(25), 'item_description' => 'Stationery and 2 printers', 'reference' => 'OM-7781']);
 
@@ -92,14 +90,14 @@ class DemoDataSeeder extends Seeder
         $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 100000, 'date' => $day(68), 'reference' => 'IBFT-330017', 'notes' => 'Short-term support']);
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'bank_transfer', 'account_id' => $zamzamUbl->id, 'amount' => 200000, 'date' => $day(66), 'reference' => 'IBFT-411290']);
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'goods', 'supplier_id' => $electronics->id, 'on_credit' => true, 'amount' => 90000, 'date' => $day(64), 'item_description' => 'Traffic signal controllers (3)']);
-        $cheques->save(null, $this->cheque($zamzam, $highways, 320000, $day(22), $day(20)));
+        $cheques->save(null, $this->cheque($zamzam, $highways, $zamzamUbl, 320000, $day(22), $day(20), 200, 'DS-44107'));
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $municipal->id, 'method' => 'cash', 'amount' => 25000, 'date' => $day(15), 'received_by' => 'Naveed (clerk)']);
         $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 40000, 'date' => $day(12), 'notes' => 'Part repayment']);
         $transfers->save(null, ['from_account_id' => $cash($zamzam)->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
 
         // ---------------------------------------------------------------- Crescent ↔ Agriculture
         $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $cash($crescent)->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
-        $cheques->save(null, $this->cheque($crescent, $agri, 45000, $day(12), $day(10)));
+        $cheques->save(null, $this->cheque($crescent, $agri, $crescentMeezan, 45000, $day(12), $day(10)));
 
         // ---------------------------------------------------------------- own transfers & expenses
         $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $cash($noor)->id, 'amount' => 50000, 'date' => $day(45), 'reference' => 'ATM']);
@@ -111,7 +109,7 @@ class DemoDataSeeder extends Seeder
         auth()->logout();
     }
 
-    private function cheque(Company $company, Department $department, int $amount, string $chequeDate, string $received): array
+    private function cheque(Company $company, Department $department, Account $bank, int $amount, string $chequeDate, string $deposited, int $charges = 0, ?string $slip = null): array
     {
         return [
             'company_id' => $company->id,
@@ -121,7 +119,10 @@ class DemoDataSeeder extends Seeder
             'issuing_branch' => 'AG Office Branch',
             'amount' => $amount,
             'cheque_date' => $chequeDate,
-            'received_date' => $received,
+            'date' => $deposited,
+            'deposit_account_id' => $bank->id,
+            'bank_charges' => $charges,
+            'deposit_reference' => $slip,
         ];
     }
 }

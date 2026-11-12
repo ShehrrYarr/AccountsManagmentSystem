@@ -71,7 +71,8 @@ trait BuildsLedgerFixtures
         return ExpenseCategory::firstOrCreate(['name' => $name], ['is_active' => true]);
     }
 
-    protected function receiveCheque(array $overrides = []): Cheque
+    /** Enter (and so deposit) a government cheque; defaults to 100,000 into HBL Current for Health Dept. */
+    protected function cheque(array $overrides = []): Cheque
     {
         static $n = 1000;
 
@@ -83,23 +84,16 @@ trait BuildsLedgerFixtures
             'issuing_branch' => 'Main',
             'amount' => '100000',
             'cheque_date' => now()->subDays(3)->toDateString(),
-            'received_date' => now()->subDays(2)->toDateString(),
+            'date' => now()->subDay()->toDateString(),
+            'deposit_account_id' => $this->bank->id,
+            'bank_charges' => 0,
         ], $overrides), $this->admin);
     }
 
-    protected function deposit(Cheque $cheque, array $overrides = []): Cheque
-    {
-        return app(ChequeService::class)->deposit($cheque, array_merge([
-            'deposit_account_id' => $this->bank->id,
-            'deposited_date' => now()->subDay()->toDateString(),
-            'bank_charges' => 0,
-        ], $overrides));
-    }
-
-    /** Receive and deposit a cheque so the bank has money. */
+    /** Put money in the bank through a govt cheque. */
     protected function fundBank(string $amount = '100000', array $overrides = []): Cheque
     {
-        return $this->deposit($this->receiveCheque(array_merge(['amount' => $amount], $overrides)));
+        return $this->cheque(array_merge(['amount' => $amount], $overrides));
     }
 
     protected function pay(array $overrides = []): Payment

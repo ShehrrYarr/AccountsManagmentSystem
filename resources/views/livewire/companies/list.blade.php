@@ -1,7 +1,7 @@
 <?php
 
 /**
- * My companies: where each one's money is (cash, banks, cheques in hand) and what is owed,
+ * My companies: where each one's money is (cash, banks), cheques this month and what is owed,
  * plus a create / edit modal. Creating a company also creates its cash in hand.
  */
 
@@ -44,7 +44,7 @@ $rows = computed(function () {
 
     $money = Account::query()->selectRaw('company_id, type, SUM(current_balance) as total')->groupBy('company_id', 'type')->get()
         ->groupBy('company_id');
-    $cheques = Cheque::inHand()->selectRaw('company_id, SUM(amount) as total, COUNT(*) as n')->groupBy('company_id')->get()->keyBy('company_id');
+    $cheques = Cheque::whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()])->selectRaw('company_id, SUM(amount) as total, COUNT(*) as n')->groupBy('company_id')->get()->keyBy('company_id');
     $depts = Balances::departments()->groupBy('company_id');
     $suppliers = Balances::suppliers()->groupBy('company_id');
 
@@ -127,7 +127,7 @@ $delete = function (int $id) {
                             <th>Company</th>
                             <th class="money d-none d-md-table-cell">Cash in hand</th>
                             <th class="money d-none d-md-table-cell">Bank</th>
-                            <th class="money d-none d-lg-table-cell">Cheques in hand</th>
+                            <th class="money d-none d-lg-table-cell">Cheques this month</th>
                             <th class="money d-none d-lg-table-cell" title="Departments that owe this company (spent more than cheques received)">Depts owe</th>
                             <th class="money d-none d-lg-table-cell" title="Cheques received ahead of spending">Held for depts</th>
                             <th class="money d-none d-xl-table-cell">Owed to suppliers</th>
@@ -143,7 +143,7 @@ $delete = function (int $id) {
                                     @if ($r->company->ntn)<div class="fs-12 text-muted">NTN {{ $r->company->ntn }}</div>@endif
                                     <div class="d-md-none fs-12 mt-1">
                                         Cash <strong>{{ money($r->cash) }}</strong> · Bank <strong>{{ money($r->bank) }}</strong>
-                                        @if ($r->chequesCount)<br>Cheques in hand {{ money($r->chequesAmount) }}@endif
+                                        @if ($r->chequesCount)<br>Cheques this month {{ money($r->chequesAmount) }}@endif
                                     </div>
                                 </td>
                                 <td class="money d-none d-md-table-cell">{{ money($r->cash) }}</td>

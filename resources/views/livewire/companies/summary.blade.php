@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Header of a company page: money, cheques in hand, what departments / suppliers / other
+ * Header of a company page: money, cheques this month, what departments / suppliers / other
  * companies owe, profit — plus its accounts and inter-company balances.
  */
 
@@ -17,11 +17,16 @@ $data = computed(function () {
     $company = Company::withTrashed()->with(['accounts' => fn ($q) => $q->orderBy('type')->orderBy('name')])->findOrFail($this->companyId);
     $depts = Balances::departments($company->id);
     $names = Company::withTrashed()->pluck('name', 'id');
+    $month = \App\Models\Cheque::where('company_id', $company->id)
+        ->whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()]);
 
     return [
         'company' => $company,
         'money' => Balances::money($company->id),
-        'cheques' => Balances::chequesInHand($company->id),
+        'cheques' => [
+            'amount' => Money::of($month->sum('amount')),
+            'count' => (clone $month)->count(),
+        ],
         'deptsOwe' => Money::add(...$depts->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
         'deptsHeld' => Money::sub(0, Money::add(...$depts->filter(fn ($r) => Money::isNegative($r->balance))->pluck('balance')->all())),
         'suppliers' => Money::add(...Balances::suppliers($company->id)->pluck('owed')->all()),
@@ -44,7 +49,7 @@ on(['transaction-updated' => function () {
             <x-stat-card label="Cash in hand" :value="money($d['money']['cash'])" icon="ri-wallet-3-line" color="success" :hint="'Bank '.money($d['money']['bank'])" />
         </div>
         <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Cheques in hand" :value="money($d['cheques']['amount'])" icon="ri-time-line" color="warning" :hint="$d['cheques']['count'].' not deposited yet'" />
+            <x-stat-card label="Cheques this month" :value="money($d['cheques']['amount'])" icon="ri-bank-card-line" color="warning" :hint="$d['cheques']['count'].' deposited in '.now()->format('F')" />
         </div>
         <div class="col-sm-6 col-xl-3">
             <x-stat-card label="Departments owe you" :value="money($d['deptsOwe'])" icon="ri-government-line" color="danger" :hint="'You hold '.money($d['deptsHeld']).' of their cheques'" />

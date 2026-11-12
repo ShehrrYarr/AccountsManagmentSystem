@@ -8,7 +8,7 @@
 
 @section('page-actions')
     <div x-data class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-sm btn-primary" x-on:click="Livewire.dispatch('cheque-create', { companyId: {{ $company->id }} })"><i class="ri-bank-card-line me-1"></i>Receive Cheque</button>
+        <button type="button" class="btn btn-sm btn-primary" x-on:click="Livewire.dispatch('cheque-create', { companyId: {{ $company->id }} })"><i class="ri-bank-card-line me-1"></i>Deposit Cheque</button>
         <button type="button" class="btn btn-sm btn-success" x-on:click="Livewire.dispatch('payment-create', { companyId: {{ $company->id }} })"><i class="ri-hand-coin-line me-1"></i>Pay Department</button>
         <button type="button" class="btn btn-sm btn-light" x-on:click="Livewire.dispatch('transfer-create', { companyId: {{ $company->id }} })"><i class="ri-arrow-left-right-line me-1"></i>Transfer</button>
         <button type="button" class="btn btn-sm btn-light" x-on:click="Livewire.dispatch('expense-create', { companyId: {{ $company->id }} })"><i class="ri-receipt-line me-1"></i>Expense</button>
@@ -41,7 +41,6 @@
     </div>
 
     <livewire:cheques.register-cheque />
-    <livewire:cheques.deposit-cheque />
     <livewire:payments.create />
     <livewire:departments.close-deal />
     <livewire:accounts.manage :modal-only="true" />

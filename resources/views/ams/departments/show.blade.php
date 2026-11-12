@@ -8,7 +8,7 @@
 
 @section('page-actions')
     <div x-data class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-sm btn-primary" x-on:click="Livewire.dispatch('cheque-create', { departmentId: {{ $department->id }} })"><i class="ri-bank-card-line me-1"></i>Receive Cheque</button>
+        <button type="button" class="btn btn-sm btn-primary" x-on:click="Livewire.dispatch('cheque-create', { departmentId: {{ $department->id }} })"><i class="ri-bank-card-line me-1"></i>Deposit Cheque</button>
         <button type="button" class="btn btn-sm btn-success" x-on:click="Livewire.dispatch('payment-create', { departmentId: {{ $department->id }} })"><i class="ri-hand-coin-line me-1"></i>Pay / Spend</button>
         <button type="button" class="btn btn-sm btn-light" x-on:click="Livewire.dispatch('deal-close', { departmentId: {{ $department->id }} })"><i class="ri-flag-2-line me-1"></i>Close Deal</button>
     </div>
@@ -40,7 +40,6 @@
     </div>
 
     <livewire:cheques.register-cheque />
-    <livewire:cheques.deposit-cheque />
     <livewire:payments.create />
     <livewire:departments.close-deal />
 @endsection

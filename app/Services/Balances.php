@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\AccountType;
 use App\Enums\LedgerAccount;
 use App\Models\Account;
-use App\Models\Cheque;
 use App\Models\JournalLedgerEntry;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
@@ -108,16 +107,6 @@ class Balances
         $bank = Money::of($accounts->where('type', AccountType::Bank)->sum('current_balance'));
 
         return ['cash' => $cash, 'bank' => $bank, 'total' => Money::add($cash, $bank)];
-    }
-
-    /** @return array{count: int, amount: string} */
-    public static function chequesInHand(?int $companyId = null, ?int $departmentId = null): array
-    {
-        $q = Cheque::inHand()
-            ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
-            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId));
-
-        return ['count' => (clone $q)->count(), 'amount' => Money::of((clone $q)->sum('amount'))];
     }
 
     /**

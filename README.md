@@ -10,7 +10,7 @@ goods from a supplier) and the government later pays with **cheques** — someti
 
 | Area | Screens |
 |---|---|
-| **Money in** | Receive a govt cheque for a department under one of my companies (the department is credited at once), then **deposit** it into that company's bank in one step, with optional bank charges. |
+| **Money in** | Enter a govt cheque for a department and the bank it was deposited into — **one step**: the company's bank goes up (less optional bank charges) and the department is credited. Cheques older than 6 months are refused. |
 | **Money out** | Department payments: **cash given**, **bank transfer** or **goods purchased** (paid now or **on credit** to a supplier). Supplier payments. General expenses by category. |
 | **Transfers** | Within one company (ATM / cash withdrawal, cash deposit, bank to bank) or **between my companies** — the receiving company owes the sender until it is sent back. |
 | **Ledgers** | Company ledger, cash statements, bank statements, department (customer) ledger per company and in total, supplier ledger — on screen, printable and as PDF. Double-entry journal with CSV export. |
@@ -109,7 +109,7 @@ app/Services/LedgerService.php  double-entry posting, voiding, sync of documents
 app/Services/Balances.php       department / supplier / inter-company / profit balances from the journal
 app/Services/*Service.php       Cheque, Payment, Transfer, Deal (closings & openings), MasterData, Statement
 resources/views/livewire/       Volt single-file components
-  cheques/          register-cheque, deposit-cheque, list
+  cheques/          register-cheque (one-step deposit), list
   payments/         create, list
   supplier-payments/, expenses/, transfers/, accounts/, opening-balances/   manage (list + modal)
   companies/        list, summary
