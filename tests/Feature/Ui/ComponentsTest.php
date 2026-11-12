@@ -37,88 +37,152 @@ class ComponentsTest extends TestCase
     {
         Volt::test('cheques.register-cheque')
             ->call('save')
-            ->assertHasErrors(['company_id', 'department_id', 'cheque_number', 'issuing_bank', 'amount', 'deposit_account_id']);
+            ->assertHasErrors(['cheque_date', 'company_id', 'department_id', 'cheque_number', 'amount', 'deposit_account_id'])
+            ->assertHasNoErrors(['issuing_branch']);
 
         Volt::test('cheques.register-cheque')
             ->dispatch('cheque-create', companyId: $this->company->id, departmentId: $this->dept->id)
             ->assertSet('company_id', $this->company->id)
             ->assertSet('deposit_account_id', $this->bank->id) // the company's only bank is preselected
+            ->set('cheque_date', now()->subDays(10)->toDateString())
+            ->set('issuing_branch', '0423')
             ->set('cheque_number', '77001')
-            ->set('issuing_bank', 'National Bank of Pakistan')
             ->set('amount', '60000')
             ->set('bank_charges', '100')
-            ->assertSee('settled')
+            ->assertSee('Settled')
             ->assertSee('59,900.00')
             ->call('save')
             ->assertHasNoErrors()
             ->assertDispatched('transaction-updated');
 
         $cheque = Cheque::firstOrFail();
-        $this->assertSame(now()->toDateString(), $cheque->date->toDateString());
+        $this->assertSame(now()->toDateString(), $cheque->date->toDateString(), 'deposited the day it is entered');
+        $this->assertSame('0423', $cheque->issuing_branch);
+        $this->assertNull($cheque->issuing_bank);
         $this->assertMoney('59900.00', $this->bank);
         $this->assertSame('-60000.00', Balances::departmentBalance($this->dept->id));
 
+        // An edit keeps the original deposit date.
+        $cheque->forceFill(['date' => now()->subDays(2)->toDateString()])->saveQuietly();
         Volt::test('cheques.register-cheque')
             ->dispatch('cheque-edit', id: $cheque->id)
             ->assertSet('deposit_account_id', $this->bank->id)
+            ->assertSee('Deposit date: '.now()->subDays(2)->format('d M Y'))
             ->set('bank_charges', '')
             ->call('save')->assertHasNoErrors();
         $this->assertMoney('60000.00', $this->bank);
+        $this->assertSame(now()->subDays(2)->toDateString(), $cheque->fresh()->date->toDateString());
     }
 
-    public function test_cheque_deposit_page(): void
+    public function test_cheque_deposit_page_builds_a_table_and_saves_it_together(): void
     {
         $this->get(route('cheques.create', ['company' => $this->company->id, 'department' => $this->dept->id]))
-            ->assertOk()->assertSee('Deposit Government Cheque')->assertSee('deposit another');
+            ->assertOk()->assertSee('Deposit Government Cheques')->assertSee('Add to table')->assertDontSee('Drawn on');
 
-        $page = fn () => Volt::test('cheques.register-cheque', ['asPage' => true, 'company' => (string) $this->company->id, 'department' => (string) $this->dept->id]);
+        $page = Volt::test('cheques.register-cheque', ['asPage' => true, 'company' => (string) $this->company->id, 'department' => (string) $this->dept->id]);
 
         // Prefilled from the URL; the modal events are ignored by the page form.
-        $page()->assertSet('company_id', $this->company->id)
+        $page->assertSet('company_id', $this->company->id)
             ->assertSet('department_id', $this->dept->id)
             ->assertSet('deposit_account_id', $this->bank->id)
             ->dispatch('cheque-create')->assertSet('company_id', $this->company->id)
             ->assertNotDispatched('modal-show');
 
-        // "Save & deposit another" stays on the page, keeping company, bank and dates.
-        $page()->set('cheque_number', '88001')->set('issuing_bank', 'NBP')->set('amount', '40000')
-            ->call('save', true)
+        $fill = function ($c, string $number, string $amount, array $extra = []) {
+            $c->set('cheque_date', now()->subDays(5)->toDateString())
+                ->set('company_id', $this->company->id)
+                ->set('deposit_account_id', $this->bank->id)
+                ->set('department_id', $this->dept->id)
+                ->set('cheque_number', $number)
+                ->set('amount', $amount);
+            foreach ($extra as $k => $v) {
+                $c->set($k, $v);
+            }
+
+            return $c;
+        };
+
+        // Add to table: nothing is saved yet and every field is cleared.
+        $fill($page, '88001', '40000', ['bank_charges' => '50', 'notes' => 'Bill 12'])->call('addRow')
             ->assertHasNoErrors()
+            ->assertSet('cheque_number', '')->assertSet('company_id', null)->assertSet('cheque_date', '')
+            ->assertCount('rows', 1)
+            ->assertSee('#88001')->assertSee('39,950.00');
+        $this->assertSame(0, Cheque::count());
+
+        // A number already in the table is refused.
+        $fill($page, '88001', '100')->call('addRow')->assertHasErrors('cheque_number')->assertCount('rows', 1);
+
+        $fill($page, '88002', '10000')->call('addRow')->assertHasNoErrors()->assertCount('rows', 2)
+            ->assertSee('50,000.00'); // table total
+
+        // Edit a row in the form, then update it.
+        $page->call('editRow', 1)->assertSet('cheque_number', '88002')->assertSet('editingRow', 1)
+            ->assertSee('Update row')
+            ->set('amount', '12000')->call('addRow')->assertHasNoErrors()
+            ->assertSet('editingRow', null)->assertSet('rows.1.amount', '12000.00')->assertCount('rows', 2);
+
+        // Remove a row.
+        $fill($page, '88003', '700')->call('addRow')->assertCount('rows', 3);
+        $page->call('removeRow', 2)->assertCount('rows', 2)->assertDontSee('#88003');
+
+        // Final save: both deposited today, then back to the list.
+        $page->call('saveAll')->assertHasNoErrors()->assertRedirect(route('cheques.index'));
+
+        $this->assertSame(['88001', '88002'], Cheque::orderBy('cheque_number')->pluck('cheque_number')->all());
+        $this->assertSame([now()->toDateString()], Cheque::pluck('date')->map->toDateString()->unique()->values()->all());
+        $this->assertMoney('51950.00', $this->bank);
+    }
+
+    public function test_cheque_batch_is_all_or_nothing(): void
+    {
+        $page = Volt::test('cheques.register-cheque', ['asPage' => true]);
+
+        foreach (['91001' => '1000', '91002' => '2000'] as $number => $amount) {
+            $page->set('cheque_date', now()->subDay()->toDateString())->set('company_id', $this->company->id)
+                ->set('deposit_account_id', $this->bank->id)->set('department_id', $this->dept->id)
+                ->set('cheque_number', (string) $number)->set('amount', $amount)
+                ->call('addRow')->assertHasNoErrors();
+        }
+
+        // Someone enters 91002 elsewhere before the batch is saved.
+        $this->cheque(['cheque_number' => '91002']);
+
+        $page->call('saveAll')
             ->assertNoRedirect()
-            ->assertDispatched('toast', type: 'success')
-            ->assertSet('cheque_number', '')
-            ->assertSet('department_id', null)
-            ->assertSet('company_id', $this->company->id)
-            ->assertSet('deposit_account_id', $this->bank->id);
+            ->assertSet('rowErrors', [1 => 'This cheque number is already entered.'])
+            ->assertDispatched('toast', type: 'error')
+            ->assertSee('This cheque number is already entered.');
 
-        // "Save & deposit" goes back to the cheque list.
-        $page()->set('cheque_number', '88002')->set('issuing_bank', 'NBP')->set('amount', '10000')
-            ->call('save')
-            ->assertHasNoErrors()
-            ->assertRedirect(route('cheques.index'));
+        $this->assertSame(['91002'], Cheque::pluck('cheque_number')->all(), 'nothing from the batch was saved');
 
-        $this->assertSame(2, Cheque::count());
-        $this->assertMoney('50000.00', $this->bank);
+        // Fix the row and save again.
+        $page->call('editRow', 1)->set('cheque_number', '91003')->call('addRow')->assertHasNoErrors()
+            ->assertSet('rowErrors', [])
+            ->call('saveAll')->assertRedirect(route('cheques.index'));
+        $this->assertSame(3, Cheque::count());
 
-        // Rule errors keep you on the page.
-        $page()->set('cheque_number', '88003')->set('issuing_bank', 'NBP')->set('amount', '500')
-            ->set('cheque_date', now()->subMonths(7)->toDateString())->set('date', now()->toDateString())
-            ->call('save')->assertHasErrors(['cheque_date'])->assertNoRedirect();
+        // Saving an empty table does nothing.
+        Volt::test('cheques.register-cheque', ['asPage' => true])->call('saveAll')->assertDispatched('toast', type: 'error')->assertNoRedirect();
     }
 
     public function test_cheque_form_rejects_duplicates_and_expired_cheques(): void
     {
-        $this->cheque(['cheque_number' => '555', 'issuing_bank' => 'NBP']);
+        $this->cheque(['cheque_number' => '555', 'issuing_branch' => '0001']);
 
         $form = fn () => Volt::test('cheques.register-cheque')
             ->dispatch('cheque-create', companyId: $this->company->id, departmentId: $this->dept->id)
-            ->set('issuing_bank', 'NBP')->set('amount', '10');
+            ->set('cheque_date', now()->subDay()->toDateString())->set('amount', '10');
 
-        $form()->set('cheque_number', '555')->call('save')->assertHasErrors(['cheque_number' => 'unique']);
+        // Duplicate by number alone, whatever the branch.
+        $form()->set('cheque_number', '555')->set('issuing_branch', '0002')->call('save')->assertHasErrors(['cheque_number' => 'unique']);
 
         $form()->set('cheque_number', '556')->set('cheque_date', now()->subMonths(7)->toDateString())
             ->assertSee('Expired on')
             ->call('save')->assertHasErrors(['cheque_date'])->assertDispatched('toast', type: 'error');
+
+        $form()->set('cheque_number', '557')->set('cheque_date', now()->addDay()->toDateString())
+            ->call('save')->assertHasErrors(['cheque_date' => 'before_or_equal']);
 
         $this->assertSame(1, Cheque::count());
     }

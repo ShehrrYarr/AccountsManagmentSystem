@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Deposit Cheque')
-@section('page-title', 'Deposit Cheque')
+@section('title', 'Deposit Cheques')
+@section('page-title', 'Deposit Cheques')
 @section('breadcrumb-parent')<a href="{{ route('cheques.index') }}">Govt Cheques</a>@endsection
 
 @section('page-actions')
@@ -11,9 +11,5 @@
 @endsection
 
 @section('content')
-    <div class="row justify-content-center">
-        <div class="col-xxl-9 col-xl-10">
-            <livewire:cheques.register-cheque :as-page="true" :company="request()->query('company')" :department="request()->query('department')" />
-        </div>
-    </div>
+    <livewire:cheques.register-cheque :as-page="true" :company="request()->query('company')" :department="request()->query('department')" />
 @endsection

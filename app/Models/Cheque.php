@@ -29,7 +29,7 @@ class Cheque extends Model implements PostsToLedger
     public const VALIDITY_MONTHS = 6;
 
     protected $fillable = [
-        'company_id', 'department_id', 'cheque_number', 'issuing_bank', 'issuing_branch', 'amount', 'cheque_date',
+        'company_id', 'department_id', 'cheque_number', 'issuing_branch', 'amount', 'cheque_date',
         'date', 'deposit_account_id', 'bank_charges', 'deposit_reference', 'scan_path', 'notes', 'created_by',
     ];
 

@@ -50,7 +50,7 @@ $baseQuery = computed(fn () => Cheque::query()
     ->when($this->search, function ($q) {
         $s = '%'.trim($this->search).'%';
         $q->where(fn ($q) => $q->where('cheque_number', 'like', $s)
-            ->orWhere('issuing_bank', 'like', $s)
+            ->orWhere('issuing_branch', 'like', $s)
             ->orWhere('deposit_reference', 'like', $s)
             ->orWhereHas('company', fn ($c) => $c->where('name', 'like', $s))
             ->orWhereHas('department', fn ($d) => $d->where('name', 'like', $s)));
@@ -152,7 +152,9 @@ $clearFilters = function () {
                             <tr wire:key="cheque-{{ $c->id }}">
                                 <td>
                                     <div class="fw-semibold">#{{ $c->cheque_number }}</div>
-                                    <div class="fs-12 text-muted">{{ $c->issuing_bank }}{{ $c->issuing_branch ? ' · '.$c->issuing_branch : '' }}</div>
+                                    @if ($c->issuing_branch || $c->issuing_bank)
+                                        <div class="fs-12 text-muted">{{ $c->issuing_branch ? 'Branch '.$c->issuing_branch : $c->issuing_bank }}</div>
+                                    @endif
                                     <div class="fs-11 text-muted">Cheque date {{ $c->cheque_date->format('d M Y') }}</div>
                                     {{-- Phones: the other columns folded into this cell --}}
                                     <div class="d-md-none mt-1 fs-13">
