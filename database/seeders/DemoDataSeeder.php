@@ -130,7 +130,7 @@ class DemoDataSeeder extends Seeder
         $usman = $agent('Usman Tariq', 'usman.agent@ams.test', '0312-7788990');
 
         // One bank account added by the admin, one by the agent himself.
-        $master->saveAccount(null, ['agent_id' => $bilal->id, 'type' => 'bank', 'name' => 'Meezan Savings', 'bank_name' => 'Meezan Bank', 'account_title' => $bilal->name, 'account_number' => '0211-0044-5521', 'is_active' => true], $admin);
+        $bilalMeezan = $master->saveAccount(null, ['agent_id' => $bilal->id, 'type' => 'bank', 'name' => 'Meezan Savings', 'bank_name' => 'Meezan Bank', 'account_title' => $bilal->name, 'account_number' => '0211-0044-5521', 'is_active' => true], $admin);
         $master->saveAccount(null, ['agent_id' => $usman->id, 'type' => 'bank', 'name' => 'JazzCash Wallet', 'bank_name' => 'JazzCash', 'account_title' => $usman->name, 'account_number' => '0312-7788990', 'is_active' => true], $usman);
 
         $cheques->save(null, $this->cheque($noor, $health, $noorHbl, 95000, $day(8), $day(6), 100, 'DS-90021'), $bilal);
@@ -139,6 +139,10 @@ class DemoDataSeeder extends Seeder
 
         // Usman typed the wrong amount and asked the admin to fix it.
         app(ChequeApprovalService::class)->requestEdit($byUsman, ['amount' => 66000] + $byUsman->only(['cheque_date', 'company_id', 'deposit_account_id', 'department_id', 'cheque_number']), $usman, 'Amount is 66,000 on the cheque, I typed 60,000');
+
+        // Bilal got an advance from Al-Noor's bank and sent part of it back (waiting for approval).
+        $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $bilalMeezan->id, 'amount' => 30000, 'date' => $day(4), 'reference' => 'IBFT-77120', 'notes' => 'For field expenses']);
+        $transfers->requestReturn(['from_account_id' => $bilalMeezan->id, 'from_company_id' => $noor->id, 'to_account_id' => $cash()->id, 'amount' => 5000, 'date' => $day(1), 'notes' => 'Left over'], $bilal);
 
         auth()->logout();
     }

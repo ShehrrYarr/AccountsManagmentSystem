@@ -31,6 +31,8 @@ $data = computed(function () {
         'deptsHeld' => Money::sub(0, Money::add(...$depts->filter(fn ($r) => Money::isNegative($r->balance))->pluck('balance')->all())),
         'suppliers' => Money::add(...Balances::suppliers($company->id)->pluck('owed')->all()),
         'interCompany' => Balances::interCompany($company->id)->map(fn ($bal, $id) => ['name' => $names[$id] ?? '?', 'balance' => $bal]),
+        'agents' => Balances::agents($company->id)->reject(fn ($r) => Money::isZero($r->owed))
+            ->map(fn ($r) => ['id' => $r->agent_id, 'name' => \App\Models\User::find($r->agent_id)?->name ?? '?', 'owed' => $r->owed])->values(),
         'profitMonth' => Balances::profit($company->id, now()->startOfMonth(), now()),
         'profitYear' => Balances::profit($company->id, now()->startOfYear(), now()),
     ];
@@ -84,6 +86,16 @@ on(['transaction-updated' => function () {
             <div class="card h-100 mb-0">
                 <div class="card-header"><h5 class="card-title mb-0">Other balances</h5></div>
                 <ul class="list-group list-group-flush fs-13">
+                    <li class="list-group-item d-flex justify-content-between gap-2 bg-light-subtle">
+                        <a href="{{ route('agents.index') }}" class="text-body fw-medium">With agents <span class="text-muted fw-normal">(they owe this company)</span></a>
+                        <strong class="text-nowrap">{{ money(Money::add(...$d['agents']->pluck('owed')->all())) }}</strong>
+                    </li>
+                    @foreach ($d['agents'] as $ag)
+                        <li class="list-group-item d-flex justify-content-between gap-2 ps-4" wire:key="sum-ag-{{ $ag['id'] }}">
+                            <a href="{{ route('agents.show', $ag['id']) }}" class="text-body">{{ $ag['name'] }}</a>
+                            <span class="text-nowrap">{{ money($ag['owed']) }}</span>
+                        </li>
+                    @endforeach
                     <li class="list-group-item d-flex justify-content-between gap-2"><span>Owed to suppliers</span><strong class="text-nowrap {{ Money::isPositive($d['suppliers']) ? 'text-warning' : '' }}">{{ money($d['suppliers']) }}</strong></li>
                     @forelse ($d['interCompany'] as $id => $ic)
                         <li class="list-group-item d-flex justify-content-between gap-2" wire:key="ic-{{ $id }}">

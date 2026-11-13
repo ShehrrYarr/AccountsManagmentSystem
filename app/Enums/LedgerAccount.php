@@ -13,6 +13,8 @@ namespace App\Enums;
  *   BankCharges     charges deducted when a cheque is deposited           debit = charged
  *   DealResult      profit (credit) / loss (debit) when a deal is closed  (department_id)
  *   OpeningEquity   balancing side of opening balances
+ *   Agent           company money an agent holds and owes back, per agent account (account_id)
+ *                                                                         debit = advanced to them, credit = returned
  */
 enum LedgerAccount: string
 {
@@ -26,6 +28,7 @@ enum LedgerAccount: string
     case BankCharges = 'bank_charges';
     case DealResult = 'deal_result';
     case OpeningEquity = 'opening_equity';
+    case Agent = 'agent';
 
     public function label(): string
     {
@@ -38,6 +41,7 @@ enum LedgerAccount: string
             self::BankCharges => 'Bank charges',
             self::DealResult => 'Profit / loss on deals',
             self::OpeningEquity => 'Opening balance equity',
+            self::Agent => 'Advances to agents',
         };
     }
 
@@ -45,7 +49,7 @@ enum LedgerAccount: string
     public function partyColumn(): ?string
     {
         return match ($this) {
-            self::Money => 'account_id',
+            self::Money, self::Agent => 'account_id',
             self::Department, self::DealResult => 'department_id',
             self::Supplier => 'supplier_id',
             self::InterCompany => 'counterparty_company_id',

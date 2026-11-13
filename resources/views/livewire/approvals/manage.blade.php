@@ -1,8 +1,9 @@
 <?php
 
 /**
- * Admin: agents' requests to edit or delete cheques they received. Each pending request shows
- * the current and requested values; Approve applies it, Reject keeps the cheque as it is.
+ * Admin: agents' requests to edit or delete cheques they received, and money agents send back
+ * (returns). Each pending cheque request shows the current and requested values; Approve
+ * applies it, Reject keeps the cheque as it is. An approved return posts to the books.
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
@@ -10,7 +11,9 @@ use App\Models\Account;
 use App\Models\ChequeChangeRequest;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\Transfer;
 use App\Services\ChequeApprovalService;
+use App\Services\TransferService;
 use App\Support\Money;
 
 use function Livewire\Volt\{computed, on, state, uses, usesPagination};
@@ -18,7 +21,15 @@ use function Livewire\Volt\{computed, on, state, uses, usesPagination};
 uses([InteractsWithUi::class]);
 usesPagination(theme: 'bootstrap');
 
-state(['rejectingId' => null, 'rejectNote' => '']);
+state(['rejectingId' => null, 'rejectingKind' => 'cheque', 'rejectNote' => '']);
+
+$pendingReturns = computed(fn () => Transfer::pending()
+    ->with(['fromAccount.agent', 'toAccount', 'fromCompany', 'creator'])
+    ->oldest()->get());
+
+$decidedReturns = computed(fn () => Transfer::query()->whereNotNull('decided_at')
+    ->with(['fromAccount.agent', 'toAccount', 'fromCompany', 'decider'])
+    ->latest('decided_at')->latest('id')->limit(10)->get());
 
 $pending = computed(fn () => ChequeChangeRequest::pending()
     ->with(['cheque.company', 'cheque.department', 'cheque.depositAccount', 'requester'])
@@ -40,8 +51,19 @@ $names = computed(function () {
 });
 
 on(['approval-updated' => function () {
-    unset($this->pending, $this->history);
+    unset($this->pending, $this->history, $this->pendingReturns, $this->decidedReturns);
 }]);
+
+$approveReturn = function (int $id) {
+    $transfer = Transfer::findOrFail($id);
+    $ok = $this->attempt(fn () => app(TransferService::class)->approve($transfer, auth()->user()));
+    if ($ok !== false) {
+        $this->toast('success', 'Approved: '.money($transfer->amount).' returned by '.$transfer->fromAccount?->holderName().'.');
+        unset($this->pendingReturns, $this->decidedReturns);
+        $this->broadcastChange();
+        $this->dispatch('approval-updated');
+    }
+};
 
 $approve = function (int $id) {
     $request = ChequeChangeRequest::findOrFail($id);
@@ -54,13 +76,26 @@ $approve = function (int $id) {
     }
 };
 
-$startReject = function (int $id) {
-    $this->fill(['rejectingId' => $id, 'rejectNote' => '']);
+$startReject = function (int $id, string $kind = 'cheque') {
+    $this->fill(['rejectingId' => $id, 'rejectingKind' => $kind === 'return' ? 'return' : 'cheque', 'rejectNote' => '']);
     $this->showModal('rejectModal');
 };
 
 $reject = function () {
     $this->validate(['rejectNote' => ['nullable', 'string', 'max:500']]);
+    if ($this->rejectingKind === 'return') {
+        $transfer = Transfer::findOrFail($this->rejectingId);
+        $ok = $this->attempt(fn () => app(TransferService::class)->reject($transfer, auth()->user(), trim($this->rejectNote) ?: null));
+        if ($ok !== false) {
+            $this->toast('success', 'Rejected: the return of '.money($transfer->amount).' was not recorded.');
+            $this->hideModal('rejectModal');
+            $this->fill(['rejectingId' => null, 'rejectNote' => '']);
+            unset($this->pendingReturns, $this->decidedReturns);
+            $this->dispatch('approval-updated');
+        }
+
+        return;
+    }
     $request = ChequeChangeRequest::findOrFail($this->rejectingId);
     $ok = $this->attempt(fn () => app(ChequeApprovalService::class)->reject($request, auth()->user(), trim($this->rejectNote) ?: null));
     if ($ok !== false) {
@@ -93,9 +128,49 @@ $reject = function () {
 @endphp
 
 <div>
+    @if ($this->pendingReturns->isNotEmpty())
+        <div class="card border-info-subtle">
+            <div class="card-header d-flex align-items-center gap-2">
+                <h5 class="card-title mb-0 me-auto">Money returned by agents <span class="badge bg-info-subtle text-info ms-1">{{ $this->pendingReturns->count() }}</span></h5>
+                <span class="fs-12 text-muted">Counts in the books once you approve</span>
+            </div>
+            <div class="card-body">
+                @foreach ($this->pendingReturns as $t)
+                    <div class="border border-info-subtle rounded p-3 mb-3" wire:key="ret-{{ $t->id }}">
+                        <div class="d-flex flex-wrap align-items-start gap-2">
+                            <div class="me-auto">
+                                <span class="badge bg-info me-1">Return</span>
+                                <strong>{{ money($t->amount) }}</strong>
+                                <span class="text-muted">· {{ $t->fromCompany?->name }}</span>
+                                <div class="fs-13 mt-1">
+                                    {{ $t->fromAccount?->holderName() }} · {{ $t->fromAccount?->shortLabel() }}
+                                    <i class="ri-arrow-right-line text-muted"></i> {{ $t->toAccount?->shortLabel() }}
+                                </div>
+                                <div class="fs-12 text-muted mt-1">
+                                    <i class="ri-calendar-line"></i> {{ $t->date->format('d M Y') }}
+                                    @if ($t->reference) · Ref {{ $t->reference }} @endif
+                                    · sent {{ $t->created_at->diffForHumans() }}
+                                    · owes {{ $t->fromCompany?->name }} {{ money(\App\Services\Balances::agentOwed((int) $t->fromAccount?->agent_id, (int) $t->from_company_id)) }} now
+                                </div>
+                                @if ($t->notes)<div class="fs-13 mt-1"><i class="ri-chat-3-line text-muted"></i> “{{ $t->notes }}”</div>@endif
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-success" wire:loading.attr="disabled"
+                                    x-on:click="amsConfirm(@js('Record '.money($t->amount).' returned by '.$t->fromAccount?->holderName().' into '.$t->toAccount?->shortLabel().'?'), 'Approve').then(ok => ok && $wire.approveReturn({{ $t->id }}))">
+                                    <i class="ri-check-line me-1"></i>Approve
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light-danger" wire:click="startReject({{ $t->id }}, 'return')"><i class="ri-close-line me-1"></i>Reject</button>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-header d-flex align-items-center gap-2">
-            <h5 class="card-title mb-0 me-auto">Waiting for you <span class="badge bg-warning-subtle text-warning ms-1">{{ $this->pending->count() }}</span></h5>
+            <h5 class="card-title mb-0 me-auto">Cheque changes waiting for you <span class="badge bg-warning-subtle text-warning ms-1">{{ $this->pending->count() }}</span></h5>
             <span class="fs-12 text-muted">Agents can't change saved cheques until you approve</span>
         </div>
         <div class="card-body">
@@ -178,10 +253,35 @@ $reject = function () {
         @endif
     </div>
 
+    @if ($this->decidedReturns->isNotEmpty())
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Decided returns <span class="fs-12 text-muted fw-normal">(latest 10)</span></h5></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 fs-13">
+                    <thead class="table-light"><tr><th>Agent</th><th>Return</th><th class="money">Amount</th><th>Decision</th><th>Note</th></tr></thead>
+                    <tbody>
+                        @foreach ($this->decidedReturns as $t)
+                            <tr wire:key="rhist-{{ $t->id }}">
+                                <td>{{ $t->fromAccount?->holderName() }}<div class="fs-11 text-muted">{{ $t->date->format('d M Y') }}</div></td>
+                                <td>{{ $t->fromAccount?->shortLabel() }} <i class="ri-arrow-right-line text-muted"></i> {{ $t->toAccount?->shortLabel() }}<div class="fs-11 text-muted">{{ $t->fromCompany?->name }}</div></td>
+                                <td class="money">{{ money($t->amount) }}</td>
+                                <td>
+                                    <span class="badge {{ $t->isPosted() ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }}">{{ $t->isPosted() ? 'Approved' : 'Rejected' }}</span>
+                                    <div class="fs-11 text-muted">{{ $t->decider?->name }} · {{ $t->decided_at?->format('d M Y') }}</div>
+                                </td>
+                                <td class="text-muted">{{ $t->decision_note ?: '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
     <x-modal id="rejectModal" title="Reject request" icon="ri-close-circle-line" size="md">
         <form wire:submit="reject">
             <div class="modal-body">
-                <p class="mb-2">The cheque stays as it is. The agent will see that the request was rejected.</p>
+                <p class="mb-2">{{ $rejectingKind === 'return' ? 'The return is not recorded; what the agent owes stays the same.' : 'The cheque stays as it is.' }} The agent will see that the request was rejected.</p>
                 <label class="form-label">Reason <span class="text-muted">(optional, shown to the agent)</span></label>
                 <textarea class="form-control @error('rejectNote') is-invalid @enderror" rows="2" wire:model="rejectNote" maxlength="500"></textarea>
                 @error('rejectNote') <div class="invalid-feedback">{{ $message }}</div> @enderror

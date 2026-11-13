@@ -52,11 +52,12 @@ class DealService
         $opening->amount = Money::of($opening->amount);
 
         if (count(array_filter([$opening->department_id, $opening->supplier_id, $opening->account_id])) !== 1) {
-            throw new BusinessRuleException('Choose a department, a supplier or cash in hand.', 'party');
+            throw new BusinessRuleException('Choose a department, a supplier, cash in hand or an agent account.', 'party');
         }
 
-        if ($opening->account_id && ! Account::find($opening->account_id)?->isAdminCash()) {
-            throw new BusinessRuleException('A cash opening balance goes on the admin cash in hand.', 'party');
+        $account = $opening->account_id ? Account::find($opening->account_id) : null;
+        if ($opening->account_id && ! ($account?->isAdminCash() || $account?->isAgentAccount())) {
+            throw new BusinessRuleException('An opening balance on an account goes on the admin cash in hand or an agent account.', 'party');
         }
 
         if (Money::isZero($opening->amount)) {
@@ -64,7 +65,7 @@ class DealService
         }
 
         if ($opening->account_id && Money::isNegative($opening->amount)) {
-            throw new BusinessRuleException('Cash in hand cannot open below zero.', 'amount');
+            throw new BusinessRuleException($account->isAgentAccount() ? 'What an agent holds cannot open below zero.' : 'Cash in hand cannot open below zero.', 'amount');
         }
 
         if ($opening->supplier_id && Money::isNegative($opening->amount)) {

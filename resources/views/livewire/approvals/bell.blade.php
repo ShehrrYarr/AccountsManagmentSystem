@@ -6,11 +6,18 @@
  */
 
 use App\Models\ChequeChangeRequest;
+use App\Models\Transfer;
 
 use function Livewire\Volt\{computed, on};
 
-$count = computed(fn () => ChequeChangeRequest::pending()->count());
-$latest = computed(fn () => ChequeChangeRequest::pending()->with(['cheque', 'requester'])->latest()->limit(5)->get());
+$count = computed(fn () => ChequeChangeRequest::pending()->count() + Transfer::pending()->count());
+
+// Cheque requests and agents' returns, newest first: [who, what, when].
+$latest = computed(fn () => ChequeChangeRequest::pending()->with(['cheque', 'requester'])->latest()->limit(5)->get()
+    ->map(fn ($r) => [$r->requester?->name, "asks to {$r->action} cheque #{$r->cheque?->cheque_number}", $r->created_at])
+    ->concat(Transfer::pending()->with('fromAccount.agent')->latest()->limit(5)->get()
+        ->map(fn ($t) => [$t->fromAccount?->holderName(), 'returned '.money($t->amount), $t->created_at]))
+    ->sortByDesc(fn ($i) => $i[2])->take(5)->values());
 
 on(['approval-updated' => function () {
     unset($this->count, $this->latest);
@@ -28,10 +35,10 @@ on(['approval-updated' => function () {
     </button>
     <div class="dropdown-menu dropdown-menu-end p-0" style="min-width:300px">
         <div class="px-3 py-2 border-bottom fw-semibold">Approvals {{ $this->count ? '('.$this->count.')' : '' }}</div>
-        @forelse ($this->latest as $r)
+        @forelse ($this->latest as [$who, $what, $when])
             <a class="dropdown-item py-2 border-bottom" href="{{ route('approvals.index') }}">
-                <div class="fs-13"><strong>{{ $r->requester?->name }}</strong> asks to {{ $r->action }} cheque #{{ $r->cheque?->cheque_number }}</div>
-                <div class="fs-11 text-muted">{{ $r->created_at->diffForHumans() }}</div>
+                <div class="fs-13"><strong>{{ $who }}</strong> {{ $what }}</div>
+                <div class="fs-11 text-muted">{{ $when->diffForHumans() }}</div>
             </a>
         @empty
             <div class="px-3 py-3 text-muted fs-13">Nothing waiting for approval.</div>

@@ -90,7 +90,7 @@ class MasterDataService
                 throw new BusinessRuleException('Holder and type cannot change after the account has been used.', 'type');
             }
 
-            $opening = $companyId ? Money::of($data['opening_balance'] ?? 0) : '0.00'; // agent accounts aren't used yet
+            $opening = $companyId ? Money::of($data['opening_balance'] ?? 0) : '0.00'; // an agent's opening amounts are Opening Balances rows, per company
             if (Money::isNegative($opening)) {
                 throw new BusinessRuleException('Opening balance cannot be negative.', 'opening_balance');
             }
@@ -141,6 +141,9 @@ class MasterDataService
     {
         return JournalLedgerEntry::where('account_id', $account->id)
             ->whereHas('transaction', fn ($q) => $q->posted()->where('type', '!=', TransactionType::OpeningBalance))
-            ->exists();
+            ->exists()
+            // An agent's opening amount, or a return still waiting for approval, also uses the account.
+            || \App\Models\OpeningBalance::where('account_id', $account->id)->exists()
+            || \App\Models\Transfer::withTrashed()->where(fn ($q) => $q->where('from_account_id', $account->id)->orWhere('to_account_id', $account->id))->exists();
     }
 }

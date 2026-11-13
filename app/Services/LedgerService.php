@@ -12,6 +12,7 @@ use App\Models\Contracts\PostsToLedger;
 use App\Models\JournalLedgerEntry;
 use App\Models\Supplier;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Support\Money;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\DB;
  * without tripping over intermediate states):
  *   - no cash / bank account may go below zero
  *   - no company may owe a supplier less than zero (no paying more than is owed)
+ *   - no agent may owe a company less than zero (no returning more than was advanced)
  */
 class LedgerService
 {
@@ -38,6 +40,9 @@ class LedgerService
 
     /** @var array<string, array{company: int, supplier: int}> */
     private array $touchedSuppliers = [];
+
+    /** @var array<string, array{company: int, agent: int}> */
+    private array $touchedAgents = [];
 
     /**
      * Run several postings / voids atomically; invariants are verified once at the end.
@@ -60,6 +65,7 @@ class LedgerService
                 if ($this->depth === 0) {
                     $this->touchedAccounts = [];
                     $this->touchedSuppliers = [];
+                    $this->touchedAgents = [];
                 }
             }
         });
@@ -198,7 +204,7 @@ class LedgerService
     {
         DB::transaction(function () {
             $balances = JournalLedgerEntry::posted()
-                ->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
+                ->whereIn('journal_ledger_entries.ledger_account', [LedgerAccount::Money->value, LedgerAccount::Agent->value])
                 ->groupBy('journal_ledger_entries.account_id')
                 ->selectRaw('journal_ledger_entries.account_id as aid, SUM(debit) - SUM(credit) as bal')
                 ->pluck('bal', 'aid');
@@ -282,8 +288,14 @@ class LedgerService
         $deltas = [];
 
         foreach ($lines as $l) {
-            if ($l['account'] === LedgerAccount::Money) {
+            // Agent lines are the agent account's money too: what it holds is what the agent owes.
+            if ($l['account'] === LedgerAccount::Money || $l['account'] === LedgerAccount::Agent) {
                 $deltas[$l['account_id']] = Money::add($deltas[$l['account_id']] ?? 0, Money::sub($l['debit'], $l['credit']));
+            }
+
+            if ($l['account'] === LedgerAccount::Agent) {
+                $agentId = (int) Account::withTrashed()->whereKey($l['account_id'])->value('agent_id');
+                $this->touchedAgents[$l['company_id'].'-'.$agentId] = ['company' => $l['company_id'], 'agent' => $agentId];
             }
 
             if ($l['account'] === LedgerAccount::Supplier) {
@@ -327,6 +339,18 @@ class LedgerService
                 $company = Company::withTrashed()->find($pair['company']);
                 throw new BusinessRuleException(
                     "This is more than {$company->name} owes {$supplier->name}. Overpaid by ".money(Money::sub(0, $owed)).'.',
+                    'amount'
+                );
+            }
+        }
+
+        foreach ($this->touchedAgents as $pair) {
+            $owed = Balances::agentOwed($pair['agent'], $pair['company']);
+            if (Money::isNegative($owed)) {
+                $agent = User::find($pair['agent']);
+                $company = Company::withTrashed()->find($pair['company']);
+                throw new BusinessRuleException(
+                    "This is more than {$agent?->name} owes {$company->name}. Over by ".money(Money::sub(0, $owed)).'.',
                     'amount'
                 );
             }

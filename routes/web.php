@@ -8,6 +8,8 @@ use App\Models\Account;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Supplier;
+use App\Models\User;
+use App\Services\StatementService;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +42,20 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::view('/cheques', 'ams.cheques.index')->name('cheques.index');
     Route::view('/cheques/deposit', 'ams.cheques.create')->name('cheques.create');
     Route::view('/my-accounts', 'ams.my-accounts')->name('my-accounts');
+    Route::get('/my-accounts/{account}', function (Account $account) {
+        abort_unless($account->agent_id === auth()->id(), 403);
+
+        return view('ams.accounts.show', compact('account'));
+    })->withTrashed()->name('my-accounts.show');
+    Route::get('/my-ledger', fn () => auth()->user()->isAgent()
+        ? view('ams.agents.show', ['agent' => auth()->user()])
+        : redirect()->route('agents.index'))->name('my-ledger');
+
+    // Printable / PDF statements: admins see all, an agent only their own ledger and accounts.
+    Route::get('/statements/{kind}/{id}/print', [StatementController::class, 'print'])
+        ->whereIn('kind', StatementService::KINDS)->whereNumber('id')->name('statements.print');
+    Route::get('/statements/{kind}/{id}/pdf', [StatementController::class, 'pdf'])
+        ->whereIn('kind', StatementService::KINDS)->whereNumber('id')->name('statements.pdf');
 
     // Private uploads (cheque scans, receipts); access is checked per file
     Route::get('/files/{type}/{id}', [FileController::class, 'show'])
@@ -60,16 +76,18 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/companies/{company}', fn (Company $company) => view('ams.companies.show', compact('company')))->withTrashed()->name('companies.show');
         Route::view('/accounts', 'ams.accounts.index')->name('accounts.index');
         Route::get('/accounts/{account}', fn (Account $account) => view('ams.accounts.show', compact('account')))->withTrashed()->name('accounts.show');
+        Route::view('/agents', 'ams.agents.index')->name('agents.index');
+        Route::get('/agents/{agent}', function (User $agent) {
+            abort_unless($agent->isAgent(), 404);
+
+            return view('ams.agents.show', compact('agent'));
+        })->name('agents.show');
         Route::view('/departments', 'ams.departments.index')->name('departments.index');
         Route::get('/departments/{department}', fn (Department $department) => view('ams.departments.show', compact('department')))->name('departments.show');
         Route::view('/suppliers', 'ams.suppliers.index')->name('suppliers.index');
         Route::get('/suppliers/{supplier}', fn (Supplier $supplier) => view('ams.suppliers.show', compact('supplier')))->name('suppliers.show');
         Route::view('/transactions', 'ams.transactions.index')->name('transactions.index');
 
-        Route::get('/statements/{kind}/{id}/print', [StatementController::class, 'print'])
-            ->whereIn('kind', ['account', 'department', 'supplier', 'company'])->whereNumber('id')->name('statements.print');
-        Route::get('/statements/{kind}/{id}/pdf', [StatementController::class, 'pdf'])
-            ->whereIn('kind', ['account', 'department', 'supplier', 'company'])->whereNumber('id')->name('statements.pdf');
 
         // Setup
         Route::view('/opening-balances', 'ams.opening-balances.index')->name('opening-balances.index');

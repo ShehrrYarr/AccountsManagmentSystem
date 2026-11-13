@@ -1,7 +1,7 @@
 <?php
 
 /**
- * On-screen running-balance statement for an account (cash / bank), department, supplier or company.
+ * On-screen running-balance statement for an account (cash / bank), department, supplier, company or agent.
  * Print and PDF use the same StatementService data.
  *
  *   <livewire:statements.ledger kind="department" :subject-id="$department->id" />
@@ -16,7 +16,7 @@ use function Livewire\Volt\{computed, on, state};
 state(['kind' => 'account', 'subjectId' => null, 'companyId' => null])->locked();
 state(['filterCompany' => null, 'from' => '', 'to' => '']);
 
-$statement = computed(fn () => app(StatementService::class)->build(
+$statement = computed(fn () => abort_unless(StatementService::canView(auth()->user(), $this->kind, (int) $this->subjectId), 403) ?? app(StatementService::class)->build(
     $this->kind,
     (int) $this->subjectId,
     $this->companyId ?? ($this->filterCompany ? (int) $this->filterCompany : null),

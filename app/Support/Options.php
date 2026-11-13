@@ -48,6 +48,26 @@ class Options
             ])->all();
     }
 
+    /**
+     * Agents' accounts (cash in hand and banks), labelled "Agent · Account" unless one agent is given.
+     */
+    public static function agentAccounts(?int $agentId = null, ?int $include = null): array
+    {
+        return Account::query()
+            ->with('agent')
+            ->whereNotNull('agent_id')
+            ->whereHas('agent', fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhereHas('agentAccounts', fn ($q) => $q->whereKey($include))))
+            ->where(fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhere('id', $include)))
+            ->when($agentId, fn ($q) => $q->where('agent_id', $agentId))
+            ->orderBy('agent_id')->orderBy('type')->orderBy('name')
+            ->get()
+            ->map(fn (Account $a) => [
+                'value' => $a->id,
+                'label' => $agentId ? $a->shortLabel() : $a->label(),
+                'hint' => money($a->current_balance),
+            ])->all();
+    }
+
     public static function agents(?int $include = null): array
     {
         return \App\Models\User::query()

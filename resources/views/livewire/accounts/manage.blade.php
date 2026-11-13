@@ -235,9 +235,15 @@ $delete = function (int $id) {
                 <div class="card" id="agent-{{ $agent->id }}" wire:key="accagent-{{ $agent->id }}">
                     <div class="card-header d-flex align-items-center gap-2">
                         <h5 class="card-title mb-0 me-auto">
-                            {{ $mine ? 'My cash & bank accounts' : $agent->name }}
+                            @if ($mine)
+                                My cash &amp; bank accounts
+                            @else
+                                <a href="{{ route('agents.show', $agent) }}" class="text-body">{{ $agent->name }}</a>
+                            @endif
                             @unless ($agent->is_active)<span class="badge bg-secondary-subtle text-secondary ms-1 fs-11">Inactive</span>@endunless
                         </h5>
+                        <span class="fs-13 text-muted">Owes <strong class="text-body ams-balance">{{ money(\App\Services\Balances::agentOwed($agent->id)) }}</strong></span>
+                        <a href="{{ $mine ? route('my-ledger') : route('agents.show', $agent) }}" class="btn btn-sm btn-light"><i class="ri-book-open-line"></i><span class="d-none d-sm-inline ms-1">Ledger</span></a>
                         <button type="button" class="btn btn-sm btn-light" wire:click="$dispatch('account-create', { agentId: {{ $agent->id }} })"><i class="ri-add-line"></i><span class="d-none d-sm-inline ms-1">Bank account</span></button>
                     </div>
                     <div class="card-body p-0">
@@ -248,7 +254,7 @@ $delete = function (int $id) {
                                     @forelse ($agent->agentAccounts as $a)
                                         <tr wire:key="acc-{{ $a->id }}">
                                             <td>
-                                                <span class="fw-semibold"><i class="{{ $a->type->icon() }} me-1 text-{{ $a->isCash() ? 'success' : 'primary' }}"></i>{{ $a->shortLabel() }}</span>
+                                                <a href="{{ $mine ? route('my-accounts.show', $a) : route('accounts.show', $a) }}" class="fw-semibold text-body"><i class="{{ $a->type->icon() }} me-1 text-{{ $a->isCash() ? 'success' : 'primary' }}"></i>{{ $a->shortLabel() }}</a>
                                                 @unless ($a->is_active)<span class="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>@endunless
                                                 <div class="fs-12 text-muted">{{ $a->type->label() }}</div>
                                             </td>
@@ -264,6 +270,7 @@ $delete = function (int $id) {
                                             </td>
                                             <td class="money fw-semibold">{{ money($a->current_balance) }}</td>
                                             <td class="text-end text-nowrap">
+                                                <a href="{{ $mine ? route('my-accounts.show', $a) : route('accounts.show', $a) }}" class="btn btn-sm btn-light" title="Statement"><i class="ri-file-list-3-line"></i><span class="d-none d-xl-inline ms-1">Statement</span></a>
                                                 @if ($this->canChange($a))
                                                     <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('account-edit', { id: {{ $a->id }} })"><i class="ri-edit-line"></i></button>
                                                     @unless ($a->isCash())
@@ -353,7 +360,7 @@ $delete = function (int $id) {
                             <label class="form-check-label" for="acc-active">Active</label>
                         </div>
                         @if ($holder === 'agent')
-                            <div class="form-text"><i class="ri-information-line"></i> Agent accounts are kept on record for now; they aren't used in transactions yet.</div>
+                            <div class="form-text"><i class="ri-information-line"></i> The admin sends advances to agent accounts from Transfers; what an agent holds there is owed back to the companies.</div>
                         @endif
                     </div>
                 </div>

@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *   Department: amount > 0 → it owes me; amount < 0 → I hold its money.
  *   Supplier:   amount > 0 → I owe it.
  *   Cash:       account_id = the admin's cash in hand; amount > 0 is the cash held for this company.
+ *   Agent:      account_id = an agent's account; amount > 0 is this company's money the agent
+ *               already held (and owes back) on the start date.
  *
  * Bank opening balances live on the bank account itself.
  */
@@ -57,9 +59,18 @@ class OpeningBalance extends Model implements PostsToLedger
         return (bool) $this->account_id;
     }
 
+    public function isAgent(): bool
+    {
+        return (bool) $this->account?->isAgentAccount();
+    }
+
     public function partyName(): string
     {
-        return $this->department?->name ?? $this->supplier?->name ?? ($this->account_id ? 'Cash in hand' : '?');
+        return $this->department?->name ?? $this->supplier?->name ?? match (true) {
+            $this->isAgent() => $this->account->holderName().' · '.$this->account->shortLabel(),
+            (bool) $this->account_id => 'Cash in hand',
+            default => '?',
+        };
     }
 
     public function ledgerPostings(): array
@@ -68,8 +79,8 @@ class OpeningBalance extends Model implements PostsToLedger
         $equity = ['account' => LedgerAccount::OpeningEquity, 'company_id' => $this->company_id];
 
         if ($this->account_id) {
-            $party = ['account' => LedgerAccount::Money, 'company_id' => $this->company_id, 'account_id' => $this->account_id];
-            $owesMe = true; // cash held: Dr cash / Cr opening equity
+            $party = ['account' => $this->isAgent() ? LedgerAccount::Agent : LedgerAccount::Money, 'company_id' => $this->company_id, 'account_id' => $this->account_id];
+            $owesMe = true; // cash held (by the admin or an agent): Dr cash / Cr opening equity
         } elseif ($this->department_id) {
             $party = ['account' => LedgerAccount::Department, 'company_id' => $this->company_id, 'department_id' => $this->department_id];
             $owesMe = ! Money::isNegative($this->amount);

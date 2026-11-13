@@ -10,7 +10,9 @@ use App\Models\Company;
 use App\Models\Department;
 use App\Models\JournalLedgerEntry;
 use App\Models\Supplier;
+use App\Enums\UserRole;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -22,18 +24,35 @@ use Illuminate\Support\Carbon;
  *   department  customer ledger: spent for them / cheques received, optionally for one company
  *   supplier    supplier ledger: purchased / paid, optionally for one company
  *   company     everything one company did, with its total cash + bank balance
+ *   agent       agent ledger: advances (and opening amounts) / returns across all the agent's
+ *               accounts; the balance is what the agent owes, optionally for one company
  */
 class StatementService
 {
-    public const KINDS = ['account', 'department', 'supplier', 'company'];
+    public const KINDS = ['account', 'department', 'supplier', 'company', 'agent'];
 
-    public function subject(string $kind, int $id): Account|Department|Supplier|Company
+    public function subject(string $kind, int $id): Account|Department|Supplier|Company|User
     {
         return match ($kind) {
-            'account' => Account::withTrashed()->with('company')->findOrFail($id),
+            'account' => Account::withTrashed()->with(['company', 'agent'])->findOrFail($id),
             'department' => Department::findOrFail($id),
             'supplier' => Supplier::findOrFail($id),
             'company' => Company::withTrashed()->findOrFail($id),
+            'agent' => User::where('role', UserRole::Agent)->findOrFail($id),
+        };
+    }
+
+    /** May this user see this statement? Admins see all; an agent only their own ledger and accounts. */
+    public static function canView(User $user, string $kind, int $id): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        return match ($kind) {
+            'agent' => $id === $user->id,
+            'account' => Account::withTrashed()->whereKey($id)->where('agent_id', $user->id)->exists(),
+            default => false,
         };
     }
 
@@ -45,16 +64,17 @@ class StatementService
         $from = $from ? Carbon::parse($from)->startOfDay() : null;
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
         $company = $kind === 'company' ? $subject : (($kind === 'account' ? $subject->company : null) ?? ($companyId ? Company::withTrashed()->find($companyId) : null));
-        // The admin's cash is shared by every company: its statement can be narrowed to one.
-        $sharedCash = $kind === 'account' && $subject->isAdminCash();
+        // The admin's cash and agents' accounts hold several companies' money: their statements can be narrowed to one.
+        $sharedCash = $kind === 'account' && ($subject->isAdminCash() || $subject->isAgentAccount());
+        $agentAccountIds = $kind === 'agent' ? Account::withTrashed()->where('agent_id', $id)->pluck('id') : collect();
 
         $meta = match ($kind) {
             'account' => [
                 'title' => $subject->isCash() ? 'Cash Statement' : 'Bank Statement',
-                'name' => $subject->shortLabel(),
+                'name' => $subject->isAgentAccount() ? $subject->label() : $subject->shortLabel(),
                 'debit' => 'Money in', 'credit' => 'Money out', 'balance' => 'Balance', 'sign' => 1,
                 'note' => null,
-                'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
+                'filter' => fn (Builder $q) => $q->whereIn('journal_ledger_entries.ledger_account', [LedgerAccount::Money->value, LedgerAccount::Agent->value])
                     ->where('journal_ledger_entries.account_id', $id)
                     ->when($sharedCash && $companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
             ],
@@ -74,6 +94,15 @@ class StatementService
                 'note' => null,
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Supplier->value)
                     ->where('journal_ledger_entries.supplier_id', $id)
+                    ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
+            ],
+            'agent' => [
+                'title' => 'Agent Ledger',
+                'name' => $subject->name,
+                'debit' => 'Given to agent', 'credit' => 'Returned', 'balance' => 'Agent owes', 'sign' => 1,
+                'note' => 'Advances and opening amounts the agent holds, less what they returned, across all their accounts.',
+                'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Agent->value)
+                    ->whereIn('journal_ledger_entries.account_id', $agentAccountIds)
                     ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
             ],
             'company' => [
@@ -154,8 +183,8 @@ class StatementService
             'name' => $meta['name'],
             'labels' => ['debit' => $meta['debit'], 'credit' => $meta['credit'], 'balance' => $meta['balance']],
             'note' => $meta['note'],
-            'showCompany' => (in_array($kind, ['department', 'supplier'], true) || $sharedCash) && ! $companyId,
-            'companyFilter' => in_array($kind, ['department', 'supplier'], true) || $sharedCash,
+            'showCompany' => (in_array($kind, ['department', 'supplier', 'agent'], true) || $sharedCash) && ! $companyId,
+            'companyFilter' => in_array($kind, ['department', 'supplier', 'agent'], true) || $sharedCash,
             'showAmount' => $kind === 'company',
             'from' => $from,
             'to' => $to,

@@ -100,8 +100,8 @@ class Balances
     }
 
     /**
-     * Cash and bank money. Overall: the admin's cash in hand + every company bank (agents' accounts
-     * are not counted yet). For one company: its banks + its net share of the admin's cash (what
+     * Cash and bank money. Overall: the admin's cash in hand + every company bank (money with
+     * agents is separate: withAgents()). For one company: its banks + its net share of the admin's cash (what
      * the admin's cash holds for it; negative when the admin's cash was spent for it).
      *
      * @return array{cash: string, bank: string, total: string}
@@ -128,6 +128,41 @@ class Balances
             ->whereIn('journal_ledger_entries.account_id', $cashIds)
             ->where('journal_ledger_entries.company_id', $companyId)
             ->selectRaw('COALESCE(SUM(debit) - SUM(credit), 0) as b')->value('b'));
+    }
+
+    /**
+     * Company money agents hold and owe back: advances + opening amounts − returns.
+     * Per agent and company, from the Agent lines on the agents' accounts.
+     *
+     * @return Collection<int, object{agent_id: int, company_id: int, advanced: string, returned: string, owed: string}>
+     */
+    public static function agents(?int $companyId = null, ?int $agentId = null, mixed $asOf = null): Collection
+    {
+        return self::lines(LedgerAccount::Agent, $companyId, $asOf)
+            ->join('accounts', 'accounts.id', '=', 'journal_ledger_entries.account_id')
+            ->when($agentId, fn ($q) => $q->where('accounts.agent_id', $agentId))
+            ->groupBy('accounts.agent_id', 'journal_ledger_entries.company_id')
+            ->selectRaw('accounts.agent_id, journal_ledger_entries.company_id, SUM(debit) as advanced, SUM(credit) as returned')
+            ->get()
+            ->map(fn ($r) => (object) [
+                'agent_id' => (int) $r->agent_id,
+                'company_id' => (int) $r->company_id,
+                'advanced' => Money::of($r->advanced),
+                'returned' => Money::of($r->returned),
+                'owed' => Money::sub($r->advanced, $r->returned),
+            ]);
+    }
+
+    /** What an agent owes (one company, or all of them). */
+    public static function agentOwed(int $agentId, ?int $companyId = null): string
+    {
+        return Money::add(...self::agents($companyId, $agentId)->pluck('owed')->all());
+    }
+
+    /** Total company money with agents (one company, or the whole business). */
+    public static function withAgents(?int $companyId = null): string
+    {
+        return Money::add(...self::agents($companyId)->pluck('owed')->all());
     }
 
     /**

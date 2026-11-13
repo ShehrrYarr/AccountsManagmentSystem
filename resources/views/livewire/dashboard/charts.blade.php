@@ -21,10 +21,11 @@ $chartData = computed(function () {
     $start = now()->startOfMonth()->subMonths($this->months - 1);
     $companyId = $this->company ? (int) $this->company : null;
 
-    // Money lines (cash / bank) by month and transaction type; transfers move money between my own accounts, so skip them.
+    // Money lines (cash / bank) by month and transaction type; transfers (also to and from agents) only move money around, so skip them.
     $lines = JournalLedgerEntry::posted()
         ->where('journal_ledger_entries.ledger_account', LedgerAccount::Money->value)
-        ->whereNotIn('transactions.type', [TransactionType::AccountTransfer->value, TransactionType::InterCompanyTransfer->value, TransactionType::OpeningBalance->value])
+        ->whereNotIn('transactions.type', [TransactionType::AccountTransfer->value, TransactionType::InterCompanyTransfer->value, TransactionType::OpeningBalance->value,
+            TransactionType::AgentAdvance->value, TransactionType::AgentReturn->value])
         ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId))
         ->where('transactions.date', '>=', $start->toDateString())
         ->get(['transactions.date', 'transactions.type', 'journal_ledger_entries.debit', 'journal_ledger_entries.credit']);
@@ -38,7 +39,7 @@ $chartData = computed(function () {
         $out[] = round((float) $rows->sum('credit'), 2);
     }
 
-    $accounts = Account::with('company')->where('current_balance', '>', 0)
+    $accounts = Account::with('company')->business()->where('current_balance', '>', 0)
         ->when($companyId, fn ($q) => $q->where('company_id', $companyId))
         ->orderByDesc('current_balance')->get();
 

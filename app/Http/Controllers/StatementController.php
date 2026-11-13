@@ -29,6 +29,8 @@ class StatementController extends Controller
 
     private function data(Request $request, string $kind, int $id): array
     {
+        abort_unless(StatementService::canView($request->user(), $kind, $id), 403);
+
         $validated = $request->validate([
             'company' => ['nullable', 'integer', 'exists:companies,id'],
             'from' => ['nullable', 'date'],

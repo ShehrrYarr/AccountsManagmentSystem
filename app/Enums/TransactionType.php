@@ -13,6 +13,8 @@ enum TransactionType: string
     case SupplierPayment = 'supplier_payment';
     case AccountTransfer = 'account_transfer';
     case InterCompanyTransfer = 'intercompany_transfer';
+    case AgentAdvance = 'agent_advance';
+    case AgentReturn = 'agent_return';
     case Expense = 'expense';
     case DealClosing = 'deal_closing';
 
@@ -26,6 +28,8 @@ enum TransactionType: string
             self::SupplierPayment => 'Supplier Payment',
             self::AccountTransfer => 'Own Transfer',
             self::InterCompanyTransfer => 'Inter-company',
+            self::AgentAdvance => 'Advance to Agent',
+            self::AgentReturn => 'Agent Return',
             self::Expense => 'Expense',
             self::DealClosing => 'Deal Closed',
         };
@@ -39,6 +43,7 @@ enum TransactionType: string
             self::DepartmentPayment, self::GoodsPurchase => 'bg-warning-subtle text-warning',
             self::SupplierPayment, self::Expense => 'bg-danger-subtle text-danger',
             self::AccountTransfer, self::InterCompanyTransfer => 'bg-primary-subtle text-primary',
+            self::AgentAdvance, self::AgentReturn => 'bg-info-subtle text-info',
             self::DealClosing => 'bg-dark-subtle text-body',
         };
     }

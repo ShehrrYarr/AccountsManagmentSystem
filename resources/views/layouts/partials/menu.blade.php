@@ -11,7 +11,7 @@
             .'</a></li>';
     };
     $isAdmin = auth()->user()?->isAdmin();
-    $pending = $isAdmin ? \App\Models\ChequeChangeRequest::pending()->count() : 0;
+    $pending = $isAdmin ? \App\Models\ChequeChangeRequest::pending()->count() + \App\Models\Transfer::pending()->count() : 0;
 @endphp
 <ul class="main-menu" id="all-menu-items" role="menu">
     @if ($isAdmin)
@@ -26,7 +26,8 @@
 
     @unless ($isAdmin)
         <li class="menu-title" role="presentation">My Money</li>
-        {!! $item('my-accounts', 'ri-wallet-3-line', 'My Accounts') !!}
+        {!! $item('my-accounts', 'ri-wallet-3-line', 'My Accounts', 'my-accounts*') !!}
+        {!! $item('my-ledger', 'ri-book-open-line', 'My Ledger') !!}
     @endunless
 
     @if ($isAdmin)
@@ -39,6 +40,7 @@
         <li class="menu-title" role="presentation">Ledgers</li>
         {!! $item('companies.index', 'ri-building-2-line', 'Companies', 'companies.*') !!}
         {!! $item('accounts.index', 'ri-safe-2-line', 'Cash & Bank', 'accounts.*') !!}
+        {!! $item('agents.index', 'ri-user-star-line', 'Agents', 'agents.*') !!}
         {!! $item('departments.index', 'ri-government-line', 'Departments', 'departments.*') !!}
         {!! $item('suppliers.index', 'ri-truck-line', 'Suppliers', 'suppliers.*') !!}
         {!! $item('transactions.index', 'ri-book-2-line', 'Transaction Journal', 'transactions.*') !!}

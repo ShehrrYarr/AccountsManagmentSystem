@@ -13,12 +13,17 @@ use App\Services\PaymentService;
 use App\Support\Money;
 use App\Support\Options;
 
-use function Livewire\Volt\{computed, on, rules, state, uses, usesPagination};
+use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesPagination};
 
 uses([InteractsWithUi::class]);
 usesPagination(theme: 'bootstrap');
 
 state(['companyId' => null, 'supplierId' => null, 'recordId' => null, 'modalOnly' => false])->locked();
+
+// Locked props aren't filled in from the tag on their own; assign them here.
+mount(function (?int $companyId = null, ?int $supplierId = null, bool $modalOnly = false) {
+    $this->fill(['companyId' => $companyId, 'supplierId' => $supplierId, 'modalOnly' => $modalOnly]);
+});
 state(['search' => '', 'from' => '', 'to' => '']);
 state(['company_id' => null, 'supplier_id' => null, 'account_id' => null, 'amount' => '', 'date' => '', 'reference' => '', 'notes' => '']);
 
