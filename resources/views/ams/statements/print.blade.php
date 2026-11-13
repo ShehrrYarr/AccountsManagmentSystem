@@ -38,7 +38,7 @@
             </td>
             <td class="right">
                 <strong>{{ $name }}</strong><br>
-                @if ($company && $kind !== 'company'){{ $company->name }}<br>@endif
+                @if ($company && $kind !== 'company'){{ $company->name }}<br>@elseif ($noCompany ?? false)No company (cash)<br>@endif
                 @if ($kind === 'account' && $subject->account_number)A/c {{ $subject->account_number }}<br>@endif
                 @if ($kind === 'company' && $subject->ntn)NTN {{ $subject->ntn }}<br>@endif
                 <span class="muted">Period: {{ $from ? $from->format('d M Y') : 'Beginning' }} – {{ $to->format('d M Y') }}</span>

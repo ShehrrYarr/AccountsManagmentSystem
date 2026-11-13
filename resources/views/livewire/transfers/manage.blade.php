@@ -1,8 +1,9 @@
 <?php
 
 /**
- * Transfers: within one company (ATM withdrawal, cash deposit, bank to bank), between my companies,
- * advances to agents and returns from agents. List + modal; embeddable on a company page.
+ * Transfers: cash & bank moves (bank → admin cash, admin cash → bank, bank to bank), between my
+ * companies, advances to agents and returns from agents. List + modal; embeddable on a company page.
+ * The admin's cash belongs to no company: moving bank money into it takes it out of the company.
  *
  * Open the form with: $dispatch('transfer-create', { companyId: 1, mode: 'own' | 'intercompany' | 'advance' | 'return', agentId: 7 })  (all optional)
  */
@@ -34,7 +35,7 @@ state([
 ]);
 
 rules(fn () => [
-    'from_company_id' => ['required', 'exists:companies,id'],
+    'from_company_id' => [$this->mode === 'own' ? 'nullable' : 'required', 'exists:companies,id'],
     'to_company_id' => [$this->mode === 'intercompany' ? 'required' : 'nullable', 'exists:companies,id', $this->mode === 'intercompany' ? 'different:from_company_id' : 'nullable'],
     'from_account_id' => ['required', 'exists:accounts,id'],
     'to_account_id' => ['required', 'exists:accounts,id', 'different:from_account_id'],
@@ -53,7 +54,7 @@ $updated = function ($property) {
     if (in_array($property, ['filterKind', 'filterCompany', 'from', 'to'], true)) {
         $this->resetPage('trPage');
     }
-    if ($property === 'from_company_id') {
+    if ($property === 'from_company_id' && $this->mode !== 'own') {
         // In a return the agent's account is the "from" side; only the company account changes.
         if ($this->mode !== 'return') {
             $this->from_account_id = null;
@@ -78,9 +79,11 @@ $baseQuery = computed(function () {
 
     return Transfer::query()->posted()
         ->when($company, fn ($q) => $q->where(fn ($q) => $q->where('from_company_id', $company)->orWhere('to_company_id', $company)))
-        ->when($this->filterKind === 'own', fn ($q) => $q->whereColumn('from_company_id', 'to_company_id')
+        ->when($this->filterKind === 'own', fn ($q) => $q
+            ->where(fn ($q) => $q->whereNull('from_company_id')->orWhereNull('to_company_id')->orWhereColumn('from_company_id', 'to_company_id'))
             ->whereNotIn('from_account_id', $agentAccounts())->whereNotIn('to_account_id', $agentAccounts()))
-        ->when($this->filterKind === 'intercompany', fn ($q) => $q->whereColumn('from_company_id', '<>', 'to_company_id'))
+        ->when($this->filterKind === 'intercompany', fn ($q) => $q->whereNotNull('from_company_id')->whereNotNull('to_company_id')
+            ->whereColumn('from_company_id', '<>', 'to_company_id'))
         ->when($this->filterKind === 'agent', fn ($q) => $q->where(fn ($q) => $q->whereIn('from_account_id', $agentAccounts())->orWhereIn('to_account_id', $agentAccounts())))
         ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
         ->when($this->to, fn ($q) => $q->whereDate('date', '<=', $this->to));
@@ -90,18 +93,21 @@ $rows = computed(fn () => (clone $this->baseQuery)->with(['fromAccount.agent', '
     ->orderByDesc('date')->orderByDesc('id')->paginate(15, pageName: 'trPage'));
 
 $companyOptions = computed(fn () => Options::companies());
+// Cash & bank moves: the admin's cash and every company bank (on a company page, its banks and the cash).
+// Between companies: banks only. Advance / return: the chosen company's banks and the admin's cash.
 $fromAccounts = computed(fn () => match (true) {
+    $this->mode === 'own' => Options::accounts($this->companyId, null, $this->from_account_id),
     $this->mode === 'return' => Options::agentAccounts($this->agentId, $this->from_account_id),
-    (bool) $this->from_company_id => Options::accounts((int) $this->from_company_id, null, $this->from_account_id),
+    (bool) $this->from_company_id => Options::accounts((int) $this->from_company_id, $this->mode === 'intercompany' ? 'bank' : null, $this->from_account_id),
     default => [],
 });
 $toAccounts = computed(function () {
-    if ($this->mode === 'advance') {
-        return Options::agentAccounts($this->agentId, $this->to_account_id);
-    }
-    $company = in_array($this->mode, ['own', 'return'], true) ? $this->from_company_id : $this->to_company_id;
-
-    return $company ? Options::accounts((int) $company, null, $this->to_account_id) : [];
+    return match (true) {
+        $this->mode === 'own' => Options::accounts($this->companyId, null, $this->to_account_id),
+        $this->mode === 'advance' => Options::agentAccounts($this->agentId, $this->to_account_id),
+        $this->mode === 'return' => $this->from_company_id ? Options::accounts((int) $this->from_company_id, null, $this->to_account_id) : [],
+        default => $this->to_company_id ? Options::accounts((int) $this->to_company_id, 'bank', $this->to_account_id) : [],
+    };
 });
 
 // Advance / return: what the agent owes this company right now (before this transfer).
@@ -193,7 +199,7 @@ $delete = function (int $id) {
         <div class="card-header d-flex flex-wrap gap-2 align-items-center">
             <select class="form-select form-select-sm w-auto" wire:model.live="filterKind" aria-label="Kind">
                 <option value="">All transfers</option>
-                <option value="own">Within a company</option>
+                <option value="own">Cash &amp; bank moves</option>
                 <option value="intercompany">Between companies</option>
                 <option value="agent">With agents</option>
             </select>
@@ -203,7 +209,7 @@ $delete = function (int $id) {
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" aria-label="From date">
             <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" aria-label="To date">
             <div class="ms-auto d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-primary" wire:click="$dispatch('transfer-create', { mode: 'own' })"><i class="ri-arrow-left-right-line me-1"></i>Own transfer</button>
+                <button type="button" class="btn btn-sm btn-primary" wire:click="$dispatch('transfer-create', { mode: 'own' })"><i class="ri-arrow-left-right-line me-1"></i>Cash &amp; bank</button>
                 <button type="button" class="btn btn-sm btn-info" wire:click="$dispatch('transfer-create', { mode: 'intercompany' })"><i class="ri-building-2-line me-1"></i>Between companies</button>
                 <div class="btn-group">
                     <button type="button" class="btn btn-sm btn-success" wire:click="$dispatch('transfer-create', { mode: 'advance' })"><i class="ri-user-shared-line me-1"></i>Advance to agent</button>
@@ -228,11 +234,11 @@ $delete = function (int $id) {
                                     <span class="badge {{ $t->isAgentMove() ? 'bg-success-subtle text-success' : ($t->isInterCompany() ? 'bg-info-subtle text-info' : 'bg-primary-subtle text-primary') }}">{{ $t->kind() }}</span>
                                     @if ($t->creator && $t->creator->isAgent())<span class="badge bg-light text-body ms-1" title="Sent by the agent, approved by {{ $t->decider?->name }}">by agent</span>@endif
                                     <div class="mt-1">
-                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->fromCompany?->name }}</span> · @endif{{ $t->fromAccount->isAgentAccount() ? $t->fromAccount->label() : $t->fromAccount->shortLabel() }}
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->fromCompany?->name }}</span> · @endif{{ $t->fromAccount->isAgentAccount() || ($t->kind() === 'Cash deposit') ? $t->fromAccount->label() : $t->fromAccount->shortLabel() }}
                                         <i class="ri-arrow-right-line text-muted"></i>
-                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->toCompany?->name }}</span> · @endif{{ $t->toAccount->isAgentAccount() ? $t->toAccount->label() : $t->toAccount->shortLabel() }}
+                                        @if ($t->isInterCompany())<span class="fw-medium">{{ $t->toCompany?->name }}</span> · @endif{{ $t->toAccount->isAgentAccount() || ($t->kind() === 'Cash deposit') ? $t->toAccount->label() : $t->toAccount->shortLabel() }}
                                     </div>
-                                    @if (! $t->isInterCompany() && ! $companyId)<div class="fs-12 text-muted">{{ $t->fromCompany?->name }}</div>@endif
+                                    @if (! $t->isInterCompany() && ! $companyId && ($t->fromCompany ?? $t->toCompany))<div class="fs-12 text-muted">{{ ($t->fromCompany ?? $t->toCompany)->name }}</div>@endif
                                 </td>
                                 <td class="fs-13 d-none d-md-table-cell">{{ $t->reference ?: '—' }}</td>
                                 <td class="money fw-semibold">{{ money($t->amount) }}</td>
@@ -258,7 +264,7 @@ $delete = function (int $id) {
             <div class="modal-body">
                 <div class="btn-group w-100 mb-3 flex-wrap" role="group" aria-label="Transfer type">
                     <input type="radio" class="btn-check" id="tr-own" value="own" wire:model.live="mode">
-                    <label class="btn btn-outline-primary btn-sm" for="tr-own"><i class="ri-arrow-left-right-line me-1"></i>Within one company</label>
+                    <label class="btn btn-outline-primary btn-sm" for="tr-own"><i class="ri-arrow-left-right-line me-1"></i>Cash &amp; bank</label>
                     <input type="radio" class="btn-check" id="tr-ic" value="intercompany" wire:model.live="mode">
                     <label class="btn btn-outline-info btn-sm" for="tr-ic"><i class="ri-building-2-line me-1"></i>Between companies</label>
                     <input type="radio" class="btn-check" id="tr-adv" value="advance" wire:model.live="mode">
@@ -268,9 +274,9 @@ $delete = function (int $id) {
                 </div>
                 <p class="fs-13 text-muted">
                     {{ match ($mode) {
-                        'own' => 'ATM / cash withdrawal (bank → admin cash), cash deposit (admin cash → bank) or bank to bank, for one company.',
-                        'intercompany' => 'Money sent from one of your companies to another. The receiving company will owe the sender until it is sent back.',
-                        'advance' => 'Company money given to an agent (into their bank account or cash in hand). The agent owes it to the company until they return it.',
+                        'own' => 'Bank → admin cash in hand (the money leaves the company: "moved to cash"), cash in hand → a bank (it comes into that bank’s company), or bank to bank. The cash in hand belongs to no company.',
+                        'intercompany' => 'Money sent from one of your companies’ banks to another’s. The receiving company will owe the sender until it is sent back.',
+                        'advance' => 'Money given to an agent (into their bank account or cash in hand) for a company. The agent owes it to that company until they return it or pay departments with it.',
                         default => 'Money an agent gives back to a company bank or your cash in hand. It lowers what the agent owes that company.',
                     } }}
                 </p>
@@ -283,11 +289,13 @@ $delete = function (int $id) {
                             @error('from_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         </div>
                     @endif
-                    <div class="{{ in_array($mode, ['own', 'advance', 'return'], true) ? 'col-12' : 'col-md-6' }}">
-                        <label class="form-label">{{ match ($mode) { 'own' => 'Company', 'advance' => 'Company giving the advance', 'return' => 'Company the money goes back to', default => 'From company' } }} <span class="text-danger">*</span></label>
+                    @if ($mode !== 'own')
+                    <div class="{{ in_array($mode, ['advance', 'return'], true) ? 'col-12' : 'col-md-6' }}">
+                        <label class="form-label">{{ match ($mode) { 'advance' => 'For company', 'return' => 'Company the money goes back to', default => 'From company' } }} <span class="text-danger">*</span></label>
                         <x-searchable-select wire:model.live="from_company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('from_company_id')" />
                         @error('from_company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
+                    @endif
                     @if ($mode === 'intercompany')
                         <div class="col-md-6">
                             <label class="form-label">To company <span class="text-danger">*</span></label>
@@ -298,13 +306,13 @@ $delete = function (int $id) {
                     @if ($mode !== 'return')
                         <div class="col-md-6">
                             <label class="form-label">From account <span class="text-danger">*</span></label>
-                            <x-searchable-select wire:model.live="from_account_id" :options="$this->fromAccounts" :placeholder="$from_company_id ? 'Money leaves…' : 'Select a company first'" :disabled="! $from_company_id" :invalid="$errors->has('from_account_id')" />
+                            <x-searchable-select wire:model.live="from_account_id" :options="$this->fromAccounts" :placeholder="$from_company_id || $mode === 'own' ? 'Money leaves…' : 'Select a company first'" :disabled="! $from_company_id && $mode !== 'own'" :invalid="$errors->has('from_account_id')" />
                             @error('from_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         </div>
                     @endif
                     <div class="{{ $mode === 'return' ? 'col-12' : 'col-md-6' }}">
                         <label class="form-label">{{ $mode === 'advance' ? 'To agent account' : 'To account' }} <span class="text-danger">*</span></label>
-                        @php($toReady = match ($mode) { 'own', 'return' => $from_company_id, 'advance' => true, default => $to_company_id })
+                        @php($toReady = match ($mode) { 'return' => $from_company_id, 'own', 'advance' => true, default => $to_company_id })
                         <x-searchable-select wire:model.live="to_account_id" :options="$this->toAccounts" :placeholder="$toReady ? ($mode === 'advance' ? 'Agent · account' : 'Money arrives…') : 'Select a company first'" :disabled="! $toReady" :invalid="$errors->has('to_account_id')" />
                         @error('to_account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>

@@ -26,6 +26,9 @@ use Illuminate\Support\Carbon;
  *   company     everything one company did, with its total cash + bank balance
  *   agent       agent ledger: advances (and opening amounts) / returns across all the agent's
  *               accounts; the balance is what the agent owes, optionally for one company
+ *
+ * $companyId: null = all, a company id, or Balances::NONE (0) = no company (what the admin's
+ * cash pot paid for: department and supplier ledgers).
  */
 class StatementService
 {
@@ -64,8 +67,9 @@ class StatementService
         $from = $from ? Carbon::parse($from)->startOfDay() : null;
         $to = $to ? Carbon::parse($to)->endOfDay() : now()->endOfDay();
         $company = $kind === 'company' ? $subject : (($kind === 'account' ? $subject->company : null) ?? ($companyId ? Company::withTrashed()->find($companyId) : null));
-        // The admin's cash and agents' accounts hold several companies' money: their statements can be narrowed to one.
-        $sharedCash = $kind === 'account' && ($subject->isAdminCash() || $subject->isAgentAccount());
+        // Agents' accounts hold several companies' money: their statements can be narrowed to one.
+        // (The admin's cash belongs to no company.)
+        $sharedCash = $kind === 'account' && $subject->isAgentAccount();
         $agentAccountIds = $kind === 'agent' ? Account::withTrashed()->where('agent_id', $id)->pluck('id') : collect();
 
         $meta = match ($kind) {
@@ -76,7 +80,7 @@ class StatementService
                 'note' => null,
                 'filter' => fn (Builder $q) => $q->whereIn('journal_ledger_entries.ledger_account', [LedgerAccount::Money->value, LedgerAccount::Agent->value])
                     ->where('journal_ledger_entries.account_id', $id)
-                    ->when($sharedCash && $companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
+                    ->when($sharedCash && $companyId, fn ($q) => Balances::forCompany($q, $companyId)),
             ],
             'department' => [
                 'title' => 'Department Ledger',
@@ -85,7 +89,7 @@ class StatementService
                 'note' => 'Positive balance = the department owes you. Negative = cheques received ahead of spending (you hold their money).',
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Department->value)
                     ->where('journal_ledger_entries.department_id', $id)
-                    ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
+                    ->tap(fn ($q) => Balances::forCompany($q, $companyId)),
             ],
             'supplier' => [
                 'title' => 'Supplier Ledger',
@@ -94,16 +98,16 @@ class StatementService
                 'note' => null,
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Supplier->value)
                     ->where('journal_ledger_entries.supplier_id', $id)
-                    ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
+                    ->tap(fn ($q) => Balances::forCompany($q, $companyId)),
             ],
             'agent' => [
                 'title' => 'Agent Ledger',
                 'name' => $subject->name,
-                'debit' => 'Given to agent', 'credit' => 'Returned', 'balance' => 'Agent owes', 'sign' => 1,
-                'note' => 'Advances and opening amounts the agent holds, less what they returned, across all their accounts.',
+                'debit' => 'Given to agent', 'credit' => 'Returned / spent', 'balance' => 'Agent owes', 'sign' => 1,
+                'note' => 'Advances and opening amounts the agent holds, less what they returned or paid to departments, across all their accounts. Below zero: the company owes the agent.',
                 'filter' => fn (Builder $q) => $q->where('journal_ledger_entries.ledger_account', LedgerAccount::Agent->value)
                     ->whereIn('journal_ledger_entries.account_id', $agentAccountIds)
-                    ->when($companyId, fn ($q) => $q->where('journal_ledger_entries.company_id', $companyId)),
+                    ->tap(fn ($q) => Balances::forCompany($q, $companyId)),
             ],
             'company' => [
                 'title' => 'Company Ledger',
@@ -158,7 +162,7 @@ class StatementService
             $totals['debit'] = Money::add($totals['debit'], $debit);
             $totals['credit'] = Money::add($totals['credit'], $credit);
 
-            $lineCompany = $txLines->first()?->line_company_id ?? $t->company_id;
+            $lineCompany = $txLines->isNotEmpty() ? $txLines->first()->line_company_id : $t->company_id;
 
             $rows[] = [
                 'id' => $t->id,
@@ -167,7 +171,7 @@ class StatementService
                 'description' => $t->description,
                 'reference' => $t->reference,
                 'notes' => $t->notes,
-                'company' => $companyNames[$lineCompany] ?? null,
+                'company' => $lineCompany ? ($companyNames[$lineCompany] ?? null) : 'No company (cash)',
                 'amount' => $t->amount,
                 'debit' => Money::isZero($debit) ? null : $debit,
                 'credit' => Money::isZero($credit) ? null : $credit,
@@ -179,11 +183,12 @@ class StatementService
             'kind' => $kind,
             'subject' => $subject,
             'company' => $company,
+            'noCompany' => $companyId === Balances::NONE,
             'title' => $meta['title'],
             'name' => $meta['name'],
             'labels' => ['debit' => $meta['debit'], 'credit' => $meta['credit'], 'balance' => $meta['balance']],
             'note' => $meta['note'],
-            'showCompany' => (in_array($kind, ['department', 'supplier', 'agent'], true) || $sharedCash) && ! $companyId,
+            'showCompany' => (in_array($kind, ['department', 'supplier', 'agent'], true) || $sharedCash) && $companyId === null,
             'companyFilter' => in_array($kind, ['department', 'supplier', 'agent'], true) || $sharedCash,
             'showAmount' => $kind === 'company',
             'from' => $from,

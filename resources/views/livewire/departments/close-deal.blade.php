@@ -23,18 +23,18 @@ state(['closingId' => null])->locked();
 state(['company_id' => null, 'department_id' => null, 'date' => '', 'notes' => '']);
 
 rules(fn () => [
-    'company_id' => ['required', 'exists:companies,id'],
+    'company_id' => ['required', 'integer', \Illuminate\Validation\Rule::when((int) $this->company_id !== 0, ['exists:companies,id'])],
     'department_id' => ['required', 'exists:departments,id'],
     'date' => ['required', 'date', 'before_or_equal:today'],
     'notes' => ['nullable', 'string', 'max:2000'],
 ]);
 
-$companyOptions = computed(fn () => Options::companies($this->company_id));
+$companyOptions = computed(fn () => [['value' => \App\Services\Balances::NONE, 'label' => 'No company (cash)'], ...Options::companies()]);
 $departmentOptions = computed(fn () => Options::departments($this->department_id));
 
 // Balance on the closing date, ignoring the closing being edited.
 $balance = computed(function () {
-    if (! $this->company_id || ! $this->department_id || ! $this->date || strtotime($this->date) === false) {
+    if (! filled($this->company_id) || ! $this->department_id || ! $this->date || strtotime($this->date) === false) {
         return null;
     }
     $balance = Balances::departmentBalance((int) $this->department_id, (int) $this->company_id, $this->date);
@@ -57,7 +57,7 @@ on(['deal-edit' => function (int $id) {
     $this->resetErrorBag();
     $c = DealClosing::findOrFail($id);
     $this->closingId = $c->id;
-    $this->fill(['company_id' => $c->company_id, 'department_id' => $c->department_id, 'date' => $c->date->toDateString(), 'notes' => $c->notes ?? '']);
+    $this->fill(['company_id' => $c->company_id ?? 0, 'department_id' => $c->department_id, 'date' => $c->date->toDateString(), 'notes' => $c->notes ?? '']);
     $this->showModal('dealCloseModal');
 }]);
 

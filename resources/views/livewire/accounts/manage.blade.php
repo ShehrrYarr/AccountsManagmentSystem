@@ -172,8 +172,8 @@ $delete = function (int $id) {
                     <a href="{{ route('accounts.show', $cash) }}" class="btn btn-sm btn-light"><i class="ri-file-list-3-line me-1"></i>Cash statement</a>
                 </div>
                 <div class="card-body py-2 fs-13 text-muted">
-                    One cash in hand for the admin, shared by every company. Each entry still records which company it was for.
-                    Set starting cash per company on <a href="{{ route('opening-balances.index') }}">Opening Balances</a>.
+                    One cash in hand for the admin: a single pot that belongs to no company. Money moved in from a company bank counts as leaving that company; cash payments and expenses have no company.
+                    Set the starting cash on <a href="{{ route('opening-balances.index') }}">Opening Balances</a>.
                 </div>
             </div>
         @endif

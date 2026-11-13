@@ -22,7 +22,7 @@ $rows = computed(function () {
 
     return Balances::departments($this->companyId, $this->departmentId)
         ->when($this->hideSettled, fn ($c) => $c->reject(fn ($r) => Money::isZero($r->balance)))
-        ->map(fn ($r) => (object) ((array) $r + ['company' => $companies[$r->company_id] ?? '?', 'department' => $departments[$r->department_id] ?? '?']))
+        ->map(fn ($r) => (object) ((array) $r + ['company' => Balances::companyName($r->company_id, $companies), 'department' => $departments[$r->department_id] ?? '?']))
         ->sortBy($this->departmentId ? 'company' : 'department')
         ->values();
 });
@@ -58,7 +58,11 @@ on(['transaction-updated' => function () {
                         <tr wire:key="db-{{ $r->company_id }}-{{ $r->department_id }}">
                             <td>
                                 @if ($departmentId)
-                                    <a href="{{ route('companies.show', $r->company_id) }}" class="fw-medium text-body">{{ $r->company }}</a>
+                                    @if ($r->company_id)
+                                        <a href="{{ route('companies.show', $r->company_id) }}" class="fw-medium text-body">{{ $r->company }}</a>
+                                    @else
+                                        <span class="fw-medium" title="Paid from the cash in hand, which belongs to no company">{{ $r->company }}</span>
+                                    @endif
                                 @else
                                     <a href="{{ route('departments.show', $r->department_id) }}" class="fw-medium text-body">{{ $r->department }}</a>
                                 @endif

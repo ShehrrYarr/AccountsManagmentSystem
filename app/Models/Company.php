@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * One of MY companies. A company has bank accounts only; cash is the admin's single cash in hand
- * (Account::adminCash()), shared by every company.
+ * (Account::adminCash()), one pot that belongs to no company.
  */
 class Company extends Model
 {

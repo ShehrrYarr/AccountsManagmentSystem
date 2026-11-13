@@ -44,7 +44,7 @@ $delete = function (int $id) {
                         <tr wire:key="close-{{ $c->id }}">
                             <td class="fs-13 text-nowrap">{{ $c->date->format('d M Y') }}</td>
                             <td>
-                                {{ $departmentId ? $c->company->name : $c->department->name }}
+                                {{ $departmentId ? ($c->company?->name ?? 'No company (cash)') : $c->department->name }}
                                 @if ($c->notes)<div class="fs-12 text-muted">{{ $c->notes }}</div>@endif
                             </td>
                             <td class="money fw-semibold {{ $c->isProfit() ? 'text-success' : 'text-danger' }}">

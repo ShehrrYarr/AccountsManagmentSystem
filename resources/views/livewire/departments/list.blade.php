@@ -30,7 +30,7 @@ rules(fn () => [
 ]);
 
 $rows = computed(function () {
-    $balances = Balances::departments($this->filterCompany ? (int) $this->filterCompany : null)->groupBy('department_id');
+    $balances = Balances::departments(filled($this->filterCompany) ? (int) $this->filterCompany : null)->groupBy('department_id');
     return Department::query()
         ->when($this->search, fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', "%{$this->search}%")
             ->orWhere('code', 'like', "%{$this->search}%")->orWhere('city', 'like', "%{$this->search}%")))
@@ -53,7 +53,7 @@ $rows = computed(function () {
 });
 
 $totals = computed(function () {
-    $all = Balances::departments($this->filterCompany ? (int) $this->filterCompany : null);
+    $all = Balances::departments(filled($this->filterCompany) ? (int) $this->filterCompany : null);
 
     return [
         'owe' => Money::add(...$all->filter(fn ($r) => Money::isPositive($r->balance))->pluck('balance')->all()),
@@ -61,7 +61,7 @@ $totals = computed(function () {
     ];
 });
 
-$companyOptions = computed(fn () => Options::companies());
+$companyOptions = computed(fn () => [['value' => \App\Services\Balances::NONE, 'label' => 'No company (cash)'], ...Options::companies()]);
 
 on(['transaction-updated' => function () {
     unset($this->rows, $this->totals);

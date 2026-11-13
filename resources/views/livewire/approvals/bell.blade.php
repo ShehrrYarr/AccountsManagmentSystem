@@ -6,15 +6,18 @@
  */
 
 use App\Models\ChequeChangeRequest;
+use App\Models\PaymentChangeRequest;
 use App\Models\Transfer;
 
 use function Livewire\Volt\{computed, on};
 
-$count = computed(fn () => ChequeChangeRequest::pending()->count() + Transfer::pending()->count());
+$count = computed(fn () => ChequeChangeRequest::pending()->count() + PaymentChangeRequest::pending()->count() + Transfer::pending()->count());
 
-// Cheque requests and agents' returns, newest first: [who, what, when].
+// Cheque and payment requests and agents' returns, newest first: [who, what, when].
 $latest = computed(fn () => ChequeChangeRequest::pending()->with(['cheque', 'requester'])->latest()->limit(5)->get()
     ->map(fn ($r) => [$r->requester?->name, "asks to {$r->action} cheque #{$r->cheque?->cheque_number}", $r->created_at])
+    ->concat(PaymentChangeRequest::pending()->with(['payment', 'requester'])->latest()->limit(5)->get()
+        ->map(fn ($r) => [$r->requester?->name, "asks to {$r->action} a payment of ".money($r->payment?->amount ?? 0), $r->created_at]))
     ->concat(Transfer::pending()->with('fromAccount.agent')->latest()->limit(5)->get()
         ->map(fn ($t) => [$t->fromAccount?->holderName(), 'returned '.money($t->amount), $t->created_at]))
     ->sortByDesc(fn ($i) => $i[2])->take(5)->values());

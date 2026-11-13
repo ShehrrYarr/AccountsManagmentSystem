@@ -1,9 +1,10 @@
 <?php
 
 /**
- * Admin: agents' requests to edit or delete cheques they received, and money agents send back
- * (returns). Each pending cheque request shows the current and requested values; Approve
- * applies it, Reject keeps the cheque as it is. An approved return posts to the books.
+ * Admin: agents' requests to edit or delete cheques they received or department payments they
+ * made, and money agents send back (returns). Each pending request shows the current and
+ * requested values; Approve applies it, Reject keeps it as it is. An approved return posts to
+ * the books.
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
@@ -11,8 +12,10 @@ use App\Models\Account;
 use App\Models\ChequeChangeRequest;
 use App\Models\Company;
 use App\Models\Department;
+use App\Models\PaymentChangeRequest;
 use App\Models\Transfer;
 use App\Services\ChequeApprovalService;
+use App\Services\PaymentApprovalService;
 use App\Services\TransferService;
 use App\Support\Money;
 
@@ -39,6 +42,25 @@ $history = computed(fn () => ChequeChangeRequest::query()->where('status', '!=',
     ->with(['cheque', 'requester', 'decider'])
     ->latest('decided_at')->latest('id')->paginate(15, pageName: 'historyPage'));
 
+$pendingPayments = computed(fn () => PaymentChangeRequest::pending()
+    ->with(['payment.company', 'payment.department', 'payment.account', 'requester'])
+    ->oldest()->get());
+
+$decidedPayments = computed(fn () => PaymentChangeRequest::query()->where('status', '!=', PaymentChangeRequest::PENDING)
+    ->with(['payment.department', 'requester', 'decider'])
+    ->latest('decided_at')->latest('id')->limit(10)->get());
+
+// Names for the ids that payment requests mention.
+$paymentNames = computed(function () {
+    $ids = fn (string $f) => $this->pendingPayments->map(fn ($r) => [$r->changes[$f] ?? null, $r->payment?->{$f}])->flatten()->filter()->unique();
+
+    return [
+        'company_id' => Company::withTrashed()->whereIn('id', $ids('company_id'))->pluck('name', 'id'),
+        'department_id' => Department::whereIn('id', $ids('department_id'))->pluck('name', 'id'),
+        'account_id' => Account::withTrashed()->whereIn('id', $ids('account_id'))->get()->mapWithKeys(fn ($a) => [$a->id => $a->label()]),
+    ];
+});
+
 // Names for the ids that requests mention.
 $names = computed(function () {
     $ids = fn (string $f) => $this->pending->map(fn ($r) => [$r->changes[$f] ?? null, $r->cheque?->{$f}])->flatten()->filter()->unique();
@@ -51,8 +73,19 @@ $names = computed(function () {
 });
 
 on(['approval-updated' => function () {
-    unset($this->pending, $this->history, $this->pendingReturns, $this->decidedReturns);
+    unset($this->pending, $this->history, $this->pendingReturns, $this->decidedReturns, $this->pendingPayments, $this->decidedPayments);
 }]);
+
+$approvePayment = function (int $id) {
+    $request = PaymentChangeRequest::findOrFail($id);
+    $ok = $this->attempt(fn () => app(PaymentApprovalService::class)->approve($request, auth()->user()));
+    if ($ok !== false) {
+        $this->toast('success', 'Approved: the payment of '.money($request->payment?->amount ?? 0).($request->isDelete() ? ' was deleted.' : ' was updated.'));
+        unset($this->pendingPayments, $this->decidedPayments);
+        $this->broadcastChange();
+        $this->dispatch('approval-updated');
+    }
+};
 
 $approveReturn = function (int $id) {
     $transfer = Transfer::findOrFail($id);
@@ -77,7 +110,7 @@ $approve = function (int $id) {
 };
 
 $startReject = function (int $id, string $kind = 'cheque') {
-    $this->fill(['rejectingId' => $id, 'rejectingKind' => $kind === 'return' ? 'return' : 'cheque', 'rejectNote' => '']);
+    $this->fill(['rejectingId' => $id, 'rejectingKind' => in_array($kind, ['return', 'payment'], true) ? $kind : 'cheque', 'rejectNote' => '']);
     $this->showModal('rejectModal');
 };
 
@@ -91,6 +124,19 @@ $reject = function () {
             $this->hideModal('rejectModal');
             $this->fill(['rejectingId' => null, 'rejectNote' => '']);
             unset($this->pendingReturns, $this->decidedReturns);
+            $this->dispatch('approval-updated');
+        }
+
+        return;
+    }
+    if ($this->rejectingKind === 'payment') {
+        $request = PaymentChangeRequest::findOrFail($this->rejectingId);
+        $ok = $this->attempt(fn () => app(PaymentApprovalService::class)->reject($request, auth()->user(), trim($this->rejectNote) ?: null));
+        if ($ok !== false) {
+            $this->toast('success', 'Rejected: the payment stays as it was.');
+            $this->hideModal('rejectModal');
+            $this->fill(['rejectingId' => null, 'rejectNote' => '']);
+            unset($this->pendingPayments, $this->decidedPayments);
             $this->dispatch('approval-updated');
         }
 
@@ -110,6 +156,21 @@ $reject = function () {
 ?>
 
 @php
+    $showPayment = function (string $field, $value, $request = null) {
+        if ($value === null || $value === '') {
+            return $field === 'company_id' ? '<span class="text-muted">No company</span>' : '<span class="text-muted">—</span>';
+        }
+
+        return match ($field) {
+            'company_id', 'department_id', 'account_id' => e($this->paymentNames[$field][$value] ?? '#'.$value),
+            'amount' => e(money($value)),
+            'date' => e(\Illuminate\Support\Carbon::parse($value)->format('d M Y')),
+            'receipt_path' => $request
+                ? '<a href="'.e(route('files.show', ['payment-request', $request->id])).'" target="_blank"><i class="ri-image-line"></i> New receipt</a>'
+                : '<i class="ri-image-line"></i> Current receipt',
+            default => e($value),
+        };
+    };
     $show = function (string $field, $value, $request = null) {
         if ($value === null || $value === '') {
             return '<span class="text-muted">—</span>';
@@ -162,6 +223,60 @@ $reject = function () {
                                 <button type="button" class="btn btn-sm btn-light-danger" wire:click="startReject({{ $t->id }}, 'return')"><i class="ri-close-line me-1"></i>Reject</button>
                             </div>
                         </div>
+                    </div>
+                @endforeach
+            </div>
+        </div>
+    @endif
+
+    @if ($this->pendingPayments->isNotEmpty())
+        <div class="card border-warning-subtle">
+            <div class="card-header d-flex align-items-center gap-2">
+                <h5 class="card-title mb-0 me-auto">Department payment changes waiting for you <span class="badge bg-warning-subtle text-warning ms-1">{{ $this->pendingPayments->count() }}</span></h5>
+                <span class="fs-12 text-muted">Agents can't change saved payments until you approve</span>
+            </div>
+            <div class="card-body">
+                @foreach ($this->pendingPayments as $r)
+                    @php($p = $r->payment)
+                    <div class="border rounded p-3 mb-3 {{ $r->isDelete() ? 'border-danger-subtle' : 'border-warning-subtle' }}" wire:key="preq-{{ $r->id }}">
+                        <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
+                            <div class="me-auto">
+                                <span class="badge {{ $r->isDelete() ? 'bg-danger' : 'bg-warning text-dark' }} me-1">{{ $r->isDelete() ? 'Delete' : 'Edit' }}</span>
+                                <strong>Payment of {{ $p ? money($p->amount) : '' }}</strong>
+                                <span class="text-muted">· {{ $p?->department?->name }} · {{ $p?->company?->name ?? 'No company' }} · {{ $p?->date?->format('d M Y') }}</span>
+                                <div class="fs-12 text-muted mt-1">
+                                    <i class="ri-user-line"></i> {{ $r->requester?->name }} · {{ $r->created_at->format('d M Y, h:i A') }} ({{ $r->created_at->diffForHumans() }})
+                                </div>
+                                @if ($r->reason)
+                                    <div class="fs-13 mt-1"><i class="ri-chat-3-line text-muted"></i> “{{ $r->reason }}”</div>
+                                @endif
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-success" wire:loading.attr="disabled"
+                                    x-on:click="amsConfirm(@js($r->isDelete() ? 'Delete this payment of '.money($p?->amount ?? 0).'? It will be removed from the department ledger and the agent ledger.' : 'Apply these changes to the payment?'), 'Approve').then(ok => ok && $wire.approvePayment({{ $r->id }}))">
+                                    <i class="ri-check-line me-1"></i>Approve
+                                </button>
+                                <button type="button" class="btn btn-sm btn-light-danger" wire:click="startReject({{ $r->id }}, 'payment')"><i class="ri-close-line me-1"></i>Reject</button>
+                            </div>
+                        </div>
+
+                        @unless ($r->isDelete())
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0 fs-13">
+                                    <thead class="table-light"><tr><th style="width:30%">Field</th><th>Now</th><th>Requested</th></tr></thead>
+                                    <tbody>
+                                        @foreach (PaymentChangeRequest::FIELDS as $field => $label)
+                                            @continue(! array_key_exists($field, $r->changes ?? []))
+                                            <tr>
+                                                <td class="fw-medium">{{ $label }}</td>
+                                                <td class="text-muted text-decoration-line-through">{!! $showPayment($field, $field === 'receipt_path' ? ($p?->receipt_path ? 1 : null) : ($p ? ($field === 'date' ? $p->date?->toDateString() : $p->getRawOriginal($field)) : null)) !!}</td>
+                                                <td class="fw-semibold text-success">{!! $showPayment($field, $r->changes[$field], $field === 'receipt_path' ? $r : null) !!}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endunless
                     </div>
                 @endforeach
             </div>
@@ -253,6 +368,31 @@ $reject = function () {
         @endif
     </div>
 
+    @if ($this->decidedPayments->isNotEmpty())
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Decided payment changes <span class="fs-12 text-muted fw-normal">(latest 10)</span></h5></div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 fs-13">
+                    <thead class="table-light"><tr><th>Payment</th><th>Request</th><th>Agent</th><th>Decision</th><th>Note</th></tr></thead>
+                    <tbody>
+                        @foreach ($this->decidedPayments as $r)
+                            <tr wire:key="phist-{{ $r->id }}">
+                                <td class="fw-medium">{{ $r->payment ? money($r->payment->amount) : '—' }}<div class="fs-11 text-muted">{{ $r->payment?->department?->name }}</div></td>
+                                <td>{{ $r->isDelete() ? 'Delete' : 'Edit ('.collect(array_keys($r->changes ?? []))->map(fn ($f) => PaymentChangeRequest::FIELDS[$f] ?? $f)->join(', ').')' }}</td>
+                                <td>{{ $r->requester?->name }}<div class="fs-11 text-muted">{{ $r->created_at->format('d M Y') }}</div></td>
+                                <td>
+                                    <span class="badge {{ $r->status === PaymentChangeRequest::APPROVED ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger' }}">{{ ucfirst($r->status) }}</span>
+                                    <div class="fs-11 text-muted">{{ $r->decider?->name }} · {{ $r->decided_at?->format('d M Y') }}</div>
+                                </td>
+                                <td class="text-muted">{{ $r->decision_note ?: '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
     @if ($this->decidedReturns->isNotEmpty())
         <div class="card">
             <div class="card-header"><h5 class="card-title mb-0">Decided returns <span class="fs-12 text-muted fw-normal">(latest 10)</span></h5></div>
@@ -281,7 +421,7 @@ $reject = function () {
     <x-modal id="rejectModal" title="Reject request" icon="ri-close-circle-line" size="md">
         <form wire:submit="reject">
             <div class="modal-body">
-                <p class="mb-2">{{ $rejectingKind === 'return' ? 'The return is not recorded; what the agent owes stays the same.' : 'The cheque stays as it is.' }} The agent will see that the request was rejected.</p>
+                <p class="mb-2">{{ match ($rejectingKind) { 'return' => 'The return is not recorded; what the agent owes stays the same.', 'payment' => 'The payment stays as it is.', default => 'The cheque stays as it is.' } }} The agent will see that the request was rejected.</p>
                 <label class="form-label">Reason <span class="text-muted">(optional, shown to the agent)</span></label>
                 <textarea class="form-control @error('rejectNote') is-invalid @enderror" rows="2" wire:model="rejectNote" maxlength="500"></textarea>
                 @error('rejectNote') <div class="invalid-feedback">{{ $message }}</div> @enderror

@@ -32,12 +32,15 @@ class StatementController extends Controller
         abort_unless(StatementService::canView($request->user(), $kind, $id), 403);
 
         $validated = $request->validate([
-            'company' => ['nullable', 'integer', 'exists:companies,id'],
+            'company' => ['nullable', 'integer', 'min:0'], // 0: no company (the cash pot)
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date', 'after_or_equal:from'],
         ]);
 
-        return $this->statements->build($kind, $id, $validated['company'] ?? null, $validated['from'] ?? null, $validated['to'] ?? null)
-            + ['query' => array_filter($validated)];
+        $company = isset($validated['company']) ? (int) $validated['company'] : null;
+        abort_if($company && ! \App\Models\Company::withTrashed()->whereKey($company)->exists(), 404);
+
+        return $this->statements->build($kind, $id, $company, $validated['from'] ?? null, $validated['to'] ?? null)
+            + ['query' => array_filter($validated, fn ($v) => $v !== null && $v !== '')];
     }
 }

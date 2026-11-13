@@ -1,8 +1,8 @@
 <?php
 
 /**
- * My companies: where each one's money is (its banks, and its net share of the admin's cash in
- * hand), cheques this month and what is owed, plus a create / edit modal.
+ * My companies: where each one's money is (its banks; what it has moved into the admin's cash in
+ * hand, which belongs to no company), cheques this month and what is owed, plus a create / edit modal.
  */
 
 use App\Enums\AccountType;
@@ -43,11 +43,7 @@ $rows = computed(function () {
     $companies = Company::query()->when(! $this->showInactive, fn ($q) => $q->where('is_active', true))->orderBy('name')->get();
 
     $banks = Account::query()->banks()->whereNotNull('company_id')->selectRaw('company_id, SUM(current_balance) as total')->groupBy('company_id')->pluck('total', 'company_id');
-    $cash = \App\Models\JournalLedgerEntry::posted()
-        ->where('journal_ledger_entries.ledger_account', \App\Enums\LedgerAccount::Money->value)
-        ->whereIn('journal_ledger_entries.account_id', Account::withTrashed()->adminCashOnly()->pluck('id'))
-        ->groupBy('journal_ledger_entries.company_id')
-        ->selectRaw('journal_ledger_entries.company_id as cid, SUM(debit) - SUM(credit) as total')->pluck('total', 'cid');
+    $cash = Balances::movedToCash();
     $cheques = Cheque::whereBetween('date', [now()->startOfMonth()->toDateString(), now()->toDateString()])->selectRaw('company_id, SUM(amount) as total, COUNT(*) as n')->groupBy('company_id')->get()->keyBy('company_id');
     $depts = Balances::departments()->groupBy('company_id');
     $suppliers = Balances::suppliers()->groupBy('company_id');
@@ -128,7 +124,7 @@ $delete = function (int $id) {
                     <thead class="table-light">
                         <tr>
                             <th>Company</th>
-                            <th class="money d-none d-md-table-cell" title="This company's net share of the admin cash in hand">Admin cash (net)</th>
+                            <th class="money d-none d-md-table-cell" title="Moved from this company's banks into the admin cash in hand, less cash deposited back">Moved to cash</th>
                             <th class="money d-none d-md-table-cell">Bank</th>
                             <th class="money d-none d-lg-table-cell">Cheques this month</th>
                             <th class="money d-none d-lg-table-cell" title="Departments that owe this company (spent more than cheques received)">Depts owe</th>
@@ -145,7 +141,7 @@ $delete = function (int $id) {
                                     @unless ($r->company->is_active)<span class="badge bg-secondary-subtle text-secondary ms-1">Inactive</span>@endunless
                                     @if ($r->company->ntn)<div class="fs-12 text-muted">NTN {{ $r->company->ntn }}</div>@endif
                                     <div class="d-md-none fs-12 mt-1">
-                                        Cash <strong>{{ money($r->cash) }}</strong> · Bank <strong>{{ money($r->bank) }}</strong>
+                                        Bank <strong>{{ money($r->bank) }}</strong> · Moved to cash <strong>{{ money($r->cash) }}</strong>
                                         @if ($r->chequesCount)<br>Cheques this month {{ money($r->chequesAmount) }}@endif
                                     </div>
                                 </td>

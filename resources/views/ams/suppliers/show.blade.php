@@ -19,7 +19,7 @@
     <div class="row g-3 mb-3">
         @forelse ($owedRows as $row)
             <div class="col-sm-6 col-xl-3">
-                <x-stat-card :label="'Owed by '.($companyNames[$row->company_id] ?? '?')" :value="money($row->owed)" icon="ri-building-2-line" color="warning" :hint="'Bought '.money($row->purchased).' · paid '.money($row->paid)" />
+                <x-stat-card :label="$row->company_id ? 'Owed by '.($companyNames[$row->company_id] ?? '?') : 'Paid in cash (no company)'" :value="money($row->owed)" icon="ri-building-2-line" color="warning" :hint="'Bought '.money($row->purchased).' · paid '.money($row->paid)" />
             </div>
         @empty
             <div class="col-12"><div class="alert alert-light border mb-0">No purchases from {{ $supplier->name }} yet.</div></div>

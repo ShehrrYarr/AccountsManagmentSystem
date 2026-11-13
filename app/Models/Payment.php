@@ -8,17 +8,25 @@ use App\Enums\TransactionType;
 use App\Models\Concerns\Auditable;
 use App\Models\Concerns\HasTransactions;
 use App\Models\Contracts\PostsToLedger;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 /**
  * Money spent for a department: cash handed over, a bank transfer, or goods bought from a supplier.
  *
- *   Cash / transfer   : Dr Department / Cr Cash or Bank
- *   Goods, paid now   : Dr Department / Cr Supplier,  Dr Supplier / Cr Cash or Bank   (supplier ledger shows both)
+ *   Cash              : Dr Department / Cr Admin cash          — no company (the cash is one pot)
+ *   Bank transfer     : Dr Department / Cr Company bank        — that bank's company
+ *   By an agent       : Dr Department / Cr Agent(agent's bank) — the company the agent chose; the
+ *                       agent owes it less (below zero: the company owes the agent)
+ *   Goods, paid now   : Dr Department / Cr Supplier,  Dr Supplier / Cr Company bank   (supplier ledger shows both)
  *   Goods, on credit  : Dr Department / Cr Supplier
+ *
+ * item_description is the payment's description (for goods: what was bought).
  */
 class Payment extends Model implements PostsToLedger
 {
@@ -64,6 +72,35 @@ class Payment extends Model implements PostsToLedger
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function changeRequests(): HasMany
+    {
+        return $this->hasMany(PaymentChangeRequest::class);
+    }
+
+    /** The agent's request waiting for the admin, if any. */
+    public function pendingRequest(): HasOne
+    {
+        return $this->hasOne(PaymentChangeRequest::class)->where('status', PaymentChangeRequest::PENDING)->latestOfMany();
+    }
+
+    /** The most recent request (to show the agent its outcome). */
+    public function latestRequest(): HasOne
+    {
+        return $this->hasOne(PaymentChangeRequest::class)->latestOfMany();
+    }
+
+    /** Payments a user may see: the admin sees all, an agent only their own. */
+    public function scopeVisibleTo(Builder $q, ?User $user): Builder
+    {
+        return $user?->isAdmin() ? $q : $q->where('created_by', $user?->id ?? 0);
+    }
+
+    /** Paid by an agent from their own account. */
+    public function isByAgent(): bool
+    {
+        return (bool) $this->account?->isAgentAccount();
+    }
+
     /** One line a person can read in any ledger, e.g. "Bank transfer to Health Dept from HBL — ref IBFT-55". */
     public function describe(): string
     {
@@ -72,7 +109,9 @@ class Payment extends Model implements PostsToLedger
 
         return match ($this->method) {
             PaymentMethod::Cash => "Cash given to {$dept}".($this->received_by ? " (received by {$this->received_by})" : '').$ref,
-            PaymentMethod::BankTransfer => "Bank transfer to {$dept} from {$this->account?->shortLabel()}{$ref}",
+            PaymentMethod::BankTransfer => $this->isByAgent()
+                ? "Bank transfer to {$dept} by {$this->account->holderName()} from {$this->account->shortLabel()}{$ref}"
+                : "Bank transfer to {$dept} from {$this->account?->shortLabel()}{$ref}",
             PaymentMethod::Goods => "Goods for {$dept} from {$this->supplier?->name}"
                 .($this->item_description ? ': '.Str::limit($this->item_description, 80) : '')
                 .($this->on_credit ? ' (on credit)' : " (paid from {$this->account?->shortLabel()})").$ref,
@@ -82,7 +121,7 @@ class Payment extends Model implements PostsToLedger
     public function ledgerPostings(): array
     {
         $dept = ['account' => LedgerAccount::Department, 'debit' => $this->amount, 'company_id' => $this->company_id, 'department_id' => $this->department_id];
-        $money = ['account' => LedgerAccount::Money, 'credit' => $this->amount, 'company_id' => $this->company_id, 'account_id' => $this->account_id];
+        $money = ['account' => $this->isByAgent() ? LedgerAccount::Agent : LedgerAccount::Money, 'credit' => $this->amount, 'company_id' => $this->company_id, 'account_id' => $this->account_id];
 
         if ($this->method === PaymentMethod::Goods) {
             $lines = [$dept, ['account' => LedgerAccount::Supplier, 'credit' => $this->amount, 'company_id' => $this->company_id, 'supplier_id' => $this->supplier_id]];

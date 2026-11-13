@@ -91,7 +91,7 @@ class AgentAdvancesTest extends TestCase
         // Admin cash advance for the other company.
         $this->advance('20000', $this->cash, $this->agentCash, $this->other->id);
         $this->assertSame('50000.00', Balances::agentOwed($this->agent->id));
-        $this->assertSame('30000.00', Balances::money($this->other->id)['cash']);
+        $this->assertSame('-20000.00', Balances::money($this->other->id)['moved'], 'taken from the cash pot for the other company');
 
         // On every statement involved.
         $statements = app(StatementService::class);
@@ -121,7 +121,7 @@ class AgentAdvancesTest extends TestCase
         $this->assertSame('Return from agent', $r->kind());
         $this->assertSame(TransactionType::AgentReturn, Transaction::posted()->latest('id')->first()->type);
         $this->assertSame('20000.00', Balances::agentOwed($this->agent->id));
-        $this->assertSame('10000.00', Balances::adminCashFor($this->company->id));
+        $this->assertSame('10000.00', Balances::money($this->company->id)['moved'], 'returned into the cash pot for the company');
         $this->assertMoney('20000.00', $this->agentBank);
 
         // Can't return the other company's money it was never given...

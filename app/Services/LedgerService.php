@@ -12,7 +12,6 @@ use App\Models\Contracts\PostsToLedger;
 use App\Models\JournalLedgerEntry;
 use App\Models\Supplier;
 use App\Models\Transaction;
-use App\Models\User;
 use App\Support\Money;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -21,15 +20,16 @@ use Illuminate\Support\Facades\DB;
 /**
  * The only place that writes to the journal and touches cached balances.
  *
- * Every posting is a balanced set of debit/credit lines, and the lines of each company
- * balance on their own. The cached balance of each cash / bank account is updated in the
- * same database transaction.
+ * Every posting is a balanced set of debit/credit lines, and the lines of each company balance
+ * on their own (lines with no company — the admin's cash pot — form a group of their own too).
+ * The cached balance of each cash / bank account is updated in the same database transaction.
  *
  * Invariants (checked when the outermost batch finishes, so an edit may void and re-post
  * without tripping over intermediate states):
- *   - no cash / bank account may go below zero
- *   - no company may owe a supplier less than zero (no paying more than is owed)
- *   - no agent may owe a company less than zero (no returning more than was advanced)
+ *   - no company bank and no admin cash may go below zero (an agent's account may: the agent
+ *     spent their own money for the company, so the company owes them)
+ *   - no company may owe a supplier less than zero, and no supplier may be owed less than zero
+ *     in total (cash payments belong to no company)
  */
 class LedgerService
 {
@@ -38,11 +38,8 @@ class LedgerService
     /** @var array<int, string> account id => balance before the batch */
     private array $touchedAccounts = [];
 
-    /** @var array<string, array{company: int, supplier: int}> */
+    /** @var array<string, array{company: ?int, supplier: int}> */
     private array $touchedSuppliers = [];
-
-    /** @var array<string, array{company: int, agent: int}> */
-    private array $touchedAgents = [];
 
     /**
      * Run several postings / voids atomically; invariants are verified once at the end.
@@ -65,7 +62,6 @@ class LedgerService
                 if ($this->depth === 0) {
                     $this->touchedAccounts = [];
                     $this->touchedSuppliers = [];
-                    $this->touchedAgents = [];
                 }
             }
         });
@@ -236,17 +232,13 @@ class LedgerService
             /** @var LedgerAccount $account */
             $account = $line['account'];
 
-            if (empty($line['company_id'])) {
-                throw new \LogicException("{$account->label()} lines require company_id.");
-            }
-
             if (($column = $account->partyColumn()) && empty($line[$column])) {
                 throw new \LogicException("{$account->label()} lines require {$column}.");
             }
 
             $out[] = [
                 'account' => $account,
-                'company_id' => (int) $line['company_id'],
+                'company_id' => empty($line['company_id']) ? null : (int) $line['company_id'], // null: the cash pot
                 'account_id' => $line['account_id'] ?? null,
                 'department_id' => $line['department_id'] ?? null,
                 'supplier_id' => $line['supplier_id'] ?? null,
@@ -271,11 +263,12 @@ class LedgerService
             throw new \LogicException("Unbalanced journal: debits {$debits} vs credits {$credits}.");
         }
 
-        foreach (collect($lines)->groupBy('company_id') as $companyId => $companyLines) {
+        foreach (collect($lines)->groupBy(fn ($l) => (string) $l['company_id']) as $companyId => $companyLines) {
             $d = Money::add(...$companyLines->pluck('debit')->all());
             $c = Money::add(...$companyLines->pluck('credit')->all());
             if (Money::cmp($d, $c) !== 0) {
-                throw new \LogicException("Unbalanced journal for company {$companyId}: debits {$d} vs credits {$c}.");
+                $who = $companyId === '' ? 'the cash pot (no company)' : "company {$companyId}";
+                throw new \LogicException("Unbalanced journal for {$who}: debits {$d} vs credits {$c}.");
             }
         }
 
@@ -291,11 +284,6 @@ class LedgerService
             // Agent lines are the agent account's money too: what it holds is what the agent owes.
             if ($l['account'] === LedgerAccount::Money || $l['account'] === LedgerAccount::Agent) {
                 $deltas[$l['account_id']] = Money::add($deltas[$l['account_id']] ?? 0, Money::sub($l['debit'], $l['credit']));
-            }
-
-            if ($l['account'] === LedgerAccount::Agent) {
-                $agentId = (int) Account::withTrashed()->whereKey($l['account_id'])->value('agent_id');
-                $this->touchedAgents[$l['company_id'].'-'.$agentId] = ['company' => $l['company_id'], 'agent' => $agentId];
             }
 
             if ($l['account'] === LedgerAccount::Supplier) {
@@ -322,8 +310,8 @@ class LedgerService
     private function assertInvariants(): void
     {
         foreach ($this->touchedAccounts as $id => $before) {
-            $account = Account::withTrashed()->with('company')->find($id);
-            if (Money::isNegative($account->current_balance)) {
+            $account = Account::withTrashed()->with(['company', 'agent'])->find($id);
+            if (Money::isNegative($account->current_balance) && ! $account->isAgentAccount()) {
                 throw new BusinessRuleException(
                     "Not enough money in {$account->label()}. Available: ".money($before).
                     ', short by '.money(Money::sub(0, $account->current_balance)).'.',
@@ -333,24 +321,20 @@ class LedgerService
         }
 
         foreach ($this->touchedSuppliers as $pair) {
-            $owed = Balances::supplierOwed($pair['supplier'], $pair['company']);
-            if (Money::isNegative($owed)) {
-                $supplier = Supplier::find($pair['supplier']);
+            $supplier = Supplier::find($pair['supplier']);
+
+            // A company's own payments can't exceed what it owes; cash (no company) can't exceed the total owed.
+            if ($pair['company'] && Money::isNegative($owed = Balances::supplierOwed($pair['supplier'], $pair['company']))) {
                 $company = Company::withTrashed()->find($pair['company']);
                 throw new BusinessRuleException(
                     "This is more than {$company->name} owes {$supplier->name}. Overpaid by ".money(Money::sub(0, $owed)).'.',
                     'amount'
                 );
             }
-        }
 
-        foreach ($this->touchedAgents as $pair) {
-            $owed = Balances::agentOwed($pair['agent'], $pair['company']);
-            if (Money::isNegative($owed)) {
-                $agent = User::find($pair['agent']);
-                $company = Company::withTrashed()->find($pair['company']);
+            if (Money::isNegative($owed = Balances::supplierOwed($pair['supplier']))) {
                 throw new BusinessRuleException(
-                    "This is more than {$agent?->name} owes {$company->name}. Over by ".money(Money::sub(0, $owed)).'.',
+                    "This is more than is owed to {$supplier->name}. Overpaid by ".money(Money::sub(0, $owed)).'.',
                     'amount'
                 );
             }

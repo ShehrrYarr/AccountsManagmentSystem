@@ -1,12 +1,14 @@
 <?php
 
 /**
- * General company expenses (rent, fuel, salaries…). List + modal; embeddable on a company page.
+ * General expenses (rent, fuel, salaries…). List + modal; embeddable on a company page.
+ * The company follows from where it was paid: a company bank, or no company for the cash in hand.
  *
  * Open the form with: $dispatch('expense-create', { companyId: 1 })  (optional)
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
+use App\Models\Account;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Services\PaymentService;
@@ -28,7 +30,6 @@ state([
 ]);
 
 rules(fn () => [
-    'company_id' => ['required', 'exists:companies,id'],
     'expense_category_id' => ['required', 'exists:expense_categories,id'],
     'account_id' => ['required', 'exists:accounts,id'],
     'amount' => ['required', 'numeric', 'gt:0'],
@@ -42,9 +43,6 @@ rules(fn () => [
 $updated = function ($property) {
     if (in_array($property, ['search', 'filterCategory', 'from', 'to'], true)) {
         $this->resetPage('expPage');
-    }
-    if ($property === 'company_id') {
-        $this->account_id = null;
     }
 };
 
@@ -63,7 +61,8 @@ $total = computed(fn () => Money::of((clone $this->baseQuery)->sum('amount')));
 
 $companyOptions = computed(fn () => Options::companies($this->company_id));
 $categoryOptions = computed(fn () => Options::expenseCategories($this->expense_category_id));
-$accountOptions = computed(fn () => $this->company_id ? Options::accounts((int) $this->company_id, null, $this->account_id) : []);
+$accountOptions = computed(fn () => Options::accounts($this->companyId, null, $this->account_id));
+$paidFrom = computed(fn () => $this->account_id ? Account::with('company')->find($this->account_id) : null);
 
 on(['transaction-updated' => function () {
     unset($this->baseQuery, $this->rows, $this->total, $this->accountOptions);
@@ -145,7 +144,7 @@ $delete = function (int $id) {
                                 <td class="ams-desc-cell">
                                     <span class="badge bg-danger-subtle text-danger">{{ $e->category->name }}</span>
                                     <div class="fs-13 text-truncate ams-wrap-sm">{{ $e->description }}</div>
-                                    <div class="fs-12 text-muted">@unless ($companyId){{ $e->company->name }}@endunless{{ $e->reference ? ' · Ref '.$e->reference : '' }}</div>
+                                    <div class="fs-12 text-muted">@unless ($companyId){{ $e->company?->name ?? 'No company (cash)' }}@endunless{{ $e->reference ? ' · Ref '.$e->reference : '' }}</div>
                                 </td>
                                 <td class="fs-13 d-none d-md-table-cell">{{ $e->account->shortLabel() }}</td>
                                 <td class="money fw-semibold">{{ money($e->amount) }}</td>
@@ -173,9 +172,12 @@ $delete = function (int $id) {
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label">Company <span class="text-danger">*</span></label>
-                        <x-searchable-select wire:model.live="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
-                        @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        <label class="form-label">Paid from <span class="text-danger">*</span></label>
+                        <x-searchable-select wire:model.live="account_id" :options="$this->accountOptions" placeholder="Cash in hand or a company bank" :invalid="$errors->has('account_id')" />
+                        @error('account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        @if ($this->paidFrom)
+                            <div class="form-text">{!! $this->paidFrom->isAdminCash() ? '<i class="ri-wallet-3-line"></i> Cash in hand belongs to no company: this is not counted for any company.' : '<i class="ri-building-2-line"></i> Counts for <strong>'.e($this->paidFrom->company?->name).'</strong>.' !!}</div>
+                        @endif
                     </div>
                     <div class="col-12">
                         <label class="form-label d-flex justify-content-between">
@@ -197,11 +199,6 @@ $delete = function (int $id) {
                         <label class="form-label">Description <span class="text-danger">*</span></label>
                         <input type="text" class="form-control @error('description') is-invalid @enderror" wire:model="description" placeholder="e.g. Generator diesel for October">
                         @error('description') <div class="invalid-feedback">{{ $message }}</div> @enderror
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Paid from <span class="text-danger">*</span></label>
-                        <x-searchable-select wire:model="account_id" :options="$this->accountOptions" :placeholder="$company_id ? 'Select cash or bank' : 'Select a company first'" :disabled="! $company_id" :invalid="$errors->has('account_id')" />
-                        @error('account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-sm-6">
                         <label class="form-label">Amount (Rs.) <span class="text-danger">*</span></label>

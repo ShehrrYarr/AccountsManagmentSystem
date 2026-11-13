@@ -2,12 +2,16 @@
 
 /**
  * Money spent for departments: cash, bank transfers and goods. Embeddable on company,
- * department and supplier pages through the locked ids.
+ * department and supplier pages through the locked ids. An agent sees only their own payments,
+ * and their edits / deletes go to the admin for approval.
  */
 
 use App\Enums\PaymentMethod;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Models\Payment;
+use App\Models\PaymentChangeRequest;
+use App\Services\Balances;
+use App\Services\PaymentApprovalService;
 use App\Services\PaymentService;
 use App\Support\Money;
 use App\Support\Options;
@@ -35,8 +39,12 @@ $updated = function ($property) {
     }
 };
 
-$baseQuery = computed(fn () => Payment::query()
-    ->when($this->companyId ?? $this->filterCompany, fn ($q, $id) => $q->where('company_id', $id))
+$isAdmin = computed(fn () => (bool) auth()->user()?->isAdmin());
+
+$baseQuery = computed(fn () => Payment::query()->visibleTo(auth()->user())
+    ->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
+    ->when(! $this->companyId && filled($this->filterCompany), fn ($q) => (int) $this->filterCompany === Balances::NONE
+        ? $q->whereNull('company_id') : $q->where('company_id', (int) $this->filterCompany))
     ->when($this->departmentId ?? $this->filterDepartment, fn ($q, $id) => $q->where('department_id', $id))
     ->when($this->supplierId, fn ($q, $id) => $q->where('supplier_id', $id))
     ->when($this->method, fn ($q) => $q->where('method', $this->method))
@@ -53,14 +61,14 @@ $baseQuery = computed(fn () => Payment::query()
     }));
 
 $payments = computed(fn () => (clone $this->baseQuery)
-    ->with(['company', 'department', 'account', 'supplier'])
+    ->with(['company', 'department', 'account.agent', 'supplier', 'pendingRequest', 'latestRequest'])
     ->orderByDesc('date')->orderByDesc('id')
     ->paginate($this->perPage, pageName: 'paymentsPage'));
 
 $totals = computed(fn () => (clone $this->baseQuery)
     ->selectRaw('method, SUM(amount) as total, COUNT(*) as n')->groupBy('method')->get()->keyBy(fn ($r) => $r->method->value));
 
-$companyOptions = computed(fn () => Options::companies());
+$companyOptions = computed(fn () => [['value' => Balances::NONE, 'label' => 'No company (cash)'], ...Options::companies()]);
 $departmentOptions = computed(fn () => Options::departments());
 
 on(['transaction-updated' => function () {
@@ -68,12 +76,37 @@ on(['transaction-updated' => function () {
 }]);
 
 $delete = function (int $id) {
+    abort_unless($this->isAdmin, 403);
     $payment = Payment::findOrFail($id);
     if ($this->attempt(fn () => app(PaymentService::class)->delete($payment)) !== false) {
         $this->toast('success', 'Payment deleted and its ledger entries voided.');
         $this->broadcastChange();
     }
 };
+
+// Agent: ask the admin to delete one of their payments.
+$requestDelete = function (int $id) {
+    $payment = Payment::visibleTo(auth()->user())->findOrFail($id);
+    if ($this->attempt(fn () => app(PaymentApprovalService::class)->requestDelete($payment, auth()->user())) !== false) {
+        $this->toast('success', 'Delete of the payment sent to the admin for approval.');
+        unset($this->payments);
+        $this->dispatch('approval-updated');
+    }
+};
+
+// Agent: withdraw their pending request.
+$withdrawRequest = function (int $requestId) {
+    $request = PaymentChangeRequest::findOrFail($requestId);
+    if ($this->attempt(fn () => app(PaymentApprovalService::class)->cancel($request, auth()->user())) !== false) {
+        $this->toast('success', 'Request withdrawn.');
+        unset($this->payments);
+        $this->dispatch('approval-updated');
+    }
+};
+
+on(['approval-updated' => function () {
+    unset($this->payments);
+}]);
 
 $clearFilters = function () {
     $this->fill(['search' => '', 'method' => '', 'filterCompany' => null, 'filterDepartment' => null, 'from' => '', 'to' => '']);
@@ -86,12 +119,14 @@ $clearFilters = function () {
         <div class="flex-grow-1" style="min-width:200px">
             <input type="search" class="form-control form-control-sm" placeholder="Search reference, items, department…" aria-label="Search payments" wire:model.live.debounce.350ms="search">
         </div>
+        @if ($this->isAdmin)
         <select class="form-select form-select-sm w-auto" wire:model.live="method" aria-label="Method">
             <option value="">All methods</option>
             @foreach (PaymentMethod::cases() as $m)
                 <option value="{{ $m->value }}">{{ $m->label() }}</option>
             @endforeach
         </select>
+        @endif
         @unless ($companyId)
             <div style="min-width:180px"><x-searchable-select wire:model.live="filterCompany" :options="$this->companyOptions" placeholder="All companies" size="sm" /></div>
         @endunless
@@ -104,7 +139,7 @@ $clearFilters = function () {
     </div>
 
     <div class="px-4 py-2 border-bottom d-flex flex-wrap gap-4 fs-13 bg-body-tertiary">
-        @foreach (PaymentMethod::cases() as $m)
+        @foreach ($this->isAdmin ? PaymentMethod::cases() : [PaymentMethod::BankTransfer] as $m)
             @php($t = $this->totals[$m->value] ?? null)
             <span><span class="text-muted">{{ $m->label() }}:</span> <strong>{{ money($t->total ?? 0) }}</strong> <span class="text-muted">({{ $t->n ?? 0 }})</span></span>
         @endforeach
@@ -131,7 +166,7 @@ $clearFilters = function () {
                                 @unless ($departmentId)
                                     <a href="{{ route('departments.show', $p->department_id) }}" class="fw-medium text-body">{{ $p->department->name }}</a>
                                 @endunless
-                                @unless ($companyId)<div class="fs-12 text-muted">{{ $p->company->name }}</div>@endunless
+                                @unless ($companyId)<div class="fs-12 text-muted">{{ $p->company?->name ?? 'No company (cash)' }}</div>@endunless
                                 @if ($p->item_description)<div class="text-truncate ams-wrap-sm" title="{{ $p->item_description }}">{{ $p->item_description }}</div>@endif
                                 <div class="fs-12 text-muted">{{ collect([$p->reference ? 'Ref '.$p->reference : null, $p->received_by ? 'received by '.$p->received_by : null])->filter()->implode(' · ') }}</div>
                                 <div class="d-md-none mt-1">
@@ -142,6 +177,7 @@ $clearFilters = function () {
                             </td>
                             <td class="d-none d-md-table-cell">
                                 <span class="badge {{ $p->method->badge() }}"><i class="{{ $p->method->icon() }} me-1"></i>{{ $p->method->label() }}</span>
+                                @if ($this->isAdmin && $p->isByAgent())<div><span class="badge bg-info-subtle text-info mt-1" title="Paid by the agent from their own bank">by {{ $p->account->agent?->name }}</span></div>@endif
                                 @if ($p->on_credit)<div><span class="badge bg-warning-subtle text-warning mt-1">On credit</span></div>@endif
                             </td>
                             <td class="fs-13 d-none d-lg-table-cell">
@@ -150,12 +186,32 @@ $clearFilters = function () {
                             </td>
                             <td class="money fw-semibold d-none d-md-table-cell">{{ money($p->amount) }}</td>
                             <td class="text-end text-nowrap">
+                                @php($pending = $p->pendingRequest)
+                                @php($latest = $p->latestRequest)
+                                @if ($pending)
+                                    @if ($this->isAdmin)
+                                        <a href="{{ route('approvals.index') }}" class="badge bg-warning-subtle text-warning me-1" title="The agent asked to {{ $pending->action }} this payment">{{ ucfirst($pending->action) }} pending</a>
+                                    @else
+                                        <span class="badge bg-warning-subtle text-warning me-1" title="Waiting for the admin">{{ ucfirst($pending->action) }} pending</span>
+                                    @endif
+                                @elseif (! $this->isAdmin && $latest?->status === PaymentChangeRequest::REJECTED)
+                                    <span class="badge bg-danger-subtle text-danger me-1" title="{{ $latest->decision_note ?: 'No reason given' }}">{{ ucfirst($latest->action) }} rejected</span>
+                                @endif
                                 @if ($p->receipt_path)
                                     <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('files.show', ['payment', $p->id]) }}" target="_blank" title="Receipt"><i class="ri-attachment-2"></i></a>
                                 @endif
-                                <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('payment-edit', { id: {{ $p->id }} })"><i class="ri-edit-line"></i></button>
-                                <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
-                                    x-on:click="amsConfirm(@js('Delete this '.strtolower($p->method->label()).' of '.money($p->amount).'?'), 'Delete').then(ok => ok && $wire.delete({{ $p->id }}))"><i class="ri-delete-bin-line"></i></button>
+                                @if ($this->isAdmin)
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('payment-edit', { id: {{ $p->id }} })"><i class="ri-edit-line"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"
+                                        x-on:click="amsConfirm(@js('Delete this '.strtolower($p->method->label()).' of '.money($p->amount).'?'), 'Delete').then(ok => ok && $wire.delete({{ $p->id }}))"><i class="ri-delete-bin-line"></i></button>
+                                @elseif ($pending)
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Withdraw my request"
+                                        x-on:click="amsConfirm('Withdraw your request for this payment?', 'Withdraw').then(ok => ok && $wire.withdrawRequest({{ $pending->id }}))"><i class="ri-arrow-go-back-line"></i></button>
+                                @else
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Ask the admin to edit" wire:click="$dispatch('payment-edit', { id: {{ $p->id }} })"><i class="ri-edit-line"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Ask the admin to delete"
+                                        x-on:click="amsConfirm(@js('Ask the admin to delete this payment of '.money($p->amount).'? It stays until the admin approves.'), 'Send request').then(ok => ok && $wire.requestDelete({{ $p->id }}))"><i class="ri-delete-bin-line"></i></button>
+                                @endif
                             </td>
                         </tr>
                     @empty

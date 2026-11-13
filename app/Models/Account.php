@@ -19,12 +19,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * A money account. Who holds it:
  *
  *   company_id set           a company's bank account (companies have no cash of their own)
- *   neither set, type cash   the ADMIN's single cash in hand, shared by every company: each journal
- *                            line on it still names the company it was for (Account::adminCash())
- *   agent_id set             an agent's cash in hand or bank account (stored, not used yet)
+ *   neither set, type cash   the ADMIN's single cash in hand (Account::adminCash()): one pot that
+ *                            belongs to no company — its journal lines have no company
+ *   agent_id set             an agent's cash in hand or bank account
  *
- * The only ledger posting an account owns is a company bank's opening balance. Cash openings
- * are OpeningBalance rows (per company) on the admin's cash.
+ * The only ledger posting an account owns is a company bank's opening balance. The cash opening
+ * is an OpeningBalance row (no company) on the admin's cash.
  */
 class Account extends Model implements PostsToLedger
 {

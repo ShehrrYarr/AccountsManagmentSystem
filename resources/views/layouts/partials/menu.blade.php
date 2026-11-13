@@ -11,7 +11,7 @@
             .'</a></li>';
     };
     $isAdmin = auth()->user()?->isAdmin();
-    $pending = $isAdmin ? \App\Models\ChequeChangeRequest::pending()->count() + \App\Models\Transfer::pending()->count() : 0;
+    $pending = $isAdmin ? \App\Models\ChequeChangeRequest::pending()->count() + \App\Models\PaymentChangeRequest::pending()->count() + \App\Models\Transfer::pending()->count() : 0;
 @endphp
 <ul class="main-menu" id="all-menu-items" role="menu">
     @if ($isAdmin)
@@ -25,6 +25,10 @@
     {!! $item('cheques.create', 'ri-add-circle-line', 'Deposit Cheque') !!}
 
     @unless ($isAdmin)
+        <li class="menu-title" role="presentation">Money Out</li>
+        {!! $item('payments.create', 'ri-add-circle-line', 'Pay Department') !!}
+        {!! $item('payments.index', 'ri-hand-coin-line', 'My Department Payments') !!}
+
         <li class="menu-title" role="presentation">My Money</li>
         {!! $item('my-accounts', 'ri-wallet-3-line', 'My Accounts', 'my-accounts*') !!}
         {!! $item('my-ledger', 'ri-book-open-line', 'My Ledger') !!}
@@ -32,7 +36,8 @@
 
     @if ($isAdmin)
         <li class="menu-title" role="presentation">Money Out</li>
-        {!! $item('payments.index', 'ri-hand-coin-line', 'Department Payments', 'payments.*') !!}
+        {!! $item('payments.create', 'ri-add-circle-line', 'Pay Department') !!}
+        {!! $item('payments.index', 'ri-hand-coin-line', 'Department Payments') !!}
         {!! $item('supplier-payments.index', 'ri-store-2-line', 'Supplier Payments', 'supplier-payments.*') !!}
         {!! $item('expenses.index', 'ri-receipt-line', 'Expenses', 'expenses.*') !!}
         {!! $item('transfers.index', 'ri-arrow-left-right-line', 'Transfers', 'transfers.*') !!}

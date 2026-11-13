@@ -1,8 +1,8 @@
 <?php
 
 /**
- * Opening balances carried over from before the system: cash / bank (on the account itself)
- * and department / supplier balances per company.
+ * Opening balances carried over from before the system: banks (on the account itself), the
+ * admin's cash in hand (no company), and department / supplier / agent balances per company.
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
@@ -21,7 +21,7 @@ state(['filterCompany' => null]);
 state(['company_id' => null, 'party' => 'department', 'department_id' => null, 'supplier_id' => null, 'agent_account_id' => null, 'direction' => 'owes', 'amount' => '', 'date' => '', 'notes' => '']);
 
 rules(fn () => [
-    'company_id' => ['required', 'exists:companies,id'],
+    'company_id' => [$this->party === 'cash' ? 'nullable' : 'required', 'exists:companies,id'],
     'department_id' => [$this->party === 'department' ? 'required' : 'nullable', 'exists:departments,id'],
     'supplier_id' => [$this->party === 'supplier' ? 'required' : 'nullable', 'exists:suppliers,id'],
     'agent_account_id' => [$this->party === 'agent' ? 'required' : 'nullable', 'exists:accounts,id'],
@@ -73,6 +73,7 @@ $save = function () {
     $data['amount'] = $this->party === 'department' && $this->direction === 'held' ? Money::sub(0, $amount) : $amount;
     $data['department_id'] = $this->party === 'department' ? $data['department_id'] : null;
     $data['supplier_id'] = $this->party === 'supplier' ? $data['supplier_id'] : null;
+    $data['company_id'] = $this->party === 'cash' ? null : $data['company_id'];
     $data['account_id'] = match ($this->party) {
         'cash' => Account::adminCash()->id,
         'agent' => $data['agent_account_id'],
@@ -149,14 +150,14 @@ $delete = function (int $id) {
                                         })
                                         <span class="badge {{ $badge }}">{{ $kind }}</span>
                                         <span class="fw-medium">{{ $o->partyName() }}</span>
-                                        <div class="fs-12 text-muted d-md-none">{{ $o->company->name }}</div>
+                                        <div class="fs-12 text-muted d-md-none">{{ $o->company?->name ?? 'No company' }}</div>
                                         @if ($o->notes)<div class="fs-12 text-muted">{{ $o->notes }}</div>@endif
                                     </td>
-                                    <td class="fs-13 d-none d-md-table-cell">{{ $o->company->name }}</td>
+                                    <td class="fs-13 d-none d-md-table-cell">{{ $o->company?->name ?? '—' }}</td>
                                     <td class="money">
                                         {{ money(Money::isNegative($o->amount) ? Money::sub(0, $o->amount) : $o->amount) }}
                                         <div class="fs-11 text-muted">
-                                            {{ $o->isAgent() ? 'agent holds, owes you' : ($o->account_id ? 'cash held for this company' : ($o->supplier_id ? 'you owe them' : (Money::isNegative($o->amount) ? 'you hold' : 'owes you'))) }} · {{ $o->date->format('d M Y') }}
+                                            {{ $o->isAgent() ? 'agent holds, owes you' : ($o->account_id ? 'cash in hand, no company' : ($o->supplier_id ? 'you owe them' : (Money::isNegative($o->amount) ? 'you hold' : 'owes you'))) }} · {{ $o->date->format('d M Y') }}
                                         </div>
                                     </td>
                                     <td class="text-end text-nowrap">
@@ -179,14 +180,16 @@ $delete = function (int $id) {
         <form wire:submit="save">
             <div class="modal-body">
                 <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label">Company <span class="text-danger">*</span></label>
-                        <x-searchable-select wire:model="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
-                        @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
-                    </div>
+                    @if ($party !== 'cash')
+                        <div class="col-12">
+                            <label class="form-label">Company <span class="text-danger">*</span></label>
+                            <x-searchable-select wire:model="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
+                            @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        </div>
+                    @endif
                     @if ($party === 'cash')
                         <div class="col-12">
-                            <div class="form-text mt-0"><i class="ri-wallet-3-line"></i> Cash in the <strong>admin cash in hand</strong> that belonged to this company on the opening date.</div>
+                            <div class="form-text mt-0"><i class="ri-wallet-3-line"></i> Cash in the <strong>admin cash in hand</strong> on the opening date. The cash belongs to no company.</div>
                         </div>
                     @elseif ($party === 'agent')
                         <div class="col-12">

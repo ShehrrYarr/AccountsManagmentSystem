@@ -45,9 +45,26 @@ trait ChecksDocuments
         return $account;
     }
 
-    /** Cash for any company comes from the admin's single cash in hand. */
-    protected function cashAccountOf(int $companyId): Account
+    /**
+     * A business account money is paid from or into: a company bank or the admin's cash in hand
+     * (not an agent's). The document's company follows from it: the bank's company, or none for cash.
+     */
+    protected function businessAccount(mixed $accountId, ?AccountType $type = null, string $field = 'account_id', ?int $keepId = null): Account
     {
-        return Account::adminCash();
+        $account = Account::with('company')->find($accountId);
+
+        if (! $account || ! ($account->isAdminCash() || ($account->company_id && $account->type === AccountType::Bank))) {
+            throw new BusinessRuleException('Choose a company bank or the admin cash in hand.', $field);
+        }
+
+        if ($type && $account->type !== $type) {
+            throw new BusinessRuleException($type === AccountType::Bank ? 'Choose a bank account.' : 'Choose the cash in hand account.', $field);
+        }
+
+        if (! $account->is_active && $account->id !== $keepId) {
+            throw new BusinessRuleException("{$account->shortLabel()} is inactive.", $field);
+        }
+
+        return $account;
     }
 }

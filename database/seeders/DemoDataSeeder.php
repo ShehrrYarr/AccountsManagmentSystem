@@ -13,6 +13,7 @@ use App\Services\ChequeApprovalService;
 use App\Services\ChequeService;
 use App\Services\DealService;
 use App\Services\MasterDataService;
+use App\Services\PaymentApprovalService;
 use App\Services\PaymentService;
 use App\Services\TransferService;
 use Illuminate\Database\Seeder;
@@ -45,11 +46,9 @@ class DemoDataSeeder extends Seeder
         $zamzam = $master->saveCompany(null, ['name' => 'Zamzam Enterprises', 'ntn' => '3520187-6', 'phone' => '0321-7654321', 'address' => 'GT Road, Gujranwala', 'is_active' => true]);
         $crescent = $master->saveCompany(null, ['name' => 'Crescent Supplies', 'ntn' => '6110452-3', 'phone' => '0333-5551122', 'address' => 'Saddar, Rawalpindi', 'is_active' => true]);
 
-        // The admin's cash in hand, with what it held for each company on the opening date.
+        // The admin's cash in hand on the opening date: one pot that belongs to no company.
         $adminCash = Account::adminCash();
-        foreach ([[$noor, 150000], [$zamzam, 80000], [$crescent, 50000]] as [$company, $amount]) {
-            app(DealService::class)->saveOpening(null, ['company_id' => $company->id, 'account_id' => $adminCash->id, 'amount' => $amount, 'date' => $opening]);
-        }
+        app(DealService::class)->saveOpening(null, ['account_id' => $adminCash->id, 'amount' => 280000, 'date' => $opening]);
 
         $bank = fn (Company $c, string $name, string $bankName, string $number, int $amount) => $master->saveAccount(null, [
             'company_id' => $c->id, 'type' => 'bank', 'name' => $name, 'bank_name' => $bankName, 'branch' => 'Main Branch',
@@ -102,11 +101,11 @@ class DemoDataSeeder extends Seeder
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $highways->id, 'method' => 'goods', 'supplier_id' => $electronics->id, 'on_credit' => true, 'amount' => 90000, 'date' => $day(64), 'item_description' => 'Traffic signal controllers (3)']);
         $cheques->save(null, $this->cheque($zamzam, $highways, $zamzamUbl, 320000, $day(22), $day(20), 200, 'DS-44107'));
         $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $municipal->id, 'method' => 'cash', 'amount' => 25000, 'date' => $day(15), 'received_by' => 'Naveed (clerk)']);
-        $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_company_id' => $noor->id, 'to_account_id' => $cash()->id, 'amount' => 40000, 'date' => $day(12), 'notes' => 'Part repayment']);
-        $transfers->save(null, ['from_company_id' => $zamzam->id, 'from_account_id' => $cash()->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
+        $transfers->save(null, ['from_account_id' => $zamzamUbl->id, 'to_account_id' => $noorHbl->id, 'amount' => 40000, 'date' => $day(12), 'reference' => 'IBFT-330411', 'notes' => 'Part repayment']);
+        $transfers->save(null, ['from_account_id' => $cash()->id, 'to_account_id' => $zamzamUbl->id, 'amount' => 20000, 'date' => $day(10), 'reference' => 'Deposit slip 5521']);
 
         // ---------------------------------------------------------------- Crescent ↔ Agriculture
-        $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $cash()->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
+        $payments->savePayment(null, ['company_id' => $crescent->id, 'department_id' => $agri->id, 'method' => 'goods', 'supplier_id' => $officeMart->id, 'account_id' => $crescentMeezan->id, 'amount' => 30000, 'date' => $day(35), 'item_description' => 'Seed storage bins']);
         $cheques->save(null, $this->cheque($crescent, $agri, $crescentMeezan, 45000, $day(12), $day(10)));
 
         // ---------------------------------------------------------------- own transfers & expenses
@@ -143,6 +142,14 @@ class DemoDataSeeder extends Seeder
         // Bilal got an advance from Al-Noor's bank and sent part of it back (waiting for approval).
         $transfers->save(null, ['from_account_id' => $noorHbl->id, 'to_account_id' => $bilalMeezan->id, 'amount' => 30000, 'date' => $day(4), 'reference' => 'IBFT-77120', 'notes' => 'For field expenses']);
         $transfers->requestReturn(['from_account_id' => $bilalMeezan->id, 'from_company_id' => $noor->id, 'to_account_id' => $cash()->id, 'amount' => 5000, 'date' => $day(1), 'notes' => 'Left over'], $bilal);
+
+        // Agents pay departments by bank transfer from their own banks, for a company.
+        $bilalPaid = $payments->savePayment(null, ['company_id' => $noor->id, 'department_id' => $health->id, 'method' => 'bank_transfer', 'account_id' => $bilalMeezan->id, 'amount' => 12000, 'date' => $day(2), 'item_description' => 'Lab test kits', 'reference' => 'IBFT-88310', 'received_by' => 'Dr. Imran (store officer)'], $bilal);
+        $usmanWallet = Account::where('agent_id', $usman->id)->banks()->firstOrFail();
+        $payments->savePayment(null, ['company_id' => $zamzam->id, 'department_id' => $municipal->id, 'method' => 'bank_transfer', 'account_id' => $usmanWallet->id, 'amount' => 8000, 'date' => $day(1), 'item_description' => 'Survey staff transport (paid from his own money)'], $usman);
+
+        // Bilal asks to correct his payment's amount.
+        app(PaymentApprovalService::class)->requestEdit($bilalPaid, ['amount' => 12500] + $bilalPaid->only(['date', 'company_id', 'account_id', 'department_id', 'item_description', 'reference', 'received_by', 'notes']), $bilal, 'Bank charged 500 on the transfer');
 
         auth()->logout();
     }

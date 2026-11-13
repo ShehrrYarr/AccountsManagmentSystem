@@ -2,11 +2,13 @@
 
 /**
  * Paying suppliers for goods bought on credit. List + modal; embeddable on a supplier or company page.
+ * Paid from a company bank (it pays that company's debt) or the cash in hand (no company).
  *
  * Open the form with: $dispatch('supplier-payment-create', { companyId: 1, supplierId: 3 })  (both optional)
  */
 
 use App\Livewire\Concerns\InteractsWithUi;
+use App\Models\Account;
 use App\Models\SupplierPayment;
 use App\Services\Balances;
 use App\Services\PaymentService;
@@ -28,7 +30,6 @@ state(['search' => '', 'from' => '', 'to' => '']);
 state(['company_id' => null, 'supplier_id' => null, 'account_id' => null, 'amount' => '', 'date' => '', 'reference' => '', 'notes' => '']);
 
 rules(fn () => [
-    'company_id' => ['required', 'exists:companies,id'],
     'supplier_id' => ['required', 'exists:suppliers,id'],
     'account_id' => ['required', 'exists:accounts,id'],
     'amount' => ['required', 'numeric', 'gt:0'],
@@ -40,9 +41,6 @@ rules(fn () => [
 $updated = function ($property) {
     if (in_array($property, ['search', 'from', 'to'], true)) {
         $this->resetPage('spPage');
-    }
-    if ($property === 'company_id') {
-        $this->account_id = null;
     }
 };
 
@@ -59,14 +57,17 @@ $rows = computed(fn () => SupplierPayment::query()
 
 $companyOptions = computed(fn () => Options::companies($this->company_id));
 $supplierOptions = computed(fn () => Options::suppliers($this->supplier_id));
-$accountOptions = computed(fn () => $this->company_id ? Options::accounts((int) $this->company_id, null, $this->account_id) : []);
+$accountOptions = computed(fn () => Options::accounts($this->companyId, null, $this->account_id));
+$paidFrom = computed(fn () => $this->account_id ? Account::with('company')->find($this->account_id) : null);
 
+// What the bank's company owes the supplier (cash: what is owed in total), before this payment.
 $owed = computed(function () {
-    if (! $this->company_id || ! $this->supplier_id) {
+    if (! $this->paidFrom || ! $this->supplier_id) {
         return null;
     }
-    $owed = Balances::supplierOwed((int) $this->supplier_id, (int) $this->company_id);
-    if ($this->recordId && ($old = SupplierPayment::find($this->recordId)) && $old->company_id == $this->company_id && $old->supplier_id == $this->supplier_id) {
+    $company = $this->paidFrom->company_id;
+    $owed = Balances::supplierOwed((int) $this->supplier_id, $company);
+    if ($this->recordId && ($old = SupplierPayment::find($this->recordId)) && ($company === null || $old->company_id == $company) && $old->supplier_id == $this->supplier_id) {
         $owed = Money::add($owed, $old->amount);
     }
 
@@ -74,7 +75,7 @@ $owed = computed(function () {
 });
 
 on(['transaction-updated' => function () {
-    unset($this->rows, $this->owed, $this->accountOptions);
+    unset($this->rows, $this->owed, $this->accountOptions, $this->paidFrom);
 }]);
 
 on(['supplier-payment-create' => function (?int $companyId = null, ?int $supplierId = null) {
@@ -145,7 +146,7 @@ $delete = function (int $id) {
                                 <td class="fs-13 text-nowrap">{{ $p->date->format('d M Y') }}</td>
                                 <td>
                                     <a href="{{ route('suppliers.show', $p->supplier_id) }}" class="fw-medium text-body">{{ $p->supplier->name }}</a>
-                                    @unless ($companyId)<div class="fs-12 text-muted">{{ $p->company->name }}</div>@endunless
+                                    @unless ($companyId)<div class="fs-12 text-muted">{{ $p->company?->name ?? 'No company (cash)' }}</div>@endunless
                                 </td>
                                 <td class="fs-13 d-none d-md-table-cell">{{ $p->account->shortLabel() }}</td>
                                 <td class="fs-13 d-none d-md-table-cell">{{ $p->reference ?: '—' }}</td>
@@ -172,9 +173,12 @@ $delete = function (int $id) {
             <div class="modal-body">
                 <div class="row g-3">
                     <div class="col-12">
-                        <label class="form-label">Company <span class="text-danger">*</span></label>
-                        <x-searchable-select wire:model.live="company_id" :options="$this->companyOptions" placeholder="Select company" :invalid="$errors->has('company_id')" />
-                        @error('company_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        <label class="form-label">Paid from <span class="text-danger">*</span></label>
+                        <x-searchable-select wire:model.live="account_id" :options="$this->accountOptions" placeholder="Cash in hand or a company bank" :invalid="$errors->has('account_id')" />
+                        @error('account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
+                        @if ($this->paidFrom)
+                            <div class="form-text">{!! $this->paidFrom->isAdminCash() ? '<i class="ri-wallet-3-line"></i> Cash in hand belongs to no company: this is not counted for any company.' : '<i class="ri-building-2-line"></i> Counts for <strong>'.e($this->paidFrom->company?->name).'</strong>.' !!}</div>
+                        @endif
                     </div>
                     <div class="col-12">
                         <label class="form-label">Supplier <span class="text-danger">*</span></label>
@@ -182,15 +186,10 @@ $delete = function (int $id) {
                         @error('supplier_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                         @if ($this->owed !== null)
                             <div class="form-text ams-balance">
-                                Owed by this company: <strong>{{ money($this->owed) }}</strong>
+                                {{ $this->paidFrom?->company_id ? 'Owed by '.$this->paidFrom->company?->name : 'Owed in total' }}: <strong>{{ money($this->owed) }}</strong>
                                 @if (Money::isPositive($this->owed)) · <a href="#" wire:click.prevent="payAll">pay it all</a>@endif
                             </div>
                         @endif
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Paid from <span class="text-danger">*</span></label>
-                        <x-searchable-select wire:model="account_id" :options="$this->accountOptions" :placeholder="$company_id ? 'Select cash or bank' : 'Select a company first'" :disabled="! $company_id" :invalid="$errors->has('account_id')" />
-                        @error('account_id') <div class="invalid-feedback d-block">{{ $message }}</div> @enderror
                     </div>
                     <div class="col-sm-6">
                         <label class="form-label">Amount (Rs.) <span class="text-danger">*</span></label>

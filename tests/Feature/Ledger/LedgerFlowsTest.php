@@ -55,25 +55,48 @@ class LedgerFlowsTest extends TestCase
 
     // ---------------------------------------------------------------- companies & accounts
 
-    public function test_companies_share_the_admin_cash_in_hand(): void
+    public function test_the_admin_cash_is_one_pot_with_no_company(): void
     {
         $co = $this->makeCompany('Zamzam Enterprises');
         $this->assertCount(0, $co->accounts, 'a company has no cash account of its own');
         $this->assertTrue($this->cash->isAdminCash());
 
-        // Cash openings are per company, on the admin's cash.
+        // One cash opening, for no company (a company given on the form is ignored).
         $deals = app(\App\Services\DealService::class);
-        $deals->saveOpening(null, ['company_id' => $this->company->id, 'account_id' => $this->cash->id, 'amount' => '30000', 'date' => now()->subMonth()->toDateString()]);
-        $deals->saveOpening(null, ['company_id' => $co->id, 'account_id' => $this->cash->id, 'amount' => '20000', 'date' => now()->subMonth()->toDateString()]);
+        $opening = $deals->saveOpening(null, ['company_id' => $this->company->id, 'account_id' => $this->cash->id, 'amount' => '50000', 'date' => now()->subMonth()->toDateString()]);
+        $this->assertNull($opening->company_id);
         $this->assertMoney('50000.00', $this->cash);
-        $this->assertSame('30000.00', Balances::money($this->company->id)['cash']);
-        $this->assertSame('20000.00', Balances::money($co->id)['cash']);
+        $this->assertSame('0.00', Balances::money($this->company->id)['cash'], 'companies hold no cash');
         $this->assertSame('50000.00', Balances::money()['cash']);
+        try {
+            $deals->saveOpening(null, ['company_id' => $co->id, 'account_id' => $this->cash->id, 'amount' => '20000', 'date' => now()->toDateString()]);
+            $this->fail('A second cash opening was allowed.');
+        } catch (BusinessRuleException $e) {
+            $this->assertStringContainsString('There is already an opening balance for Cash in hand', $e->getMessage());
+        }
 
-        // Zamzam pays cash for a department: the admin's cash goes down, Zamzam's share too.
-        $this->pay(['company_id' => $co->id, 'method' => 'cash', 'account_id' => null, 'amount' => '5000']);
+        // A cash payment has no company: it shows on the department's no-company part.
+        $p = $this->pay(['company_id' => $co->id, 'method' => 'cash', 'account_id' => null, 'amount' => '5000']);
+        $this->assertNull($p->company_id);
         $this->assertMoney('45000.00', $this->cash);
-        $this->assertSame('15000.00', Balances::money($co->id)['cash']);
+        $this->assertSame('5000.00', Balances::departmentBalance($this->dept->id, Balances::NONE));
+        $this->assertSame('0.00', Balances::departmentBalance($this->dept->id, $co->id));
+        $this->assertSame(0, JournalLedgerEntry::whereNotNull('company_id')->where('account_id', $this->cash->id)->count(), 'no cash line names a company');
+
+        // Moving bank money into the cash takes it out of the company; a cash deposit brings it back.
+        $this->fundBank('30000');
+        $svc = app(TransferService::class);
+        $svc->save(null, ['from_account_id' => $this->bank->id, 'to_account_id' => $this->cash->id, 'amount' => '12000', 'date' => now()->toDateString()]);
+        $svc->save(null, ['from_account_id' => $this->cash->id, 'to_account_id' => $this->bank->id, 'amount' => '2000', 'date' => now()->toDateString()]);
+        $this->assertSame('10000.00', Balances::money($this->company->id)['moved']);
+        $this->assertSame('20000.00', Balances::money($this->company->id)['total']);
+        $this->assertSame('55000.00', Balances::money()['cash']);
+
+        // A cash expense has no company either: overall profit falls, the company's doesn't.
+        $e = app(PaymentService::class)->saveExpense(null, ['expense_category_id' => $this->category()->id, 'account_id' => $this->cash->id, 'amount' => '500', 'date' => now()->toDateString(), 'description' => 'Tea']);
+        $this->assertNull($e->company_id);
+        $this->assertSame('-500.00', Balances::profit()['net']);
+        $this->assertSame('0.00', Balances::profit($this->company->id)['net']);
 
         try {
             app(MasterDataService::class)->saveAccount(null, ['company_id' => $co->id, 'type' => 'cash', 'name' => 'Company cash']);
@@ -251,9 +274,11 @@ class LedgerFlowsTest extends TestCase
         $t = app(TransferService::class)->save(null, ['from_account_id' => $this->bank->id, 'to_account_id' => $this->cash->id, 'amount' => '15000', 'date' => now()->toDateString()]);
 
         $this->assertFalse($t->isInterCompany());
-        $this->assertSame('Cash withdrawal', $t->kind());
+        $this->assertSame('Moved to cash', $t->kind());
+        $this->assertNull($t->to_company_id, 'the cash belongs to no company');
         $this->assertMoney('25000.00', $this->bank);
         $this->assertMoney('15000.00', $this->cash);
+        $this->assertSame('15000.00', Balances::movedToCash($this->company->id));
         $this->assertSame([], Balances::interCompany($this->company->id)->all());
     }
 
@@ -270,17 +295,17 @@ class LedgerFlowsTest extends TestCase
         $this->assertMoney('35000.00', $this->bank);
         $this->assertMoney('25000.00', $otherBank);
 
-        // Zamzam sends 10,000 back into the admin's cash, for Al-Noor.
-        $t = $svc->save(null, ['from_account_id' => $otherBank->id, 'to_company_id' => $this->company->id, 'to_account_id' => $this->cash->id, 'amount' => '10000', 'date' => now()->toDateString()]);
+        // Zamzam sends 10,000 back to Al-Noor's bank.
+        $t = $svc->save(null, ['from_account_id' => $otherBank->id, 'to_account_id' => $this->bank->id, 'amount' => '10000', 'date' => now()->toDateString()]);
         $this->assertSame('15000.00', Balances::owedBetween($this->company->id, $other->id));
         $this->assertTrue($t->isInterCompany());
-        $this->assertSame('10000.00', Balances::money($this->company->id)['cash']);
 
-        // An ATM withdrawal stays inside one company.
-        $atm = $svc->save(null, ['from_account_id' => $this->bank->id, 'to_account_id' => $this->cash->id, 'amount' => '5000', 'date' => now()->toDateString()]);
+        // Money moved into the cash is no company's: it is not a debt between companies.
+        $atm = $svc->save(null, ['from_account_id' => $otherBank->id, 'to_account_id' => $this->cash->id, 'amount' => '5000', 'date' => now()->toDateString()]);
         $this->assertFalse($atm->isInterCompany());
-        $this->assertSame('Cash withdrawal', $atm->kind());
-        $this->assertSame('15000.00', Balances::money($this->company->id)['cash']);
+        $this->assertSame('Moved to cash', $atm->kind());
+        $this->assertSame('15000.00', Balances::owedBetween($this->company->id, $other->id));
+        $this->assertSame('5000.00', Balances::money($other->id)['moved']);
     }
 
     public function test_editing_a_transfer_to_overdraw_is_blocked_and_rolled_back(): void

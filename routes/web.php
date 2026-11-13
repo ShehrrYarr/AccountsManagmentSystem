@@ -27,8 +27,8 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 | Application: signed-in, active administrators and agents
 |--------------------------------------------------------------------------
-| Agents get only their govt cheques, their own accounts and their profile;
-| everything else is for administrators.
+| Agents get only their govt cheques, their department payments, their own accounts and
+| their profile; everything else is for administrators.
 */
 Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
@@ -41,6 +41,10 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Govt cheques (an agent sees only the cheques they received)
     Route::view('/cheques', 'ams.cheques.index')->name('cheques.index');
     Route::view('/cheques/deposit', 'ams.cheques.create')->name('cheques.create');
+
+    // Department payments (an agent sees only the payments they made)
+    Route::view('/payments', 'ams.payments.index')->name('payments.index');
+    Route::view('/payments/pay', 'ams.payments.create')->name('payments.create');
     Route::view('/my-accounts', 'ams.my-accounts')->name('my-accounts');
     Route::get('/my-accounts/{account}', function (Account $account) {
         abort_unless($account->agent_id === auth()->id(), 403);
@@ -59,14 +63,13 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Private uploads (cheque scans, receipts); access is checked per file
     Route::get('/files/{type}/{id}', [FileController::class, 'show'])
-        ->whereIn('type', ['cheque', 'payment', 'expense', 'cheque-request'])->whereNumber('id')->name('files.show');
+        ->whereIn('type', ['cheque', 'payment', 'expense', 'cheque-request', 'payment-request'])->whereNumber('id')->name('files.show');
 
     Route::middleware('can:admin')->group(function () {
         Route::view('/dashboard', 'ams.dashboard')->name('dashboard');
         Route::view('/approvals', 'ams.approvals.index')->name('approvals.index');
 
         // Money out
-        Route::view('/payments', 'ams.payments.index')->name('payments.index');
         Route::view('/supplier-payments', 'ams.supplier-payments.index')->name('supplier-payments.index');
         Route::view('/expenses', 'ams.expenses.index')->name('expenses.index');
         Route::view('/transfers', 'ams.transfers.index')->name('transfers.index');

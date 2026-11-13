@@ -50,8 +50,10 @@ class Options
 
     /**
      * Agents' accounts (cash in hand and banks), labelled "Agent · Account" unless one agent is given.
+     *
+     * @param  'bank'|'cash'|null  $type
      */
-    public static function agentAccounts(?int $agentId = null, ?int $include = null): array
+    public static function agentAccounts(?int $agentId = null, ?int $include = null, ?string $type = null): array
     {
         return Account::query()
             ->with('agent')
@@ -59,6 +61,7 @@ class Options
             ->whereHas('agent', fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhereHas('agentAccounts', fn ($q) => $q->whereKey($include))))
             ->where(fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhere('id', $include)))
             ->when($agentId, fn ($q) => $q->where('agent_id', $agentId))
+            ->when($type, fn ($q) => $q->where('type', AccountType::from($type)))
             ->orderBy('agent_id')->orderBy('type')->orderBy('name')
             ->get()
             ->map(fn (Account $a) => [
@@ -75,6 +78,15 @@ class Options
             ->where(fn ($q) => $q->where('is_active', true)->when($include, fn ($q) => $q->orWhere('id', $include)))
             ->orderBy('name')->get(['id', 'name', 'phone'])
             ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name, 'hint' => $u->phone])->all();
+    }
+
+    /**
+     * Every business account money can be paid from: the admin's cash in hand first, then each
+     * company's banks ("Company · Bank"). With a company: only its banks and the cash.
+     */
+    public static function businessAccounts(?int $companyId = null, ?int $include = null): array
+    {
+        return self::accounts($companyId, null, $include);
     }
 
     public static function departments(?int $include = null): array

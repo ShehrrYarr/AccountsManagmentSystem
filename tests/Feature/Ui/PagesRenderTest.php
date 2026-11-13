@@ -105,7 +105,10 @@ class PagesRenderTest extends TestCase
         $this->get('/my-accounts')->assertOk()->assertSee('My cash &amp; bank accounts', false);
         $this->get('/profile')->assertOk();
 
-        foreach (['/dashboard', '/approvals', '/payments', '/transfers', '/companies', '/accounts', '/departments', '/suppliers',
+        $this->get('/payments')->assertOk()->assertSee('My Department Payments');
+        $this->get('/payments/pay')->assertOk()->assertSee('Bank transfer from your bank')->assertDontSee('+ New department');
+
+        foreach (['/dashboard', '/approvals', '/supplier-payments', '/expenses', '/transfers', '/companies', '/accounts', '/departments', '/suppliers',
             '/transactions', '/opening-balances', '/expense-categories', '/users', '/audit-log',
             "/statements/company/{$this->company->id}/print", "/accounts/{$this->bank->id}"] as $url) {
             $this->get($url)->assertForbidden();

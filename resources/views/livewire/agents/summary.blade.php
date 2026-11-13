@@ -40,7 +40,7 @@ on(['transaction-updated' => function () {
                     @forelse ($this->byCompany as $r)
                         <div class="d-flex justify-content-between border-top py-1">
                             <span>{{ $this->companies[$r->company_id] ?? '?' }}</span>
-                            <span><span class="text-muted fs-12 me-2">given {{ money($r->advanced) }} · returned {{ money($r->returned) }}</span><strong>{{ money($r->owed) }}</strong></span>
+                            <span><span class="text-muted fs-12 me-2">given {{ money($r->advanced) }} · returned / spent {{ money($r->returned) }}</span><strong class="{{ Money::isNegative($r->owed) ? 'text-success' : '' }}" title="{{ Money::isNegative($r->owed) ? 'The company owes '.($mine ? 'you' : $this->agent->name) : '' }}">{{ Money::isNegative($r->owed) ? 'owed '.money(Money::sub(0, $r->owed)) : money($r->owed) }}</strong></span>
                         </div>
                     @empty
                         <div class="text-muted">Nothing given or returned yet.</div>

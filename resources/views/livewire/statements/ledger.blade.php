@@ -7,6 +7,7 @@
  *   <livewire:statements.ledger kind="department" :subject-id="$department->id" />
  */
 
+use App\Services\Balances;
 use App\Services\StatementService;
 use App\Support\Money;
 use App\Support\Options;
@@ -19,12 +20,15 @@ state(['filterCompany' => null, 'from' => '', 'to' => '']);
 $statement = computed(fn () => abort_unless(StatementService::canView(auth()->user(), $this->kind, (int) $this->subjectId), 403) ?? app(StatementService::class)->build(
     $this->kind,
     (int) $this->subjectId,
-    $this->companyId ?? ($this->filterCompany ? (int) $this->filterCompany : null),
+    $this->companyId ?? (filled($this->filterCompany) ? (int) $this->filterCompany : null),
     $this->from ?: null,
     $this->to ?: null,
 ));
 
-$companyOptions = computed(fn () => Options::companies());
+// Department and supplier ledgers also have a "no company" part: what the cash in hand paid.
+$companyOptions = computed(fn () => in_array($this->kind, ['department', 'supplier'], true)
+    ? [['value' => Balances::NONE, 'label' => 'No company (cash)'], ...Options::companies()]
+    : Options::companies());
 
 $preset = function (string $range) {
     [$this->from, $this->to] = match ($range) {
@@ -55,7 +59,7 @@ on(['transaction-updated' => function () {
         </div>
         <input type="date" class="form-control form-control-sm w-auto" wire:model.live="from" aria-label="From date">
         <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" aria-label="To date">
-        @php($q = array_filter(['company' => $companyId ?? $filterCompany, 'from' => $from, 'to' => $to]))
+        @php($q = array_filter(['company' => $companyId ?? $filterCompany, 'from' => $from, 'to' => $to], fn ($v) => $v !== null && $v !== ''))
         <a class="btn btn-sm btn-light" target="_blank" href="{{ route('statements.print', [$kind, $subjectId] + $q) }}"><i class="ri-printer-line me-1"></i>Print</a>
         <a class="btn btn-sm btn-danger" href="{{ route('statements.pdf', [$kind, $subjectId] + $q) }}"><i class="ri-file-pdf-2-line me-1"></i>PDF</a>
     </div>

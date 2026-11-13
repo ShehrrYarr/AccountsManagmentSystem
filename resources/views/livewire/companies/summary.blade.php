@@ -48,7 +48,7 @@ on(['transaction-updated' => function () {
     @php($d = $this->data)
     <div class="row g-3 mb-3">
         <div class="col-sm-6 col-xl-3">
-            <x-stat-card label="Admin cash (net)" :value="money($d['money']['cash'])" icon="ri-wallet-3-line" color="success" :hint="'Bank '.money($d['money']['bank']).' · share of the admin cash'" />
+            <x-stat-card label="In banks" :value="money($d['money']['bank'])" icon="ri-bank-line" color="success" :hint="'Moved to cash in hand so far '.money($d['money']['moved'])" />
         </div>
         <div class="col-sm-6 col-xl-3">
             <x-stat-card label="Cheques this month" :value="money($d['cheques']['amount'])" icon="ri-bank-card-line" color="warning" :hint="$d['cheques']['count'].' deposited in '.now()->format('F')" />

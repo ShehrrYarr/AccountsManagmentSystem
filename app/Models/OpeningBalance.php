@@ -13,11 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * A balance carried over from before the system, for one company:
+ * A balance carried over from before the system, for one company (cash: for none):
  *
  *   Department: amount > 0 → it owes me; amount < 0 → I hold its money.
  *   Supplier:   amount > 0 → I owe it.
- *   Cash:       account_id = the admin's cash in hand; amount > 0 is the cash held for this company.
+ *   Cash:       account_id = the admin's cash in hand, company_id = null (the cash is one pot).
  *   Agent:      account_id = an agent's account; amount > 0 is this company's money the agent
  *               already held (and owes back) on the start date.
  *

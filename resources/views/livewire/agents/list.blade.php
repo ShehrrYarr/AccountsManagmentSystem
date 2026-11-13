@@ -65,7 +65,7 @@ on(['transaction-updated' => function () {
                         </td>
                         <td class="fs-13 d-none d-md-table-cell">
                             @forelse ($byCompany as $companyId => $amount)
-                                <div><span class="text-muted">{{ $this->companies[$companyId] ?? '?' }}</span> <strong>{{ money($amount) }}</strong></div>
+                                <div><span class="text-muted">{{ $this->companies[$companyId] ?? '?' }}</span> @if (Money::isNegative($amount))<strong class="text-success" title="Paid departments with their own money">owed {{ money(Money::sub(0, $amount)) }}</strong>@else<strong>{{ money($amount) }}</strong>@endif</div>
                             @empty
                                 <span class="text-muted">—</span>
                             @endforelse
@@ -86,7 +86,7 @@ on(['transaction-updated' => function () {
                     <tr>
                         <td colspan="2" class="d-none d-md-table-cell">All agents</td>
                         <td class="d-md-none">All agents</td>
-                        <td class="money">{{ money(Balances::withAgents()) }}</td>
+                        <td class="money">{{ money(Balances::withAgents()) }}@if (Money::isPositive($toAgents = Balances::owedToAgents()))<div class="fs-11 text-success fw-normal">you owe agents {{ money($toAgents) }}</div>@endif</td>
                         <td></td>
                     </tr>
                 </tfoot>

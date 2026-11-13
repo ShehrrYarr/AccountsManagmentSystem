@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Transfer;
 use App\Models\User;
 use App\Services\Concerns\ChecksDocuments;
+use App\Support\Money;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +35,7 @@ class TransferService
 
         $this->prepare($transfer, $data);
 
-        return $this->ledger->record($transfer);
+        return $this->post($transfer);
     }
 
     public function delete(Transfer $transfer): void
@@ -69,7 +70,7 @@ class TransferService
 
         $transfer->fill(['status' => Transfer::POSTED, 'decided_by' => $admin->id, 'decided_at' => now()]);
 
-        return $this->ledger->record($transfer);
+        return $this->post($transfer);
     }
 
     public function reject(Transfer $transfer, User $admin, ?string $note = null): void
@@ -116,20 +117,16 @@ class TransferService
             return;
         }
 
-        // A bank names its own company; the admin's cash is shared, so the form says which company.
-        $transfer->from_company_id = $from->company_id ?? $transfer->from_company_id;
-        $transfer->to_company_id = $to->company_id ?? ($transfer->to_company_id ?: $transfer->from_company_id);
-        if (! $transfer->from_company_id) {
-            throw new BusinessRuleException('Choose the company the money leaves from.', 'from_company_id');
-        }
-
-        $this->accountOf((int) $transfer->from_company_id, $from->id, null, 'from_account_id', $transfer->getOriginal('from_account_id'));
-        $this->accountOf((int) $transfer->to_company_id, $to->id, null, 'to_account_id', $transfer->getOriginal('to_account_id'));
+        // A bank names its own company; the admin's cash belongs to none.
+        $this->businessAccount($from->id, null, 'from_account_id', $transfer->getOriginal('from_account_id'));
+        $this->businessAccount($to->id, null, 'to_account_id', $transfer->getOriginal('to_account_id'));
+        $transfer->from_company_id = $from->company_id;
+        $transfer->to_company_id = $to->company_id;
     }
 
     /**
-     * Advance (company → agent) or return (agent → company). Both sides belong to one company:
-     * the company bank's own, or — for the admin's cash — the one chosen on the form.
+     * Advance (company → agent) or return (agent → company), always for one company: the company
+     * bank's own, or — through the admin's cash pot — the one chosen on the form.
      */
     private function prepareAgentMove(Transfer $transfer, Account $from, Account $to): void
     {
@@ -147,11 +144,45 @@ class TransferService
         }
         $transfer->from_company_id = $transfer->to_company_id = $company;
 
-        $this->accountOf((int) $company, $companySide->id, null, $companyField, $transfer->getOriginal($companyField));
+        $account = $this->businessAccount($companySide->id, null, $companyField, $transfer->getOriginal($companyField));
+        if ($account->company_id && (int) $account->company_id !== (int) $company) {
+            throw new BusinessRuleException('Choose one of this company’s banks or the admin cash in hand.', $companyField);
+        }
 
         if (! $agentSide->is_active && $agentSide->id !== $transfer->getOriginal($agentField)) {
             throw new BusinessRuleException("{$agentSide->shortLabel()} is inactive.", $agentField);
         }
+    }
+
+    /**
+     * Save and post. A return can't be more than the agent owes that company, nor more than the
+     * account it leaves holds (agents may otherwise owe less than zero: spending their own money
+     * on department payments means the company owes them).
+     */
+    private function post(Transfer $transfer): Transfer
+    {
+        return $this->ledger->batch(function () use ($transfer) {
+            $this->ledger->record($transfer);
+
+            if ($transfer->isPosted() && $transfer->isAgentReturn()) {
+                $account = $transfer->fromAccount()->first();
+                $owed = Balances::agentOwed((int) $account->agent_id, (int) $transfer->from_company_id);
+                if (Money::isNegative($owed)) {
+                    throw new BusinessRuleException(
+                        "This is more than {$account->agent?->name} owes {$transfer->fromCompany?->name}. Over by ".money(Money::sub(0, $owed)).'.',
+                        'amount'
+                    );
+                }
+                if (Money::isNegative($account->current_balance)) {
+                    throw new BusinessRuleException(
+                        "Not enough money in {$account->label()}. Short by ".money(Money::sub(0, $account->current_balance)).'.',
+                        'amount'
+                    );
+                }
+            }
+
+            return $transfer;
+        });
     }
 
     /** Would posting this break a rule (not enough in the account, more than owed)? Nothing is kept. */
@@ -162,7 +193,7 @@ class TransferService
 
         DB::beginTransaction();
         try {
-            $this->ledger->record($trial);
+            $this->post($trial);
         } finally {
             DB::rollBack();
         }

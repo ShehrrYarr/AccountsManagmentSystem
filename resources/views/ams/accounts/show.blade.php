@@ -31,7 +31,7 @@
 @section('content')
     @if ($account->isAdminCash())
         <div class="alert alert-light border fs-13">
-            <i class="ri-wallet-3-line text-success me-1"></i>The admin's cash in hand, shared by every company. Filter the statement by company to see one company's cash.
+            <i class="ri-wallet-3-line text-success me-1"></i>The admin's cash in hand: one pot that belongs to no company.
         </div>
     @elseif ($account->agent_id)
         <div class="alert alert-light border fs-13">

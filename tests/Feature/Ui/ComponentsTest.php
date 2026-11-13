@@ -252,9 +252,9 @@ class ComponentsTest extends TestCase
             ->set('date', now()->toDateString());
 
         $base('cash')->set('amount', '5000')->set('received_by', 'Ali')->call('save')->assertHasNoErrors();
-        $base('bank_transfer')->set('amount', '8000')->call('save')->assertHasErrors(['account_id']);
+        $base('bank_transfer')->set('account_id', null)->set('amount', '8000')->call('save')->assertHasErrors(['account_id']);
         $base('bank_transfer')->set('account_id', $this->bank->id)->set('amount', '8000')->set('reference', 'IBFT-9')->call('save')->assertHasNoErrors();
-        $base('goods')->set('amount', '3000')->call('save')->assertHasErrors(['supplier_id', 'item_description', 'account_id']);
+        $base('goods')->set('account_id', null)->set('amount', '3000')->call('save')->assertHasErrors(['supplier_id', 'item_description', 'account_id']);
         $base('goods')->set('supplier_id', $this->supplier->id)->set('on_credit', '1')->set('item_description', 'Fans')->set('amount', '3000')->call('save')->assertHasNoErrors();
 
         $this->assertSame(3, Payment::count());
@@ -361,13 +361,14 @@ class ComponentsTest extends TestCase
         $crescent = Company::where('name', 'Crescent Supplies')->firstOrFail();
         $this->assertCount(0, $crescent->accounts);
 
-        // Its starting cash, held in the admin's cash in hand.
+        // The starting cash: the admin's cash in hand, for no company.
         Volt::test('opening-balances.manage')
             ->call('create', 'cash')
-            ->set('company_id', $crescent->id)->set('amount', '12000')
+            ->set('amount', '12000')
             ->call('save')->assertHasNoErrors();
         $this->assertMoney('12000.00', $this->cash);
-        $this->assertSame('12000.00', Balances::money($crescent->id)['cash']);
+        $this->assertSame('0.00', Balances::money($crescent->id)['cash']);
+        $this->assertNull(\App\Models\OpeningBalance::latest('id')->first()->company_id);
 
         Volt::test('accounts.manage')
             ->dispatch('account-create', companyId: $crescent->id)
@@ -391,7 +392,7 @@ class ComponentsTest extends TestCase
             ->call('save')->assertHasNoErrors();
         $this->assertSame('2500.00', Balances::supplierOwed(Supplier::where('name', 'Hardware Hub')->value('id')));
 
-        Volt::test('companies.list')->assertSee('Crescent Supplies')->assertSee('12,000.00')->assertSee('3,000.00');
+        Volt::test('companies.list')->assertSee('Crescent Supplies')->assertSee('Moved to cash')->assertSee('3,000.00');
         Volt::test('departments.list')->set('filter', 'held')->assertSee('Irrigation Dept')->assertSee('4,000.00');
         Volt::test('suppliers.list')->set('filter', 'owed')->assertSee('Hardware Hub')->assertSee('2,500.00');
     }
