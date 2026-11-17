@@ -85,20 +85,12 @@ $save = function () {
 };
 
 $delete = function (int $id) {
-    $record = $this->config['model']::withCount($this->config['countRelation'])->findOrFail($id);
-    $countKey = \Illuminate\Support\Str::snake($this->config['countRelation']).'_count';
-    if ($record->{$countKey} > 0) {
-        $record->update(['is_active' => false]);
+    $record = $this->config['model']::findOrFail($id);
+    // Used records (also by deleted history) are deactivated instead of deleted.
+    if (app(\App\Services\DirectoryService::class)->deleteCategory($record) === 'deactivated') {
         $this->toast('info', 'It is used on existing records, so it was deactivated instead of deleted.');
     } else {
-        try {
-            $record->delete();
-            $this->toast('success', $this->config['singular'].' deleted.');
-        } catch (\Illuminate\Database\QueryException) {
-            // Still referenced by deleted (history) records.
-            $record->update(['is_active' => false]);
-            $this->toast('info', 'It is referenced by older records, so it was deactivated instead of deleted.');
-        }
+        $this->toast('success', $this->config['singular'].' deleted.');
     }
     unset($this->records);
 };

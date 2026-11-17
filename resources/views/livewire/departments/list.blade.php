@@ -92,11 +92,9 @@ $save = function () {
 
 $delete = function (int $id) {
     $d = Department::findOrFail($id);
-    if ($d->ledgerEntries()->exists() || $d->cheques()->withTrashed()->exists() || $d->payments()->withTrashed()->exists()) {
-        $d->update(['is_active' => false]);
+    if (app(\App\Services\DirectoryService::class)->deleteDepartment($d) === 'deactivated') {
         $this->toast('info', "{$d->name} has history, so it was deactivated instead of deleted.");
     } else {
-        $d->delete();
         $this->toast('success', 'Department deleted.');
     }
     unset($this->rows);

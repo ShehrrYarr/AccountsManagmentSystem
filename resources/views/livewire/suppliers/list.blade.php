@@ -78,11 +78,9 @@ $save = function () {
 
 $delete = function (int $id) {
     $s = Supplier::findOrFail($id);
-    if ($s->ledgerEntries()->exists() || $s->payments()->withTrashed()->exists() || $s->supplierPayments()->withTrashed()->exists()) {
-        $s->update(['is_active' => false]);
+    if (app(\App\Services\DirectoryService::class)->deleteSupplier($s) === 'deactivated') {
         $this->toast('info', "{$s->name} has history, so it was deactivated instead of deleted.");
     } else {
-        $s->delete();
         $this->toast('success', 'Supplier deleted.');
     }
     unset($this->rows);

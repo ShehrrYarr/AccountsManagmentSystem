@@ -20,7 +20,7 @@ uses([InteractsWithUi::class]);
 
 mount(fn () => abort_unless(auth()->user()->isAdmin(), 403));
 
-state(['userId' => null])->locked();
+state(['userId' => null, 'devicesFor' => null])->locked();
 state(['name' => '', 'email' => '', 'phone' => '', 'role' => 'admin', 'is_active' => true, 'password' => '', 'password_confirmation' => '']);
 
 rules(fn () => [
@@ -33,7 +33,30 @@ rules(fn () => [
 ]);
 
 $users = computed(fn () => User::query()->whereIn('role', [UserRole::Admin, UserRole::Agent])
-    ->withCount(['cheques', 'agentAccounts'])->orderBy('role')->orderBy('name')->get());
+    ->withCount(['cheques', 'agentAccounts', 'tokens'])->orderBy('role')->orderBy('name')->get());
+
+// The mobile app devices a user is signed in on.
+$devices = computed(fn () => $this->devicesFor ? User::find($this->devicesFor)?->tokens()->latest('last_used_at')->latest('id')->get() ?? collect() : collect());
+
+$showDevices = function (int $id) {
+    $this->devicesFor = $id;
+    unset($this->devices);
+    $this->showModal('devicesModal');
+};
+
+$signOutDevice = function (int $tokenId) {
+    $user = User::findOrFail($this->devicesFor);
+    $user->tokens()->whereKey($tokenId)->delete();
+    unset($this->devices, $this->users);
+    $this->toast('success', 'Device signed out of the app.');
+};
+
+$signOutAll = function () {
+    $user = User::findOrFail($this->devicesFor);
+    $user->tokens()->delete();
+    unset($this->devices, $this->users);
+    $this->toast('success', $user->name.' is signed out of the app on every device.');
+};
 
 $create = function (string $role = 'agent') {
     $this->resetErrorBag();
@@ -53,29 +76,10 @@ $edit = function (int $id) {
 $save = function () {
     $data = $this->validate();
 
-    // Never let the last active administrator lock everyone out.
-    if ($this->userId === auth()->id() && ($data['role'] !== 'admin' || ! $data['is_active'])) {
-        $this->addError('role', 'You cannot demote or deactivate your own account.');
-
+    // Nobody can demote or deactivate themselves; every agent gets a cash in hand.
+    $user = $this->attempt(fn () => app(\App\Services\DirectoryService::class)->saveUser($this->userId ? User::findOrFail($this->userId) : null, $data, auth()->user()));
+    if ($user === false) {
         return;
-    }
-
-    if (blank($data['password'])) {
-        unset($data['password']);
-    }
-    unset($data['password_confirmation']);
-
-    if ($this->userId) {
-        $user = User::findOrFail($this->userId);
-        $user->update($data);
-    } else {
-        $user = User::create($data);
-        $user->forceFill(['email_verified_at' => now()])->save();
-    }
-
-    // Every agent has a cash in hand.
-    if ($user->isAgent()) {
-        app(MasterDataService::class)->ensureAgentCash($user, auth()->user());
     }
 
     $this->toast('success', "{$user->name} saved.");
@@ -86,7 +90,7 @@ $save = function () {
 $toggleActive = function (int $id) {
     abort_if($id === auth()->id(), 422, 'You cannot deactivate yourself.');
     $u = User::findOrFail($id);
-    $u->update(['is_active' => ! $u->is_active]);
+    app(\App\Services\DirectoryService::class)->setActive($u, ! $u->is_active, auth()->user());
     $this->toast('success', $u->name.($u->is_active ? ' activated.' : ' deactivated and signed out.'));
     unset($this->users);
 };
@@ -103,7 +107,7 @@ $toggleActive = function (int $id) {
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Role</th><th class="d-none d-md-table-cell">Cheques received</th><th>Status</th><th class="d-none d-md-table-cell">Last sign-in</th><th></th></tr></thead>
+                    <thead class="table-light"><tr><th>Name</th><th>Email</th><th>Role</th><th class="d-none d-md-table-cell">Cheques received</th><th>Status</th><th class="d-none d-md-table-cell">Last sign-in</th><th class="d-none d-md-table-cell">App devices</th><th></th></tr></thead>
                     <tbody>
                         @foreach ($this->users as $u)
                             <tr wire:key="user-{{ $u->id }}">
@@ -124,10 +128,18 @@ $toggleActive = function (int $id) {
                                 <td class="d-none d-md-table-cell fs-13">{{ $u->cheques_count }}</td>
                                 <td><span class="badge {{ $u->is_active ? 'bg-success-subtle text-success' : 'bg-secondary-subtle text-secondary' }}">{{ $u->is_active ? 'Active' : 'Inactive' }}</span></td>
                                 <td class="d-none d-md-table-cell fs-13">{{ $u->last_login_at?->diffForHumans() ?? 'Never' }}</td>
+                                <td class="d-none d-md-table-cell fs-13">
+                                    @if ($u->tokens_count)
+                                        <a href="#" wire:click.prevent="showDevices({{ $u->id }})"><i class="ri-smartphone-line me-1"></i>{{ $u->tokens_count }}</a>
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
+                                </td>
                                 <td class="text-end text-nowrap">
                                     @if ($u->isAgent())
                                         <a class="btn btn-sm btn-light icon-btn-sm" href="{{ route('accounts.index') }}#agent-{{ $u->id }}" title="Cash & bank accounts"><i class="ri-wallet-3-line"></i></a>
                                     @endif
+                                    <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="showDevices({{ $u->id }})" title="App devices"><i class="ri-smartphone-line"></i></button>
                                     <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="edit({{ $u->id }})"><i class="ri-edit-line"></i></button>
                                     @if ($u->id !== auth()->id())
                                         <button type="button" class="btn btn-sm btn-light icon-btn-sm" wire:click="toggleActive({{ $u->id }})" title="{{ $u->is_active ? 'Deactivate' : 'Activate' }}">
@@ -142,9 +154,36 @@ $toggleActive = function (int $id) {
             </div>
         </div>
         <div class="card-footer fs-13 text-muted">
-            Administrators have full access. Agents only enter govt cheques (and see their own), and keep their own cash in hand and bank accounts; their edits and deletes of saved cheques need your approval.
+            Administrators have full access. Agents enter govt cheques and department payments (and see only their own), keep their own cash in hand and bank accounts, and send money back; their edits and deletes need your approval. Deactivating someone also signs them out of the mobile app.
         </div>
     </div>
+
+    <x-modal id="devicesModal" title="Mobile app devices" icon="ri-smartphone-line" size="md">
+        <div class="modal-body">
+            @php($who = $devicesFor ? $this->users->firstWhere('id', $devicesFor) : null)
+            <p class="fs-13 text-muted mb-2">Phones where <strong class="text-body">{{ $who?->name }}</strong> is signed in to the AMS app. Sign out a lost or old phone here.</p>
+            <ul class="list-group">
+                @forelse ($this->devices as $d)
+                    <li class="list-group-item d-flex align-items-center gap-2" wire:key="dev-{{ $d->id }}">
+                        <i class="ri-smartphone-line fs-20 text-primary"></i>
+                        <div class="me-auto">
+                            <div class="fw-medium">{{ $d->name }}</div>
+                            <div class="fs-12 text-muted">Signed in {{ $d->created_at?->format('d M Y') }} · last used {{ $d->last_used_at?->diffForHumans() ?? 'never' }}</div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-light-danger" x-on:click="amsConfirm(@js('Sign '.$d->name.' out of the app?'), 'Sign out').then(ok => ok && $wire.signOutDevice({{ $d->id }}))"><i class="ri-logout-box-r-line me-1"></i>Sign out</button>
+                    </li>
+                @empty
+                    <li class="list-group-item text-muted">Not signed in to the app on any device.</li>
+                @endforelse
+            </ul>
+        </div>
+        <div class="modal-footer">
+            @if ($this->devices->count() > 1)
+                <button type="button" class="btn btn-light-danger me-auto" x-on:click="amsConfirm('Sign out of the app on every device?', 'Sign out all').then(ok => ok && $wire.signOutAll())">Sign out all</button>
+            @endif
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button>
+        </div>
+    </x-modal>
 
     <x-modal id="userModal" :title="($userId ? 'Edit ' : 'New ').($role === 'agent' ? 'Agent' : 'Administrator')" icon="ri-user-settings-line" size="md">
         <form wire:submit="save">

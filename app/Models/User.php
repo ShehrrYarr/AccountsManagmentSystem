@@ -8,11 +8,22 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use Auditable, HasFactory, Notifiable;
+    use Auditable, HasApiTokens, HasFactory, Notifiable;
+
+    protected static function booted(): void
+    {
+        // Deactivating someone (or taking their AMS role away) signs out every app device they use.
+        static::updated(function (User $user) {
+            if ($user->wasChanged(['is_active', 'role']) && (! $user->is_active || ! ($user->isAdmin() || $user->isAgent()))) {
+                $user->tokens()->delete();
+            }
+        });
+    }
 
     protected $fillable = [
         'name',
