@@ -10,6 +10,11 @@
             .($badge ? '<span class="badge bg-danger rounded-pill ms-auto">'.e($badge).'</span>' : '')
             .'</a></li>';
     };
+    $sub = function (string $route, string $label, ?string $pattern = null) use ($path) {
+        $active = request()->routeIs($pattern ?? $route) ? ' active' : '';
+
+        return '<li class="slide"><a href="'.e($path($route)).'" class="side-menu__item'.$active.'" role="menuitem">'.e($label).'</a></li>';
+    };
     $isAdmin = auth()->user()?->isAdmin();
     $pending = $isAdmin ? \App\Models\ChequeChangeRequest::pending()->count() + \App\Models\PaymentChangeRequest::pending()->count() + \App\Models\Transfer::pending()->count() : 0;
 @endphp
@@ -20,13 +25,24 @@
         {!! $item('approvals.index', 'ri-checkbox-multiple-line', 'Approvals', 'approvals.*', $pending ? (string) $pending : null) !!}
     @endif
 
+    <li class="menu-title" role="presentation">Forms</li>
+    <li class="slide">
+        <a href="#!" class="side-menu__item" role="menuitem">
+            <span class="side_menu_icon"><i class="ri-file-edit-line"></i></span>
+            <span class="side-menu__label">Cheque &amp; Expense</span>
+            <i class="ri-arrow-down-s-line side-menu__angle"></i>
+        </a>
+        <ul class="slide-menu" role="menu">
+            {!! $sub('cheques.create', 'Deposit Cheque') !!}
+            {!! $sub('payments.create', 'Pay Department') !!}
+        </ul>
+    </li>
+
     <li class="menu-title" role="presentation">Money In</li>
     {!! $item('cheques.index', 'ri-bank-card-line', $isAdmin ? 'Govt Cheques' : 'My Govt Cheques') !!}
-    {!! $item('cheques.create', 'ri-add-circle-line', 'Deposit Cheque') !!}
 
     @unless ($isAdmin)
         <li class="menu-title" role="presentation">Money Out</li>
-        {!! $item('payments.create', 'ri-add-circle-line', 'Pay Department') !!}
         {!! $item('payments.index', 'ri-hand-coin-line', 'My Department Payments') !!}
 
         <li class="menu-title" role="presentation">My Money</li>
@@ -36,7 +52,6 @@
 
     @if ($isAdmin)
         <li class="menu-title" role="presentation">Money Out</li>
-        {!! $item('payments.create', 'ri-add-circle-line', 'Pay Department') !!}
         {!! $item('payments.index', 'ri-hand-coin-line', 'Department Payments') !!}
         {!! $item('supplier-payments.index', 'ri-store-2-line', 'Supplier Payments', 'supplier-payments.*') !!}
         {!! $item('expenses.index', 'ri-receipt-line', 'Expenses', 'expenses.*') !!}
