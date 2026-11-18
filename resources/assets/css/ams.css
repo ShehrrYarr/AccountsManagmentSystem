@@ -68,3 +68,7 @@
 .ams-balance { font-variant-numeric: tabular-nums; }
 
 .side-menu__item .badge { margin-left: auto; }
+
+/* Compact sidebar: less space above and below each link and section heading. */
+.app-sidebar .side-menu__item { padding-top: 5px; padding-bottom: 5px; }
+.app-sidebar .menu-title { padding-top: 7px; padding-bottom: 1px; }
