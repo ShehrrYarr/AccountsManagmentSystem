@@ -13,11 +13,13 @@
  *     (date, type, company, bank / supplier, department) stays filled; the light-blue card
  *     (amount, description, reference, received by, receipt, notes) clears after each
  *     "Add to table". "Save all" saves the table together, all-or-nothing, and stays here.
+ *     The unsaved form and table are kept in the browser (KeepsDraft) and come back after a reload.
  */
 
 use App\Enums\PaymentMethod;
 use App\Exceptions\BusinessRuleException;
 use App\Livewire\Concerns\InteractsWithUi;
+use App\Livewire\Concerns\KeepsDraft;
 use App\Models\Account;
 use App\Models\Company;
 use App\Models\Department;
@@ -36,7 +38,7 @@ use Illuminate\Support\Str;
 
 use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesFileUploads};
 
-uses([InteractsWithUi::class]);
+uses([InteractsWithUi::class, KeepsDraft::class]);
 usesFileUploads();
 
 state(['paymentId' => null, 'asPage' => false])->locked();
@@ -228,6 +230,7 @@ mount(function (bool $asPage = false, $company = null, $department = null, $meth
         $companyId = $id($company) ?? ($this->isAdmin ? null : ($this->companyOptions[0]['value'] ?? null));
         $this->startNew($companyId, $id($department) ?? ($this->departmentOptions[0]['value'] ?? null), $method);
         unset($this->companyOptions, $this->departmentOptions);
+        $this->newDraftToken();
     }
 });
 
@@ -337,9 +340,11 @@ $addRow = function () {
     if ($this->receipt) {
         if ($receiptPath) {
             Storage::disk('local')->delete($receiptPath); // replaced
+            $this->forgetDraftFiles([$receiptPath]);
         }
         $receiptName = $this->receipt->getClientOriginalName();
         $receiptPath = $this->storeUpload($this->receipt, 'receipts');
+        $this->rememberDraftFile($receiptPath);
     }
 
     // Keep what the rules decided (cash: no company, the admin's cash; on credit: no bank).
@@ -409,6 +414,7 @@ $removeRow = function (int $i) {
     }
     if ($path = $this->rows[$i]['receipt_path']) {
         Storage::disk('local')->delete($path);
+        $this->forgetDraftFiles([$path]);
     }
     if ($this->editingRow === $i) {
         $this->finishEdit();
@@ -475,12 +481,92 @@ $saveAll = function () {
     // Stay on the page for the next batch: empty table, payment details kept.
     $count = count($this->rows);
     $total = $this->total;
+    $this->markDraftSaved(array_column($this->rows, 'receipt_path'));
     $this->rows = [];
     $this->rowErrors = [];
     $this->clearItemFields();
     unset($this->lookups, $this->total, $this->position, $this->agentHolds, $this->supplierOwed, $this->companyOptions, $this->accountOptions);
     $this->toast('success', $count.' '.Str::plural('payment', $count).' of '.money($total).' saved.');
     $this->broadcastChange();
+};
+
+// ── Page: the browser's copy of the unsaved form and table ─────────────────────────────
+
+/** Put back what the browser kept. Returns whether anything was restored. */
+$restoreDraft = function (array $draft) {
+    abort_unless($this->asPage, 404);
+    if ($this->draftWasSaved($draft['draftToken'] ?? null)) {
+        return ['restored' => false]; // this batch was saved already
+    }
+
+    $batch = function (array $d) {
+        $method = PaymentMethod::tryFrom((string) ($d['method'] ?? ''))?->value ?? PaymentMethod::Cash->value;
+
+        return [
+            'date' => $this->draftDate($d['date'] ?? null),
+            'method' => $this->isAdmin ? $method : PaymentMethod::BankTransfer->value,
+            'company_id' => $this->draftId($d['company_id'] ?? null),
+            'account_id' => $this->draftId($d['account_id'] ?? null),
+            'supplier_id' => $this->draftId($d['supplier_id'] ?? null),
+            'on_credit' => ($d['on_credit'] ?? '0') == '1' ? '1' : '0',
+            'department_id' => $this->draftId($d['department_id'] ?? null),
+        ];
+    };
+    $item = fn (array $d) => [
+        'amount' => $this->draftAmount($d['amount'] ?? null),
+        'item_description' => $this->draftText($d['item_description'] ?? ''),
+        'reference' => $this->draftText($d['reference'] ?? ''),
+        'received_by' => $this->draftText($d['received_by'] ?? ''),
+        'notes' => $this->draftText($d['notes'] ?? '', 500),
+    ];
+
+    $rows = [];
+    foreach ($this->draftRows($draft['rows'] ?? null) as $r) {
+        $row = $batch($r) + $item($r);
+        if ($row['date'] === '' || $row['amount'] === '' || ! $row['department_id']) {
+            continue;
+        }
+        $path = $this->draftFile($r['receipt_path'] ?? null, 'receipts');
+        $rows[] = array_merge($row, [
+            'amount' => Money::of($row['amount']),
+            'receipt_path' => $path,
+            'receipt_name' => $path ? $this->draftText($r['receipt_name'] ?? '') : null,
+        ]);
+    }
+
+    $editing = is_int($draft['editingRow'] ?? null) && isset($rows[$draft['editingRow']]) ? $draft['editingRow'] : null;
+    $rowReceipt = $editing !== null ? $this->draftFile($draft['rowReceiptPath'] ?? null, 'receipts') : null;
+
+    $this->fill($batch($draft) + $item($draft) + [
+        'rows' => $rows,
+        'rowErrors' => [],
+        'editingRow' => $editing,
+        'rowReceiptPath' => $rowReceipt,
+        'rowReceiptName' => $rowReceipt ? $this->draftText($draft['rowReceiptName'] ?? '') : null,
+        'heldBatch' => $editing !== null && is_array($draft['heldBatch'] ?? null) ? $batch($draft['heldBatch']) : null,
+    ]);
+    if ($this->date === '') {
+        $this->date = now()->toDateString();
+    }
+    if (is_string($draft['draftToken'] ?? null) && Str::isUuid($draft['draftToken'])) {
+        $this->draftToken = $draft['draftToken'];
+    }
+    $this->resetErrorBag();
+    unset($this->accountOptions, $this->companyOptions, $this->departmentOptions, $this->supplierOptions,
+        $this->position, $this->agentHolds, $this->supplierOwed, $this->lookups, $this->total);
+
+    return ['restored' => true];
+};
+
+/** "Discard": empty the table (deleting its receipts) and the item fields; the payment details stay. */
+$discardDraft = function () {
+    abort_unless($this->asPage, 404);
+    $this->deleteDraftFiles(array_column($this->rows, 'receipt_path'), 'receipts');
+    $this->rows = [];
+    $this->rowErrors = [];
+    $this->finishEdit();
+    $this->newDraftToken();
+    unset($this->lookups, $this->total);
 };
 
 ?>
@@ -665,7 +751,9 @@ $saveAll = function () {
         <input type="file" class="form-control form-control-sm @error('receipt') is-invalid @enderror" wire:model="receipt" accept=".jpg,.jpeg,.png,.pdf">
         <div wire:loading wire:target="receipt" class="form-text fs-11 mt-0"><i class="ri-loader-4-line"></i> Uploading…</div>
         @error('receipt') <div class="invalid-feedback">{{ $message }}</div> @enderror
-        @if (! $receipt && $existingReceipt && $paymentId)
+        @if ($receipt instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)
+            <div class="form-text fs-11 mt-0 text-truncate text-success"><i class="ri-attachment-2"></i> {{ $receipt->getClientOriginalName() }} attached</div>
+        @elseif (! $receipt && $existingReceipt && $paymentId)
             <div class="form-text fs-11 mt-0"><a href="{{ route('files.show', ['payment', $paymentId]) }}" target="_blank"><i class="ri-attachment-2"></i> Current receipt</a> — upload to replace</div>
         @elseif (! $receipt && $rowReceiptPath)
             <div class="form-text fs-11 mt-0 text-truncate"><i class="ri-attachment-2"></i> {{ $rowReceiptName }} — upload to replace</div>
@@ -680,8 +768,9 @@ $saveAll = function () {
     </div>
 @php($itemFields = ob_get_clean())
 
-<div @if ($asPage) x-data x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-department', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id', 'amount', 'item_description', 'reference', 'received_by', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['amount', 'item_description', 'reference', 'received_by', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
     @if ($asPage)
+        @include('layouts.partials.form-draft-notice')
         <form wire:submit="addRow" id="paymentFormPage">
             @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
 
@@ -711,7 +800,7 @@ $saveAll = function () {
                         @if ($editingRow !== null)
                             <button type="button" class="btn btn-sm btn-light" wire:click="cancelEdit">Cancel</button>
                         @endif
-                        <button type="submit" class="btn btn-sm btn-primary px-4" wire:loading.attr="disabled" wire:target="addRow,receipt">
+                        <button type="submit" class="btn btn-sm btn-primary px-4" wire:loading.attr="disabled" wire:offline.attr="disabled" wire:target="addRow,receipt">
                             <span wire:loading.remove wire:target="addRow">
                                 <i class="{{ $editingRow !== null ? 'ri-check-line' : 'ri-add-line' }} me-1"></i>{{ $editingRow !== null ? 'Update row '.($editingRow + 1) : 'Add to table' }}
                             </span>
@@ -793,7 +882,7 @@ $saveAll = function () {
             <div class="card-footer d-flex flex-wrap align-items-center justify-content-end gap-2">
                 <a href="{{ route('payments.index') }}" class="btn btn-light me-auto"
                     @if ($rows) x-on:click="if (! confirm('Leave without saving the payments in the table?')) $event.preventDefault()" @endif>Back to payments</a>
-                <button type="button" class="btn btn-primary" wire:click="saveAll" wire:loading.attr="disabled" wire:target="saveAll,addRow,receipt" @disabled(! $rows)>
+                <button type="button" class="btn btn-primary" wire:click="saveAll" wire:loading.attr="disabled" wire:offline.attr="disabled" wire:target="saveAll,addRow,receipt" @disabled(! $rows)>
                     <span wire:loading.remove wire:target="saveAll"><i class="ri-save-3-line me-1"></i>Save all</span>
                     <span wire:loading wire:target="saveAll"><i class="ri-loader-4-line me-1"></i>Saving…</span>
                 </button>

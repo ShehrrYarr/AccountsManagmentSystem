@@ -11,10 +11,12 @@
  *     prefilled from ?company=5&department=2). The white "batch details" card (date, company, bank,
  *     branch, department) stays filled; the light-blue "cheque details" card clears after each
  *     "Add to table". "Save & deposit all" saves the table together, all-or-nothing, and stays here.
+ *     The unsaved form and table are kept in the browser (KeepsDraft) and come back after a reload.
  */
 
 use App\Exceptions\BusinessRuleException;
 use App\Livewire\Concerns\InteractsWithUi;
+use App\Livewire\Concerns\KeepsDraft;
 use App\Models\Account;
 use App\Models\Cheque;
 use App\Models\Company;
@@ -32,7 +34,7 @@ use Illuminate\Support\Str;
 
 use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesFileUploads};
 
-uses([InteractsWithUi::class]);
+uses([InteractsWithUi::class, KeepsDraft::class]);
 usesFileUploads();
 
 state(['chequeId' => null, 'asPage' => false])->locked();
@@ -158,6 +160,7 @@ mount(function (bool $asPage = false, $company = null, $department = null) {
         );
         $this->cheque_date = now()->toDateString();
         unset($this->companyOptions, $this->departmentOptions);
+        $this->newDraftToken();
     }
 });
 
@@ -283,9 +286,11 @@ $addRow = function () {
     if ($this->scan) {
         if ($scanPath) {
             Storage::disk('local')->delete($scanPath); // replaced
+            $this->forgetDraftFiles([$scanPath]);
         }
         $scanName = $this->scan->getClientOriginalName();
         $scanPath = $this->storeUpload($this->scan, 'cheques');
+        $this->rememberDraftFile($scanPath);
     }
 
     $row = array_merge($data, [
@@ -361,6 +366,7 @@ $removeRow = function (int $i) {
     }
     if ($path = $this->rows[$i]['scan_path']) {
         Storage::disk('local')->delete($path);
+        $this->forgetDraftFiles([$path]);
     }
     if ($this->editingRow === $i) {
         $this->finishEdit();
@@ -420,12 +426,89 @@ $saveAll = function () {
     // Stay on the page for the next batch: empty table, batch details kept.
     $count = count($this->rows);
     $total = $this->totals['amount'];
+    $this->markDraftSaved(array_column($this->rows, 'scan_path'));
     $this->rows = [];
     $this->rowErrors = [];
     $this->clearChequeFields();
     unset($this->lookups, $this->totals, $this->position);
     $this->toast('success', $count.' '.Str::plural('cheque', $count).' of '.money($total).' deposited.');
     $this->broadcastChange();
+};
+
+// ── Page: the browser's copy of the unsaved form and table ─────────────────────────────
+
+/** Put back what the browser kept. Returns whether anything was restored. */
+$restoreDraft = function (array $draft) {
+    abort_unless($this->asPage, 404);
+    if ($this->draftWasSaved($draft['draftToken'] ?? null)) {
+        return ['restored' => false]; // this batch was saved already
+    }
+
+    $batch = fn (array $d) => [
+        'cheque_date' => $this->draftDate($d['cheque_date'] ?? null),
+        'company_id' => $this->draftId($d['company_id'] ?? null),
+        'deposit_account_id' => $this->draftId($d['deposit_account_id'] ?? null),
+        'issuing_branch' => $this->draftText($d['issuing_branch'] ?? ''),
+        'department_id' => $this->draftId($d['department_id'] ?? null),
+    ];
+
+    $rows = [];
+    foreach ($this->draftRows($draft['rows'] ?? null) as $r) {
+        $date = $this->draftDate($r['cheque_date'] ?? null);
+        $amount = $this->draftAmount($r['amount'] ?? null);
+        if ($date === '' || $amount === '') {
+            continue;
+        }
+        $path = $this->draftFile($r['scan_path'] ?? null, 'cheques');
+        $rows[] = array_merge($batch($r), [
+            'cheque_date' => $date,
+            'company_id' => (int) $this->draftId($r['company_id'] ?? null),
+            'deposit_account_id' => (int) $this->draftId($r['deposit_account_id'] ?? null),
+            'department_id' => (int) $this->draftId($r['department_id'] ?? null),
+            'cheque_number' => $this->draftText($r['cheque_number'] ?? '', 50),
+            'amount' => Money::of($amount),
+            'bank_charges' => Money::of($this->draftAmount($r['bank_charges'] ?? null)),
+            'notes' => $this->draftText($r['notes'] ?? '', 500),
+            'deposit_reference' => $this->draftText($r['deposit_reference'] ?? ''),
+            'scan_path' => $path,
+            'scan_name' => $path ? $this->draftText($r['scan_name'] ?? '') : null,
+        ]);
+    }
+
+    $editing = is_int($draft['editingRow'] ?? null) && isset($rows[$draft['editingRow']]) ? $draft['editingRow'] : null;
+    $rowScan = $editing !== null ? $this->draftFile($draft['rowScanPath'] ?? null, 'cheques') : null;
+
+    $this->fill($batch($draft) + [
+        'cheque_number' => $this->draftText($draft['cheque_number'] ?? '', 50),
+        'amount' => $this->draftAmount($draft['amount'] ?? null),
+        'bank_charges' => $this->draftAmount($draft['bank_charges'] ?? null),
+        'notes' => $this->draftText($draft['notes'] ?? '', 500),
+        'deposit_reference' => $this->draftText($draft['deposit_reference'] ?? ''),
+        'rows' => $rows,
+        'rowErrors' => [],
+        'editingRow' => $editing,
+        'rowScanPath' => $rowScan,
+        'rowScanName' => $rowScan ? $this->draftText($draft['rowScanName'] ?? '') : null,
+        'heldBatch' => $editing !== null && is_array($draft['heldBatch'] ?? null) ? $batch($draft['heldBatch']) : null,
+    ]);
+    if (is_string($draft['draftToken'] ?? null) && Str::isUuid($draft['draftToken'])) {
+        $this->draftToken = $draft['draftToken'];
+    }
+    $this->resetErrorBag();
+    unset($this->bankOptions, $this->companyOptions, $this->departmentOptions, $this->position, $this->lookups, $this->totals);
+
+    return ['restored' => true];
+};
+
+/** "Discard": empty the table (deleting its pictures) and the cheque fields; the batch details stay. */
+$discardDraft = function () {
+    abort_unless($this->asPage, 404);
+    $this->deleteDraftFiles(array_column($this->rows, 'scan_path'), 'cheques');
+    $this->rows = [];
+    $this->rowErrors = [];
+    $this->finishEdit();
+    $this->newDraftToken();
+    unset($this->lookups, $this->totals);
 };
 
 ?>
@@ -546,7 +629,9 @@ $saveAll = function () {
         <input type="file" class="form-control form-control-sm @error('scan') is-invalid @enderror" wire:model="scan" accept=".jpg,.jpeg,.png,.pdf">
         <div wire:loading wire:target="scan" class="form-text fs-11 mt-0"><i class="ri-loader-4-line"></i> Uploading…</div>
         @error('scan') <div class="invalid-feedback">{{ $message }}</div> @enderror
-        @if (! $scan && $existingScan && $chequeId)
+        @if ($scan instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile)
+            <div class="form-text fs-11 mt-0 text-truncate text-success"><i class="ri-attachment-2"></i> {{ $scan->getClientOriginalName() }} attached</div>
+        @elseif (! $scan && $existingScan && $chequeId)
             <div class="form-text fs-11 mt-0"><a href="{{ route('files.show', ['cheque', $chequeId]) }}" target="_blank"><i class="ri-attachment-2"></i> Current picture</a> — upload to replace</div>
         @elseif (! $scan && $rowScanPath)
             <div class="form-text fs-11 mt-0 text-truncate"><i class="ri-attachment-2"></i> {{ $rowScanName }} — upload to replace</div>
@@ -568,8 +653,9 @@ $saveAll = function () {
     </div>
 @php($chequeFields = ob_get_clean())
 
-<div @if ($asPage) x-data x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':cheque-deposit', 'file' => 'scan', 'fields' => ['cheque_date', 'company_id', 'deposit_account_id', 'issuing_branch', 'department_id', 'cheque_number', 'amount', 'bank_charges', 'notes', 'deposit_reference', 'rows', 'editingRow', 'rowScanPath', 'rowScanName', 'heldBatch', 'draftToken'], 'itemFields' => ['cheque_number', 'amount', 'bank_charges', 'notes', 'deposit_reference']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
     @if ($asPage)
+        @include('layouts.partials.form-draft-notice')
         <form wire:submit="addRow" id="chequeFormPage">
             @error('general') <div class="alert alert-danger py-2">{{ $message }}</div> @enderror
 
@@ -599,7 +685,7 @@ $saveAll = function () {
                         @if ($editingRow !== null)
                             <button type="button" class="btn btn-sm btn-light" wire:click="cancelEdit">Cancel</button>
                         @endif
-                        <button type="submit" class="btn btn-sm btn-primary px-4" wire:loading.attr="disabled" wire:target="addRow,scan">
+                        <button type="submit" class="btn btn-sm btn-primary px-4" wire:loading.attr="disabled" wire:offline.attr="disabled" wire:target="addRow,scan">
                             <span wire:loading.remove wire:target="addRow">
                                 <i class="{{ $editingRow !== null ? 'ri-check-line' : 'ri-add-line' }} me-1"></i>{{ $editingRow !== null ? 'Update row '.($editingRow + 1) : 'Add to table' }}
                             </span>
@@ -678,7 +764,7 @@ $saveAll = function () {
             <div class="card-footer d-flex flex-wrap align-items-center justify-content-end gap-2">
                 <a href="{{ route('cheques.index') }}" class="btn btn-light me-auto"
                     @if ($rows) x-on:click="if (! confirm('Leave without saving the cheques in the table?')) $event.preventDefault()" @endif>Back to cheques</a>
-                <button type="button" class="btn btn-primary" wire:click="saveAll" wire:loading.attr="disabled" wire:target="saveAll,addRow,scan" @disabled(! $rows)>
+                <button type="button" class="btn btn-primary" wire:click="saveAll" wire:loading.attr="disabled" wire:offline.attr="disabled" wire:target="saveAll,addRow,scan" @disabled(! $rows)>
                     <span wire:loading.remove wire:target="saveAll"><i class="ri-save-3-line me-1"></i>Save &amp; deposit all</span>
                     <span wire:loading wire:target="saveAll"><i class="ri-loader-4-line me-1"></i>Saving…</span>
                 </button>

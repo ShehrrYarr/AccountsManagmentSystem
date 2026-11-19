@@ -11,5 +11,6 @@
 @endsection
 
 @section('content')
+    @include('layouts.partials.form-draft')
     <livewire:payments.create :as-page="true" :company="request()->query('company')" :department="request()->query('department')" :method="request()->query('method')" />
 @endsection
