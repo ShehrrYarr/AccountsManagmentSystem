@@ -61,7 +61,7 @@ $baseQuery = computed(fn () => Payment::query()->visibleTo(auth()->user())
     }));
 
 $payments = computed(fn () => (clone $this->baseQuery)
-    ->with(['company', 'department', 'account.agent', 'supplier', 'pendingRequest', 'latestRequest'])
+    ->with(['company', 'department', 'account.agent', 'supplier', 'pendingRequest', 'latestRequest', 'taxes.tax'])
     ->orderByDesc('date')->orderByDesc('id')
     ->paginate($this->perPage, pageName: 'paymentsPage'));
 
@@ -185,7 +185,9 @@ $clearFilters = function () {
                                 @if ($p->supplier)<a href="{{ route('suppliers.show', $p->supplier_id) }}" class="text-body">{{ $p->supplier->name }}</a>@endif
                                 @if ($p->account)<div class="fs-12 text-muted">{{ $p->account->shortLabel() }}</div>@endif
                             </td>
-                            <td class="money fw-semibold d-none d-md-table-cell">{{ money($p->amount) }}</td>
+                            <td class="money fw-semibold d-none d-md-table-cell">{{ money($p->amount) }}
+                                @foreach ($p->taxes as $t)<div class="fs-11 text-muted fw-normal">+ {{ $t->tax?->name }} {{ money($t->amount) }}</div>@endforeach
+                            </td>
                             <td class="text-end text-nowrap">
                                 @php($pending = $p->pendingRequest)
                                 @php($latest = $p->latestRequest)

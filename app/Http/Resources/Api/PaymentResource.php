@@ -25,6 +25,8 @@ class PaymentResource extends ApiResource
             'supplier' => self::ref($this->supplier),
             'on_credit' => (bool) $this->on_credit,
             'amount' => self::money($this->amount),
+            'taxes' => $this->taxes->map(fn ($t) => ['tax_id' => $t->tax_id, 'name' => $t->tax?->name, 'amount' => self::money($t->amount)])->values(),
+            'tax_total' => self::money($this->taxTotal()),
             'description' => $this->item_description,
             'quantity' => $this->quantity === null ? null : rtrim(rtrim((string) $this->quantity, '0'), '.'),
             'unit_price' => self::money($this->unit_price),

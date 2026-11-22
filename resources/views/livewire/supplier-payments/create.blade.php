@@ -16,6 +16,7 @@
  */
 
 use App\Exceptions\BusinessRuleException;
+use App\Livewire\Concerns\HasTaxFields;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Livewire\Concerns\KeepsDraft;
 use App\Models\Account;
@@ -34,7 +35,7 @@ use Illuminate\Support\Str;
 
 use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesFileUploads};
 
-uses([InteractsWithUi::class, KeepsDraft::class]);
+uses([InteractsWithUi::class, KeepsDraft::class, HasTaxFields::class]);
 usesFileUploads();
 
 state(['recordId' => null, 'asPage' => false])->locked();
@@ -79,6 +80,7 @@ $lookups = computed(function () {
         'companies' => Company::withTrashed()->whereIn('id', $rows->pluck('company_id')->filter())->pluck('name', 'id'),
         'accounts' => Account::withTrashed()->whereIn('id', $rows->pluck('account_id')->filter())->get()->mapWithKeys(fn ($a) => [$a->id => $a->shortLabel()]),
         'suppliers' => Supplier::whereIn('id', $rows->pluck('supplier_id'))->pluck('name', 'id'),
+        'taxes' => \App\Models\Tax::whereIn('id', $rows->pluck('taxes')->flatten(1)->pluck('tax_id')->filter())->pluck('name', 'id'),
     ];
 });
 
@@ -103,7 +105,7 @@ $updatedMethod = function () {
         $this->method = 'cash';
     }
     if ($this->method === 'cash') {
-        $this->fill(['company_id' => null, 'account_id' => null]);
+        $this->fill(['company_id' => null, 'account_id' => null, 'taxes' => []]); // taxes only leave a bank
     }
     $this->pickAccount();
     $this->resetErrorBag();
@@ -112,7 +114,7 @@ $updatedMethod = function () {
 $resetForm = function () {
     $this->fill([
         'date' => now()->toDateString(), 'method' => 'cash', 'company_id' => null, 'account_id' => null, 'supplier_id' => null,
-        'amount' => '', 'reference' => '', 'receipt' => null, 'notes' => '', 'existingReceipt' => false,
+        'amount' => '', 'taxes' => [], 'addingTax' => false, 'newTax' => '', 'reference' => '', 'receipt' => null, 'notes' => '', 'existingReceipt' => false,
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null, 'heldBatch' => null,
     ]);
     $this->recordId = null;
@@ -167,6 +169,7 @@ on(['supplier-payment-edit' => function (int $id) {
         'reference' => $p->reference ?? '',
         'notes' => $p->notes ?? '',
         'existingReceipt' => (bool) $p->receipt_path,
+        'taxes' => $this->taxRowsOf($p),
     ]);
     unset($this->accountOptions);
     $this->showModal('supplierPaymentModal');
@@ -186,6 +189,7 @@ $serviceData = fn (array $values) => [
     'reference' => filled($values['reference'] ?? null) ? trim($values['reference']) : null,
     'notes' => filled($values['notes'] ?? null) ? trim($values['notes']) : null,
     'receipt_path' => $values['receipt_path'] ?? null,
+    'taxes' => $values['method'] === 'cash' ? [] : ($values['taxes'] ?? []),
 ];
 
 $formValues = fn () => $this->only([...SupplierPaymentRules::BATCH_FIELDS, ...SupplierPaymentRules::ITEM_FIELDS]);
@@ -258,6 +262,7 @@ $addRow = function () {
         'amount' => Money::of($values['amount']),
         'reference' => trim((string) $values['reference']),
         'notes' => trim((string) $values['notes']),
+        'taxes' => $checked->pendingTaxes ?? [],
     ]);
     if ($why = $this->overpaid($row)) {
         $this->addError('amount', $why);
@@ -292,7 +297,7 @@ $addRow = function () {
 /** Clear only the item fields (the light-blue card). */
 $clearItemFields = function () {
     $this->fill([
-        'amount' => '', 'reference' => '', 'receipt' => null, 'notes' => '',
+        'amount' => '', 'taxes' => [], 'addingTax' => false, 'newTax' => '', 'reference' => '', 'receipt' => null, 'notes' => '',
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null,
     ]);
     $this->resetErrorBag();
@@ -428,6 +433,7 @@ $restoreDraft = function (array $draft) {
     };
     $item = fn (array $d) => [
         'amount' => $this->draftAmount($d['amount'] ?? null),
+        'taxes' => ($d['method'] ?? 'cash') === 'bank_transfer' ? $this->cleanTaxRows($d['taxes'] ?? []) : [],
         'reference' => $this->draftText($d['reference'] ?? ''),
         'notes' => $this->draftText($d['notes'] ?? '', 2000),
     ];
@@ -582,6 +588,10 @@ $discardDraft = function () {
         @endif
     </div>
 
+    @if ($method === 'bank_transfer')
+        @include('partials.payment-taxes', ['taxes' => $taxes, 'taxOptions' => $this->taxOptions(), 'label' => $label, 'addingTax' => $addingTax, 'canAddTax' => true, 'amount' => $amount])
+    @endif
+
     {{-- 8. Notes --}}
     <div class="{{ $asPage ? 'col-xl-3 col-sm-6' : 'col-md-6' }}">
         <label class="{{ $label }}">Notes</label>
@@ -590,7 +600,7 @@ $discardDraft = function () {
     </div>
 @php($itemFields = ob_get_clean())
 
-<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-supplier', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'amount', 'reference', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['amount', 'reference', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-supplier', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'amount', 'taxes', 'reference', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['amount', 'taxes', 'reference', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
     @if ($asPage)
         @include('layouts.partials.form-draft-notice')
         <form wire:submit="addRow" id="supplierPaymentFormPage">
@@ -661,7 +671,11 @@ $discardDraft = function () {
                                     @endif
                                 </td>
                                 <td>{{ $this->lookups['suppliers'][$row['supplier_id']] ?? '—' }}</td>
-                                <td class="money text-end text-nowrap fw-semibold">{{ money($row['amount']) }}</td>
+                                <td class="money text-end text-nowrap fw-semibold">{{ money($row['amount']) }}
+                                    @foreach ($row['taxes'] ?? [] as $t)
+                                        <div class="fs-11 text-muted fw-normal">+ {{ $this->lookups['taxes'][$t['tax_id']] ?? 'Tax' }} {{ money($t['amount']) }}</div>
+                                    @endforeach
+                                </td>
                                 <td class="text-truncate" style="max-width: 16rem" title="{{ trim($row['reference'].' '.$row['notes']) }}">
                                     {{ collect([$row['reference'] ? 'Ref '.$row['reference'] : null, $row['notes'] ?: null])->filter()->implode(' · ') ?: '—' }}
                                 </td>

@@ -33,7 +33,8 @@ class PaymentApprovalService
                 continue;
             }
             $new = $this->normalise($field, $data[$field]);
-            if ($new !== $this->normalise($field, $payment->getRawOriginal($field))) {
+            $now = $field === 'taxes' ? $payment->taxes->map->only(['tax_id', 'amount'])->all() : $payment->getRawOriginal($field);
+            if ($new !== $this->normalise($field, $now)) {
                 $changes[$field] = $new;
             }
         }
@@ -133,6 +134,11 @@ class PaymentApprovalService
             'amount' => Money::of($value),
             'company_id', 'account_id', 'department_id' => $value === null || $value === '' ? null : (int) $value,
             'date' => $value ? substr((string) $value, 0, 10) : null,
+            // A list of ['tax_id', 'amount'], in a fixed order so two lists compare equal.
+            'taxes' => collect(is_array($value) ? $value : [])
+                ->filter(fn ($t) => ! empty($t['tax_id']) && is_numeric($t['amount'] ?? null))
+                ->map(fn ($t) => ['tax_id' => (int) $t['tax_id'], 'amount' => Money::of($t['amount'])])
+                ->sortBy('tax_id')->values()->all(),
             default => filled($value) ? trim((string) $value) : null,
         };
     }

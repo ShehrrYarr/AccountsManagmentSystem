@@ -18,6 +18,7 @@
 
 use App\Enums\PaymentMethod;
 use App\Exceptions\BusinessRuleException;
+use App\Livewire\Concerns\HasTaxFields;
 use App\Livewire\Concerns\InteractsWithUi;
 use App\Livewire\Concerns\KeepsDraft;
 use App\Models\Account;
@@ -38,7 +39,7 @@ use Illuminate\Support\Str;
 
 use function Livewire\Volt\{computed, mount, on, rules, state, uses, usesFileUploads};
 
-uses([InteractsWithUi::class, KeepsDraft::class]);
+uses([InteractsWithUi::class, KeepsDraft::class, HasTaxFields::class]);
 usesFileUploads();
 
 state(['paymentId' => null, 'asPage' => false])->locked();
@@ -136,7 +137,7 @@ $agentHolds = computed(function () {
     }
     foreach ($this->rows as $i => $row) {
         if ($i !== $this->editingRow && $row['company_id'] == $this->company_id) {
-            $holds = Money::sub($holds, $row['amount']);
+            $holds = Money::sub($holds, Money::add($row['amount'], $this->sumTaxes($row['taxes'] ?? [])));
         }
     }
 
@@ -156,6 +157,7 @@ $lookups = computed(function () {
         'accounts' => Account::withTrashed()->whereIn('id', $rows->pluck('account_id')->filter())->get()->mapWithKeys(fn ($a) => [$a->id => $a->shortLabel()]),
         'departments' => Department::whereIn('id', $rows->pluck('department_id'))->pluck('name', 'id'),
         'suppliers' => Supplier::whereIn('id', $rows->pluck('supplier_id')->filter())->pluck('name', 'id'),
+        'taxes' => \App\Models\Tax::whereIn('id', $rows->pluck('taxes')->flatten(1)->pluck('tax_id')->filter())->pluck('name', 'id'),
     ];
 });
 
@@ -189,20 +191,29 @@ $updatedMethod = function () {
     if ($this->method !== 'goods') {
         $this->fill(['supplier_id' => null, 'on_credit' => '0', 'quantity' => '', 'unit_price' => '']);
     }
+    if (! $this->taxable()) {
+        $this->taxes = [];
+    }
     $this->pickAccount();
     $this->resetErrorBag();
     unset($this->position, $this->supplierOwed);
 };
 
 $updatedOnCredit = function () {
+    if (! $this->taxable()) {
+        $this->taxes = [];
+    }
     $this->pickAccount();
 };
+
+/** Taxes go with money leaving a bank: bank transfers (agents' too) and goods paid from a bank. */
+$taxable = fn () => ! $this->isAdmin || $this->method === 'bank_transfer' || ($this->method === 'goods' && $this->on_credit !== '1');
 
 $resetForm = function () {
     $this->fill([
         'date' => now()->toDateString(), 'method' => $this->isAdmin ? 'cash' : 'bank_transfer', 'company_id' => null, 'account_id' => null,
         'supplier_id' => null, 'on_credit' => '0', 'department_id' => null,
-        'quantity' => '', 'unit_price' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
+        'quantity' => '', 'unit_price' => '', 'taxes' => [], 'addingTax' => false, 'newTax' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
         'existingReceipt' => false, 'newDepartment' => '', 'addingDepartment' => false, 'newSupplier' => '', 'addingSupplier' => false,
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null, 'heldBatch' => null, 'changeReason' => '',
     ]);
@@ -264,6 +275,7 @@ on(['payment-edit' => function (int $id) {
         'quantity' => $p->quantity === null ? '' : rtrim(rtrim((string) $p->quantity, '0'), '.'), 'unit_price' => $p->unit_price ?? '',
         'reference' => $p->reference ?? '', 'received_by' => $p->received_by ?? '', 'notes' => $p->notes ?? '',
         'existingReceipt' => (bool) $p->receipt_path,
+        'taxes' => $this->taxRowsOf($p),
     ]);
     unset($this->accountOptions);
     $this->showModal('paymentModal');
@@ -360,6 +372,7 @@ $addRow = function () {
         'amount' => Money::of($data['amount']),
         'quantity' => $checked->quantity === null ? '' : rtrim(rtrim((string) $checked->quantity, '0'), '.'),
         'unit_price' => $checked->unit_price ?? '',
+        'taxes' => $checked->pendingTaxes ?? [],
         'receipt_path' => $receiptPath,
         'receipt_name' => $receiptName,
     ]);
@@ -378,7 +391,7 @@ $addRow = function () {
 /** Clear only the item fields (the light-blue card). */
 $clearItemFields = function () {
     $this->fill([
-        'quantity' => '', 'unit_price' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
+        'quantity' => '', 'unit_price' => '', 'taxes' => [], 'addingTax' => false, 'newTax' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null,
     ]);
     $this->resetErrorBag();
@@ -519,6 +532,7 @@ $restoreDraft = function (array $draft) {
     };
     $item = fn (array $d) => [
         'quantity' => $this->draftAmount($d['quantity'] ?? null),
+        'taxes' => $this->cleanTaxRows($d['taxes'] ?? []),
         'unit_price' => $this->draftAmount($d['unit_price'] ?? null),
         'amount' => $this->draftAmount($d['amount'] ?? null),
         'item_description' => $this->draftText($d['item_description'] ?? ''),
@@ -790,6 +804,10 @@ $discardDraft = function () {
         @endif
     </div>
 
+    @if ($this->taxable())
+        @include('partials.payment-taxes', ['taxes' => $taxes, 'taxOptions' => $this->taxOptions(), 'label' => $label, 'addingTax' => $addingTax, 'canAddTax' => $this->isAdmin, 'amount' => $amount])
+    @endif
+
     {{-- 10. Notes --}}
     <div class="{{ $asPage ? 'col-12' : 'col-12' }}">
         <label class="{{ $label }}">Notes</label>
@@ -798,7 +816,7 @@ $discardDraft = function () {
     </div>
 @php($itemFields = ob_get_clean())
 
-<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-department', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id', 'quantity', 'unit_price', 'amount', 'item_description', 'reference', 'received_by', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['quantity', 'unit_price', 'amount', 'item_description', 'reference', 'received_by', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-department', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id', 'quantity', 'unit_price', 'amount', 'taxes', 'item_description', 'reference', 'received_by', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['quantity', 'unit_price', 'amount', 'taxes', 'item_description', 'reference', 'received_by', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
     @if ($asPage)
         @include('layouts.partials.form-draft-notice')
         <form wire:submit="addRow" id="paymentFormPage">
@@ -872,7 +890,11 @@ $discardDraft = function () {
                                     @endif
                                 </td>
                                 <td>{{ $this->lookups['departments'][$row['department_id']] ?? '—' }}</td>
-                                <td class="money text-end text-nowrap fw-semibold">{{ money($row['amount']) }}</td>
+                                <td class="money text-end text-nowrap fw-semibold">{{ money($row['amount']) }}
+                                    @foreach ($row['taxes'] ?? [] as $t)
+                                        <div class="fs-11 text-muted fw-normal">+ {{ $this->lookups['taxes'][$t['tax_id']] ?? 'Tax' }} {{ money($t['amount']) }}</div>
+                                    @endforeach
+                                </td>
                                 <td class="text-truncate" style="max-width: 14rem" title="{{ $row['item_description'] }}">{{ $row['item_description'] ?: '—' }}
                                     @if ($qty = Payment::quantityLine($row['quantity'] ?? null, $row['unit_price'] ?? null))<div class="fs-11 text-muted">{{ $qty }}</div>@endif
                                 </td>

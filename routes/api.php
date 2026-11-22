@@ -77,11 +77,11 @@ Route::prefix('v1')->name('api.')->group(function () {
         Route::get('agents/{agent}', [V1\AgentController::class, 'show'])->whereNumber('agent');
 
         // Departments, suppliers, expense categories (admin)
-        Route::get('{kind}', [V1\DirectoryController::class, 'index'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories']);
-        Route::post('{kind}', [V1\DirectoryController::class, 'store'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories']);
-        Route::get('{kind}/{id}', [V1\DirectoryController::class, 'show'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories'])->whereNumber('id');
-        Route::match(['put', 'patch'], '{kind}/{id}', [V1\DirectoryController::class, 'update'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories'])->whereNumber('id');
-        Route::delete('{kind}/{id}', [V1\DirectoryController::class, 'destroy'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories'])->whereNumber('id');
+        Route::get('{kind}', [V1\DirectoryController::class, 'index'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories', 'taxes']);
+        Route::post('{kind}', [V1\DirectoryController::class, 'store'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories', 'taxes']);
+        Route::get('{kind}/{id}', [V1\DirectoryController::class, 'show'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories', 'taxes'])->whereNumber('id');
+        Route::match(['put', 'patch'], '{kind}/{id}', [V1\DirectoryController::class, 'update'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories', 'taxes'])->whereNumber('id');
+        Route::delete('{kind}/{id}', [V1\DirectoryController::class, 'destroy'])->whereIn('kind', ['departments', 'suppliers', 'expense-categories', 'taxes'])->whereNumber('id');
 
         // Opening balances and deal closings (admin)
         Route::get('opening-balances', [V1\BooksController::class, 'openings']);

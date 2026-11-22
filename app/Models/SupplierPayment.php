@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LedgerAccount;
 use App\Enums\TransactionType;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\HasTaxes;
 use App\Models\Concerns\HasTransactions;
 use App\Models\Contracts\PostsToLedger;
 use Illuminate\Database\Eloquent\Model;
@@ -13,10 +14,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Paying a supplier what a company owes it:  Dr Supplier / Cr Cash or Bank.
+ * From a bank it may carry taxes paid on top (HasTaxes):  Dr Tax / Cr Bank, one transaction each.
  */
 class SupplierPayment extends Model implements PostsToLedger
 {
-    use Auditable, HasTransactions, SoftDeletes;
+    use Auditable, HasTaxes, HasTransactions, SoftDeletes;
 
     protected $fillable = ['company_id', 'supplier_id', 'account_id', 'amount', 'date', 'reference', 'notes', 'receipt_path', 'created_by'];
 
@@ -42,6 +44,8 @@ class SupplierPayment extends Model implements PostsToLedger
 
     public function ledgerPostings(): array
     {
+        $about = "Paid {$this->supplier?->name} from {$this->account?->shortLabel()}".($this->reference ? " — ref {$this->reference}" : '');
+
         return [[
             'type' => TransactionType::SupplierPayment,
             'date' => $this->date,
@@ -55,9 +59,10 @@ class SupplierPayment extends Model implements PostsToLedger
                 'account_id' => $this->account_id,
                 'amount' => $this->amount,
                 'reference' => $this->reference,
-                'description' => "Paid {$this->supplier?->name} from {$this->account?->shortLabel()}".($this->reference ? " — ref {$this->reference}" : ''),
+                'description' => $about,
                 'notes' => $this->notes,
             ],
-        ]];
+        ], ...($this->company_id ? $this->taxPostings(LedgerAccount::Money, $this->account_id, $about,
+            ['company_id' => $this->company_id, 'supplier_id' => $this->supplier_id, 'account_id' => $this->account_id, 'reference' => $this->reference]) : [])];
     }
 }

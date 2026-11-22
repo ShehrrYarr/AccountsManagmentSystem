@@ -24,7 +24,7 @@ use Illuminate\Validation\ValidationException;
  */
 class PaymentController extends ApiController
 {
-    private const WITH = ['company', 'department', 'account.agent', 'supplier', 'creator'];
+    private const WITH = ['company', 'department', 'account.agent', 'supplier', 'creator', 'taxes.tax'];
 
     public function __construct(private PaymentService $payments, private PaymentApprovalService $approvals) {}
 
@@ -117,6 +117,7 @@ class PaymentController extends ApiController
         $current['method'] = $model->method->value;
         $current['date'] = $model->date->toDateString();
         $current['on_credit'] = $model->on_credit ? '1' : '0';
+        $current['taxes'] = $model->taxes->map(fn ($t) => ['tax_id' => $t->tax_id, 'amount' => $t->amount])->all();
         $data = $this->validated(array_merge($current, Arr::except($request->all(), ['receipt'])) + ['receipt' => $request->file('receipt')], $request);
         $data['receipt_path'] = $this->storeUpload($request->file('receipt'), 'receipts');
 

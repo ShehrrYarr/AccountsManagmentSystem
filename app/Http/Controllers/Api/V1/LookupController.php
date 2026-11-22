@@ -58,6 +58,7 @@ class LookupController extends ApiController
             'departments' => Department::query()->tap($active)->orderBy('name')->get(['id', 'name', 'city', 'is_active']),
             'suppliers' => Supplier::query()->tap($active)->orderBy('name')->get(['id', 'name', 'phone', 'is_active']),
             'expense_categories' => $admin ? ExpenseCategory::query()->tap($active)->orderBy('name')->get(['id', 'name', 'is_active']) : [],
+            'taxes' => \App\Models\Tax::query()->tap($active)->orderBy('name')->get(['id', 'name', 'is_active']),
             'accounts' => $business,
             'my_accounts' => $admin ? [] : Account::where('agent_id', $user->id)->tap($active)->orderBy('type')->orderBy('name')->get()
                 ->map(fn ($a) => $accountRow($a, true) + ['can_edit' => AccountController::canChange($user, $a)]),

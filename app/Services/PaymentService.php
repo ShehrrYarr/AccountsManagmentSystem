@@ -10,8 +10,10 @@ use App\Models\Company;
 use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\SupplierPayment;
+use App\Models\Tax;
 use App\Models\User;
 use App\Services\Concerns\ChecksDocuments;
+use App\Support\Money;
 use Illuminate\Support\Arr;
 
 /**
@@ -37,7 +39,7 @@ class PaymentService
 
     public function savePayment(?Payment $payment, array $data, ?User $by = null): Payment
     {
-        return $this->ledger->record($this->preparePayment($payment, $data, $by));
+        return $this->recordWithTaxes($this->preparePayment($payment, $data, $by));
     }
 
     /**
@@ -71,7 +73,7 @@ class PaymentService
 
     public function saveSupplierPayment(?SupplierPayment $payment, array $data): SupplierPayment
     {
-        return $this->ledger->record($this->prepareSupplierPayment($payment, $data));
+        return $this->recordWithTaxes($this->prepareSupplierPayment($payment, $data));
     }
 
     /**
@@ -140,8 +142,76 @@ class PaymentService
             throw new BusinessRuleException("{$account->shortLabel()} is not a bank of that company.", 'account_id');
         }
         $payment->company_id = $account->company_id; // none for cash
+        $this->prepareTaxes($payment, $data, (bool) $payment->company_id);
 
         return $payment;
+    }
+
+    /** Save the document, its taxes, then post (the tax postings read the saved taxes). */
+    private function recordWithTaxes(Payment|SupplierPayment $document): Payment|SupplierPayment
+    {
+        return $this->ledger->batch(function () use ($document) {
+            $document->save();
+            if ($document->pendingTaxes !== null) {
+                $document->taxes()->delete();
+                foreach ($document->pendingTaxes as $tax) {
+                    $document->taxes()->create($tax);
+                }
+                $document->pendingTaxes = null;
+            }
+            $this->ledger->sync($document);
+
+            return $document;
+        });
+    }
+
+    /**
+     * The taxes from the form, checked: each a known tax (a turned-off one only if the payment
+     * already had it), a positive amount, no tax twice. Payments that can't carry taxes drop them.
+     */
+    private function prepareTaxes(Payment|SupplierPayment $payment, array $data, bool $allowed): void
+    {
+        if (! $allowed) {
+            $payment->pendingTaxes = $payment->exists || array_key_exists('taxes', $data) ? [] : null;
+
+            return;
+        }
+        if (! array_key_exists('taxes', $data)) {
+            return; // leave the saved taxes as they are
+        }
+
+        $lines = [];
+        foreach (is_array($data['taxes']) ? $data['taxes'] : [] as $i => $line) {
+            $taxId = (int) ($line['tax_id'] ?? 0);
+            $amount = $line['amount'] ?? null;
+            if (! $taxId && blank($amount)) {
+                continue; // an empty row
+            }
+            if (! $taxId) {
+                throw new BusinessRuleException('Choose the tax.', "taxes.{$i}.tax_id");
+            }
+            if (! is_numeric($amount) || Money::cmp($amount, 0) <= 0) {
+                throw new BusinessRuleException('Enter the tax amount.', "taxes.{$i}.amount");
+            }
+            if (isset($lines[$taxId])) {
+                throw new BusinessRuleException('The same tax is listed twice.', "taxes.{$i}.tax_id");
+            }
+            $lines[$taxId] = ['tax_id' => $taxId, 'amount' => Money::of($amount)];
+        }
+
+        $had = $payment->exists ? $payment->taxes()->pluck('tax_id')->all() : [];
+        $taxes = Tax::whereKey(array_keys($lines))->get()->keyBy('id');
+        foreach (array_keys($lines) as $taxId) {
+            $tax = $taxes->get($taxId);
+            if (! $tax) {
+                throw new BusinessRuleException('That tax no longer exists.', 'taxes');
+            }
+            if (! $tax->is_active && ! in_array($taxId, $had)) {
+                throw new BusinessRuleException("{$tax->name} is turned off.", 'taxes');
+            }
+        }
+
+        $payment->pendingTaxes = array_values($lines);
     }
 
     private function preparePayment(?Payment $payment, array $data, ?User $by): Payment
@@ -182,6 +252,7 @@ class PaymentService
 
         if ($agentPayment) {
             $this->prepareAgentPayment($payment, $method, $account, $by, $keep);
+            $this->prepareTaxes($payment, $data, true);
 
             return $payment;
         }
@@ -209,6 +280,8 @@ class PaymentService
                 }
                 break;
         }
+        // Taxes leave the bank on top of the payment: not for cash, nor goods bought on credit.
+        $this->prepareTaxes($payment, $data, $method === PaymentMethod::BankTransfer || ($method === PaymentMethod::Goods && ! $payment->on_credit));
 
         return $payment;
     }

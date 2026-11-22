@@ -198,9 +198,25 @@ class Balances
     }
 
     /**
-     * Profit for a period: deal profits − deal losses − expenses − bank charges.
+     * Taxes paid per tax (the company's cost), optionally for one company and a period.
      *
-     * @return array{deals: string, expenses: string, charges: string, net: string}
+     * @return Collection<int, string>  tax_id => paid
+     */
+    public static function taxes(?int $companyId = null, mixed $from = null, mixed $to = null): Collection
+    {
+        return self::lines(LedgerAccount::Tax, $companyId)
+            ->when($from, fn ($q) => $q->where('transactions.date', '>=', Carbon::parse($from)->toDateString()))
+            ->when($to, fn ($q) => $q->where('transactions.date', '<=', Carbon::parse($to)->toDateString()))
+            ->groupBy('journal_ledger_entries.tax_id')
+            ->selectRaw('journal_ledger_entries.tax_id, SUM(debit) - SUM(credit) as paid, COUNT(*) as times')
+            ->get()
+            ->mapWithKeys(fn ($r) => [(int) $r->tax_id => (object) ['paid' => Money::of($r->paid), 'times' => (int) $r->times]]);
+    }
+
+    /**
+     * Profit for a period: deal profits − deal losses − expenses − bank charges − taxes.
+     *
+     * @return array{deals: string, expenses: string, charges: string, taxes: string, net: string}
      */
     public static function profit(?int $companyId = null, mixed $from = null, mixed $to = null): array
     {
@@ -214,12 +230,14 @@ class Balances
         $deals = $sum(LedgerAccount::DealResult, 'SUM(credit) - SUM(debit)');
         $expenses = $sum(LedgerAccount::Expense, 'SUM(debit) - SUM(credit)');
         $charges = $sum(LedgerAccount::BankCharges, 'SUM(debit) - SUM(credit)');
+        $taxes = $sum(LedgerAccount::Tax, 'SUM(debit) - SUM(credit)');
 
         return [
             'deals' => $deals,
             'expenses' => $expenses,
             'charges' => $charges,
-            'net' => Money::sub($deals, Money::add($expenses, $charges)),
+            'taxes' => $taxes,
+            'net' => Money::sub($deals, Money::add($expenses, $charges, $taxes)),
         ];
     }
 }

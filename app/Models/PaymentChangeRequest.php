@@ -25,6 +25,7 @@ class PaymentChangeRequest extends Model
         'account_id' => 'Paid from',
         'department_id' => 'Department',
         'amount' => 'Amount',
+        'taxes' => 'Taxes',
         'item_description' => 'Description',
         'reference' => 'Reference / slip no.',
         'received_by' => 'Received by',

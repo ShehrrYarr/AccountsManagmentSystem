@@ -70,6 +70,29 @@ class DirectoryService
         return $category;
     }
 
+    public function saveTax(?\App\Models\Tax $tax, array $data): \App\Models\Tax
+    {
+        $tax ??= new \App\Models\Tax(['is_active' => true]);
+        $tax->fill(Arr::only($data, ['name', 'is_active']));
+        $tax->name = trim((string) $tax->name);
+        $tax->save();
+
+        return $tax;
+    }
+
+    /** A tax that was paid on any payment is turned off, not deleted. @return 'deleted'|'deactivated' */
+    public function deleteTax(\App\Models\Tax $tax): string
+    {
+        if ($tax->paymentTaxes()->exists()) {
+            $tax->update(['is_active' => false]);
+
+            return 'deactivated';
+        }
+        $tax->delete();
+
+        return 'deleted';
+    }
+
     /** @return 'deleted'|'deactivated' */
     public function deleteCategory(ExpenseCategory $category): string
     {

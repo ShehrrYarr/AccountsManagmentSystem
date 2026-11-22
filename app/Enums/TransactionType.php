@@ -17,6 +17,7 @@ enum TransactionType: string
     case AgentReturn = 'agent_return';
     case Expense = 'expense';
     case DealClosing = 'deal_closing';
+    case Tax = 'tax';
 
     public function label(): string
     {
@@ -32,6 +33,7 @@ enum TransactionType: string
             self::AgentReturn => 'Agent Return',
             self::Expense => 'Expense',
             self::DealClosing => 'Deal Closed',
+            self::Tax => 'Tax',
         };
     }
 
@@ -41,7 +43,7 @@ enum TransactionType: string
             self::OpeningBalance => 'bg-secondary-subtle text-secondary',
             self::ChequeDeposit => 'bg-success-subtle text-success',
             self::DepartmentPayment, self::GoodsPurchase => 'bg-warning-subtle text-warning',
-            self::SupplierPayment, self::Expense => 'bg-danger-subtle text-danger',
+            self::SupplierPayment, self::Expense, self::Tax => 'bg-danger-subtle text-danger',
             self::AccountTransfer, self::InterCompanyTransfer => 'bg-primary-subtle text-primary',
             self::AgentAdvance, self::AgentReturn => 'bg-info-subtle text-info',
             self::DealClosing => 'bg-dark-subtle text-body',

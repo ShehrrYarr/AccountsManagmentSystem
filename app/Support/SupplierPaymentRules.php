@@ -14,7 +14,7 @@ class SupplierPaymentRules
     public const BATCH_FIELDS = ['date', 'method', 'company_id', 'account_id', 'supplier_id'];
 
     /** Cleared after each "Add to table" (plus the receipt picture). */
-    public const ITEM_FIELDS = ['amount', 'reference', 'notes'];
+    public const ITEM_FIELDS = ['amount', 'taxes', 'reference', 'notes'];
 
     /** Cash comes from the admin's cash in hand (no company); a bank transfer from a company bank. */
     public const METHODS = ['cash', 'bank_transfer'];
@@ -31,6 +31,10 @@ class SupplierPaymentRules
             'account_id' => [Rule::requiredIf($bank), 'nullable', 'exists:accounts,id'],
             'supplier_id' => ['required', 'exists:suppliers,id'],
             'amount' => ['required', 'numeric', 'gt:0', 'max:9999999999999'],
+            // Taxes paid from the same bank on top of the amount (bank payments only).
+            'taxes' => ['nullable', 'array', 'max:10'],
+            'taxes.*.tax_id' => ['required', 'integer', 'distinct', 'exists:taxes,id'],
+            'taxes.*.amount' => ['required', 'numeric', 'gt:0', 'max:9999999999999'],
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
@@ -49,6 +53,10 @@ class SupplierPaymentRules
             'company_id.required' => 'Choose the company.',
             'account_id.required' => 'Choose the bank the money was paid from.',
             'supplier_id.required' => 'Choose the supplier.',
+            'taxes.*.tax_id.required' => 'Choose the tax.',
+            'taxes.*.tax_id.distinct' => 'The same tax is listed twice.',
+            'taxes.*.amount.required' => 'Enter the tax amount.',
+            'taxes.*.amount.gt' => 'Enter the tax amount.',
         ];
     }
 

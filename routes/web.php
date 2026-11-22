@@ -90,6 +90,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/departments/{department}', fn (Department $department) => view('ams.departments.show', compact('department')))->name('departments.show');
         Route::view('/suppliers', 'ams.suppliers.index')->name('suppliers.index');
         Route::get('/suppliers/{supplier}', fn (Supplier $supplier) => view('ams.suppliers.show', compact('supplier')))->name('suppliers.show');
+        Route::view('/taxes', 'ams.taxes.index')->name('taxes.index');
+        Route::get('/taxes/{tax}', fn (\App\Models\Tax $tax) => view('ams.taxes.show', compact('tax')))->name('taxes.show');
         Route::view('/transactions', 'ams.transactions.index')->name('transactions.index');
 
 

@@ -244,6 +244,7 @@ class LedgerService
                 'supplier_id' => $line['supplier_id'] ?? null,
                 'counterparty_company_id' => $line['counterparty_company_id'] ?? null,
                 'expense_category_id' => $line['expense_category_id'] ?? null,
+                'tax_id' => $line['tax_id'] ?? null,
                 'debit' => $debit,
                 'credit' => $credit,
                 'memo' => $line['memo'] ?? null,

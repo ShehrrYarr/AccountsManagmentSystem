@@ -24,7 +24,7 @@ class MoneyOutController extends ApiController
     public function supplierPayments(Request $request): AnonymousResourceCollection
     {
         $this->requireAdmin($request);
-        $q = SupplierPayment::query()->with(['company', 'supplier', 'account'])
+        $q = SupplierPayment::query()->with(['company', 'supplier', 'account', 'taxes.tax'])
             ->when($request->integer('supplier_id'), fn ($q, $id) => $q->where('supplier_id', $id))
             ->when($request->query('search'), fn ($q, $s) => $q->where('reference', 'like', "%{$s}%"));
         $this->companyFilter($q, $request);
@@ -37,7 +37,7 @@ class MoneyOutController extends ApiController
     {
         $this->requireAdmin($request);
 
-        return new MoneyOutResource(SupplierPayment::with(['company', 'supplier', 'account'])->findOrFail($id));
+        return new MoneyOutResource(SupplierPayment::with(['company', 'supplier', 'account', 'taxes.tax'])->findOrFail($id));
     }
 
     public function storeSupplierPayment(Request $request): JsonResponse
@@ -157,6 +157,9 @@ class MoneyOutController extends ApiController
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'receipt' => $this->fileRule(),
+            'taxes' => ['nullable', 'array', 'max:10'],
+            'taxes.*.tax_id' => ['required', 'integer', 'distinct', 'exists:taxes,id'],
+            'taxes.*.amount' => ['required', 'numeric', 'gt:0', 'max:9999999999999'],
         ];
     }
 

@@ -17,6 +17,7 @@ namespace App\Enums;
  *   OpeningEquity   balancing side of opening balances
  *   Agent           company money an agent holds and owes back, per agent account (account_id)
  *                                                                         debit = advanced to them, credit = returned
+ *   Tax             taxes paid on bank payments, the company's cost (tax_id)  debit = paid
  *   CashPot         money a company moved into (debit) or took from (credit) the admin's cash pot;
  *                   on the no-company side it carries counterparty_company_id = that company
  */
@@ -34,6 +35,7 @@ enum LedgerAccount: string
     case OpeningEquity = 'opening_equity';
     case Agent = 'agent';
     case CashPot = 'cash_pot';
+    case Tax = 'tax';
 
     public function label(): string
     {
@@ -48,6 +50,7 @@ enum LedgerAccount: string
             self::OpeningEquity => 'Opening balance equity',
             self::Agent => 'Advances to agents',
             self::CashPot => 'Moved to cash in hand',
+            self::Tax => 'Taxes',
         };
     }
 
@@ -60,6 +63,7 @@ enum LedgerAccount: string
             self::Supplier => 'supplier_id',
             self::InterCompany => 'counterparty_company_id',
             self::Expense => 'expense_category_id',
+            self::Tax => 'tax_id',
             default => null,
         };
     }

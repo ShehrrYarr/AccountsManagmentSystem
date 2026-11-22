@@ -6,6 +6,7 @@ use App\Enums\LedgerAccount;
 use App\Enums\PaymentMethod;
 use App\Enums\TransactionType;
 use App\Models\Concerns\Auditable;
+use App\Models\Concerns\HasTaxes;
 use App\Models\Concerns\HasTransactions;
 use App\Models\Contracts\PostsToLedger;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,10 +28,13 @@ use Illuminate\Support\Str;
  *   Goods, on credit  : Dr Department / Cr Supplier
  *
  * item_description is the payment's description (for goods: what was bought).
+ *
+ * Taxes (HasTaxes): a bank transfer, or goods paid from a bank, may carry taxes paid from the same
+ * bank on top of the amount (the company's cost):  Dr Tax / Cr Company bank (or Cr Agent).
  */
 class Payment extends Model implements PostsToLedger
 {
-    use Auditable, HasTransactions, SoftDeletes;
+    use Auditable, HasTaxes, HasTransactions, SoftDeletes;
 
     protected $fillable = [
         'company_id', 'department_id', 'method', 'account_id', 'supplier_id', 'on_credit', 'amount', 'date',
@@ -149,7 +153,7 @@ class Payment extends Model implements PostsToLedger
             $type = TransactionType::DepartmentPayment;
         }
 
-        return [[
+        $postings = [[
             'type' => $type,
             'date' => $this->date,
             'lines' => $lines,
@@ -164,5 +168,18 @@ class Payment extends Model implements PostsToLedger
                 'notes' => $this->notes,
             ],
         ]];
+
+        // Taxes leave the same bank on top of the payment (nothing to pay from when on credit).
+        if (! $this->on_credit && $this->account_id) {
+            $postings = [...$postings, ...$this->taxPostings(
+                $this->isByAgent() ? LedgerAccount::Agent : LedgerAccount::Money,
+                $this->account_id,
+                $this->describe(),
+                ['company_id' => $this->company_id, 'department_id' => $this->department_id, 'supplier_id' => $this->supplier_id,
+                    'account_id' => $this->account_id, 'reference' => $this->reference],
+            )];
+        }
+
+        return $postings;
     }
 }

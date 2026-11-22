@@ -49,6 +49,10 @@ class DirectoryController extends ApiController
                 'name' => ['required', 'string', 'max:255', Rule::unique('expense_categories', 'name')->ignore($ignore)],
                 'is_active' => ['boolean'],
             ]],
+            'taxes' => [\App\Models\Tax::class, [
+                'name' => ['required', 'string', 'max:255', Rule::unique('taxes', 'name')->ignore($ignore)],
+                'is_active' => ['boolean'],
+            ]],
         };
     }
 
@@ -59,6 +63,7 @@ class DirectoryController extends ApiController
         $balances = match ($kind) {
             'departments' => Balances::departments($this->balanceCompany($request))->groupBy('department_id'),
             'suppliers' => Balances::suppliers($this->balanceCompany($request))->groupBy('supplier_id'),
+            'taxes' => Balances::taxes($this->balanceCompany($request), $request->query('from'), $request->query('to')),
             default => collect(),
         };
 
@@ -72,6 +77,7 @@ class DirectoryController extends ApiController
                 return (new DirectoryResource($r))->toArray($request) + match ($kind) {
                     'departments' => ['spent' => Money::add(...$b->pluck('spent')->all()), 'received' => Money::add(...$b->pluck('received')->all()), 'balance' => Money::add(...$b->pluck('balance')->all())],
                     'suppliers' => ['purchased' => Money::add(...$b->pluck('purchased')->all()), 'paid' => Money::add(...$b->pluck('paid')->all()), 'owed' => Money::add(...$b->pluck('owed')->all())],
+                    'taxes' => ['paid' => $balances->get($r->id)?->paid ?? '0.00', 'times_paid' => $balances->get($r->id)?->times ?? 0],
                     default => [],
                 };
             });
@@ -127,6 +133,7 @@ class DirectoryController extends ApiController
             'departments' => $this->directory->deleteDepartment($record),
             'suppliers' => $this->directory->deleteSupplier($record),
             'expense-categories' => $this->directory->deleteCategory($record),
+            'taxes' => $this->directory->deleteTax($record),
         };
 
         return response()->json([
@@ -141,6 +148,7 @@ class DirectoryController extends ApiController
             'departments' => $this->directory->saveDepartment($record, $data),
             'suppliers' => $this->directory->saveSupplier($record, $data),
             'expense-categories' => $this->directory->saveCategory($record, $data),
+            'taxes' => $this->directory->saveTax($record, $data),
         };
     }
 }

@@ -66,6 +66,7 @@
         {!! $item('agents.index', 'ri-user-star-line', 'Agents', 'agents.*') !!}
         {!! $item('departments.index', 'ri-government-line', 'Departments', 'departments.*') !!}
         {!! $item('suppliers.index', 'ri-truck-line', 'Suppliers', 'suppliers.*') !!}
+        {!! $item('taxes.index', 'ri-percent-line', 'Taxes', 'taxes.*') !!}
         {!! $item('transactions.index', 'ri-book-2-line', 'Transaction Journal', 'transactions.*') !!}
 
         <li class="menu-title" role="presentation">Setup</li>

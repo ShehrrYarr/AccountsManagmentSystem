@@ -140,7 +140,7 @@ has_picture, picture_url, received_by, pending_request, latest_request, created_
 | DELETE | `/payment-requests/{id}` | agent withdraws their pending request |
 
 **Fields:** `date`*, `method`* (`cash` | `bank_transfer` | `goods`), `department_id`*, `amount`*,
-`description`, `reference`, `received_by`, `notes`, `receipt` (file), and by method:
+`description`, `reference`, `received_by`, `notes`, `receipt` (file), `taxes` (bank transfers — agents' too — and goods paid from a bank: up to 10 of `{tax_id, amount}`, each tax once; paid from the same bank on top of `amount`, the company's cost; sending `taxes: []` removes them; cash and goods on credit carry none), and by method:
 
 | method | admin | agent |
 |---|---|---|
@@ -152,7 +152,7 @@ An agent's payment counts straight away and lowers what they hold of that compan
 more than they hold is allowed (the company then owes the agent).
 
 **Payment object:** `id, date, method, method_label, company (null = cash), department, account,
-supplier, on_credit, amount, description, quantity (goods, e.g. "2.5", or null), unit_price (or null), reference, received_by, notes, summary, has_receipt,
+supplier, on_credit, amount, taxes [{tax_id, name, amount}], tax_total, description, quantity (goods, e.g. "2.5", or null), unit_price (or null), reference, received_by, notes, summary, has_receipt,
 receipt_url, paid_by_agent, created_by, pending_request, latest_request, created_at, updated_at`.
 
 ---
@@ -195,7 +195,7 @@ the request stays pending.
 
 | Path | Fields |
 |---|---|
-| `/supplier-payments` (GET, POST, GET/PATCH/POST/DELETE `/{id}`) | `supplier_id`*, `account_id`* (company bank → that company's debt; admin cash → no company), `amount`*, `date`*, `reference`, `notes`, `receipt` (file; the object gives `has_receipt`, `receipt_url`). Paying more than is owed is refused (422). Filters: `supplier_id`, `company_id`, `from`, `to`, `search` |
+| `/supplier-payments` (GET, POST, GET/PATCH/POST/DELETE `/{id}`) | `supplier_id`*, `account_id`* (company bank → that company's debt; admin cash → no company), `amount`*, `date`*, `reference`, `notes`, `receipt` (file; the object gives `has_receipt`, `receipt_url`), `taxes` (from a company bank only: `{tax_id, amount}` list, paid on top; the object gives `taxes`, `tax_total`). Paying more than is owed is refused (422). Filters: `supplier_id`, `company_id`, `from`, `to`, `search` |
 | `/expenses` (GET, POST, GET/PATCH/POST/DELETE `/{id}`) | `expense_category_id`*, `account_id`*, `amount`*, `date`*, `description`*, `reference`, `notes`, `receipt` (file). Filters: `category_id`, `company_id`, `from`, `to`, `search` |
 
 The company is never sent: it follows from the account.
@@ -209,7 +209,7 @@ The company is never sent: it follows from the account.
 | `/companies` (apiResource) | admin | list adds `bank_balance`, `moved_to_cash`; show adds `summary {...}` and `bank_accounts[]`. Fields: `name`*, `ntn`, `registration_no`, `phone`, `email`, `address`, `notes`, `is_active`. Delete only without transactions |
 | `/accounts` (apiResource) | admin: all · agent: own | filters `holder` (admin/company/agent), `company_id`, `agent_id`, `type`, `include_inactive`. Admin creates a company bank (`company_id`, `name`*, `bank_name`*, `branch`, `account_title`, `account_number`, `iban`, `opening_balance`, `opening_date`) or an agent account (`agent_id`). Agents create their own banks (`name`*, `bank_name`*…). `can_edit` says what the user may change: agents can't change accounts the admin added, nor their cash in hand; nobody edits the admin cash |
 | `/agents`, `/agents/{id}` | admin (agent: own id) | what each agent owes, per company (`owes < 0` = the company owes the agent), their accounts; list `meta {with_agents, owed_to_agents}` |
-| `/departments`, `/suppliers`, `/expense-categories` (GET, POST, GET/PATCH/DELETE `/{id}`) | admin | lists add balances (`spent/received/balance`; `purchased/paid/owed`), `?company_id=` (id or `none`); show adds `by_company[]` (company `null` = no company). Delete of something with history **deactivates** it (`result: "deactivated"`) |
+| `/departments`, `/suppliers`, `/expense-categories`, `/taxes` (GET, POST, GET/PATCH/DELETE `/{id}`) | admin | lists add balances (`spent/received/balance`; `purchased/paid/owed`; taxes: `paid`, `times_paid`, also `?from=&to=`), `?company_id=` (id or `none`); show adds `by_company[]` (company `null` = no company). Delete of something with history **deactivates** it (`result: "deactivated"`) |
 | `/opening-balances` (GET, POST, PATCH/DELETE `/{id}`) | admin | `party`*: `cash` (admin cash, no company, one only) · `department` (`company_id`, `department_id`; amount > 0 owes you, < 0 you hold) · `supplier` (`company_id`, `supplier_id`) · `agent` (`company_id`, `account_id` agent's account). `amount`*, `date`*, `notes` |
 | `/deal-closings` (GET, POST, PATCH/DELETE `/{id}`) | admin | `company_id`* (or `none`), `department_id`*, `date`*, `notes` — the department's leftover balance becomes profit / loss |
 | `/users` (GET, POST, GET/PATCH `/{id}`) | admin | `name`*, `email`*, `phone`, `role`* (`admin`/`agent`), `is_active`, `password` + `password_confirmation` (new users; optional when editing). `is_active=false` deactivates and signs out every device. Nobody can demote / deactivate themselves |

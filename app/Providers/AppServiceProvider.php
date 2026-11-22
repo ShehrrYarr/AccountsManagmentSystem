@@ -49,6 +49,7 @@ class AppServiceProvider extends ServiceProvider
             'expense' => Expense::class,
             'deal_closing' => DealClosing::class,
             'opening_balance' => OpeningBalance::class,
+            'tax' => \App\Models\Tax::class,
         ]);
 
         Paginator::useBootstrapFive();

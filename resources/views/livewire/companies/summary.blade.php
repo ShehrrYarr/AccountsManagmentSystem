@@ -106,7 +106,7 @@ on(['transaction-updated' => function () {
                         <li class="list-group-item text-muted">No inter-company balances.</li>
                     @endforelse
                     <li class="list-group-item d-flex justify-content-between gap-2"><span>Deal profit this year</span><strong class="text-nowrap">{{ money($d['profitYear']['deals']) }}</strong></li>
-                    <li class="list-group-item d-flex justify-content-between gap-2"><span>Expenses + bank charges this year</span><strong class="text-danger text-nowrap">{{ money(Money::add($d['profitYear']['expenses'], $d['profitYear']['charges'])) }}</strong></li>
+                    <li class="list-group-item d-flex justify-content-between gap-2"><span>Expenses, bank charges + taxes this year</span><strong class="text-danger text-nowrap">{{ money(Money::add($d['profitYear']['expenses'], $d['profitYear']['charges'], $d['profitYear']['taxes'])) }}</strong></li>
                 </ul>
             </div>
         </div>

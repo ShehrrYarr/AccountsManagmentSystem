@@ -79,7 +79,7 @@ on(['transaction-updated' => function () {
         </div>
         <div class="col-sm-6 col-xl-4 col-xxl">
             <x-stat-card label="Profit this month" :value="money($m['profit']['net'])" icon="ri-line-chart-line" :color="Money::isNegative($m['profit']['net']) ? 'danger' : 'secondary'"
-                :hint="'Deals '.money($m['profit']['deals']).' − costs '.money(Money::add($m['profit']['expenses'], $m['profit']['charges']))" />
+                :hint="'Deals '.money($m['profit']['deals']).' − costs '.money(Money::add($m['profit']['expenses'], $m['profit']['charges'], $m['profit']['taxes']))" />
         </div>
     </div>
 </div>

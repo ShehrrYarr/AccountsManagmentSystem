@@ -30,7 +30,7 @@ $updated = function ($property) {
 };
 
 $rows = computed(fn () => SupplierPayment::query()
-    ->with(['company', 'supplier', 'account'])
+    ->with(['company', 'supplier', 'account', 'taxes.tax'])
     ->when($this->companyId, fn ($q, $id) => $q->where('company_id', $id))
     ->when($this->supplierId, fn ($q, $id) => $q->where('supplier_id', $id))
     ->when($this->from, fn ($q) => $q->whereDate('date', '>=', $this->from))
@@ -83,7 +83,9 @@ $delete = function (int $id) {
                                     {{ $p->reference ?: '—' }}
                                     @if ($p->receipt_path)<a href="{{ route('files.show', ['supplier-payment', $p->id]) }}" target="_blank" class="ms-1" title="Receipt"><i class="ri-image-line"></i></a>@endif
                                 </td>
-                                <td class="money fw-semibold">{{ money($p->amount) }}</td>
+                                <td class="money fw-semibold">{{ money($p->amount) }}
+                                    @foreach ($p->taxes as $t)<div class="fs-11 text-muted fw-normal">+ {{ $t->tax?->name }} {{ money($t->amount) }}</div>@endforeach
+                                </td>
                                 <td class="text-end text-nowrap">
                                     <button type="button" class="btn btn-sm btn-light icon-btn-sm" title="Edit" wire:click="$dispatch('supplier-payment-edit', { id: {{ $p->id }} })"><i class="ri-edit-line"></i></button>
                                     <button type="button" class="btn btn-sm btn-light-danger icon-btn-sm" title="Delete"

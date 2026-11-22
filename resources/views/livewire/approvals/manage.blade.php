@@ -58,6 +58,7 @@ $paymentNames = computed(function () {
         'company_id' => Company::withTrashed()->whereIn('id', $ids('company_id'))->pluck('name', 'id'),
         'department_id' => Department::whereIn('id', $ids('department_id'))->pluck('name', 'id'),
         'account_id' => Account::withTrashed()->whereIn('id', $ids('account_id'))->get()->mapWithKeys(fn ($a) => [$a->id => $a->label()]),
+        'taxes' => \App\Models\Tax::pluck('name', 'id'),
     ];
 });
 
@@ -164,6 +165,8 @@ $reject = function () {
         return match ($field) {
             'company_id', 'department_id', 'account_id' => e($this->paymentNames[$field][$value] ?? '#'.$value),
             'amount' => e(money($value)),
+            'taxes' => $value === [] ? '<span class="text-muted">None</span>'
+                : collect($value)->map(fn ($t) => e(($this->paymentNames['taxes'][$t['tax_id']] ?? 'Tax').' '.money($t['amount'])))->implode('<br>'),
             'date' => e(\Illuminate\Support\Carbon::parse($value)->format('d M Y')),
             'receipt_path' => $request
                 ? '<a href="'.e(route('files.show', ['payment-request', $request->id])).'" target="_blank"><i class="ri-image-line"></i> New receipt</a>'
@@ -269,7 +272,7 @@ $reject = function () {
                                             @continue(! array_key_exists($field, $r->changes ?? []))
                                             <tr>
                                                 <td class="fw-medium">{{ $label }}</td>
-                                                <td class="text-muted text-decoration-line-through">{!! $showPayment($field, $field === 'receipt_path' ? ($p?->receipt_path ? 1 : null) : ($p ? ($field === 'date' ? $p->date?->toDateString() : $p->getRawOriginal($field)) : null)) !!}</td>
+                                                <td class="text-muted text-decoration-line-through">{!! $showPayment($field, $field === 'receipt_path' ? ($p?->receipt_path ? 1 : null) : ($p ? match ($field) { 'date' => $p->date?->toDateString(), 'taxes' => $p->taxes->map->only(['tax_id', 'amount'])->all(), default => $p->getRawOriginal($field) } : null)) !!}</td>
                                                 <td class="fw-semibold text-success">{!! $showPayment($field, $r->changes[$field], $field === 'receipt_path' ? $r : null) !!}</td>
                                             </tr>
                                         @endforeach

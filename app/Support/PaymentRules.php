@@ -15,7 +15,7 @@ class PaymentRules
     public const BATCH_FIELDS = ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id'];
 
     /** Cleared after each "Add to table" (plus the receipt picture). Quantity and price: goods only. */
-    public const ITEM_FIELDS = ['quantity', 'unit_price', 'amount', 'item_description', 'reference', 'received_by', 'notes'];
+    public const ITEM_FIELDS = ['quantity', 'unit_price', 'amount', 'taxes', 'item_description', 'reference', 'received_by', 'notes'];
 
     /**
      * @param  array<string, mixed>  $values  the form (or row) values the rules depend on
@@ -40,6 +40,10 @@ class PaymentRules
             'quantity' => $goods ? ['nullable', 'numeric', 'gt:0', 'max:9999999999', 'decimal:0,3', 'required_with:unit_price'] : ['nullable'],
             'unit_price' => $goods ? ['nullable', 'numeric', 'gt:0', 'max:9999999999999', 'decimal:0,2', 'required_with:quantity'] : ['nullable'],
             'amount' => ['required', 'numeric', 'gt:0', 'max:9999999999999'],
+            // Taxes paid from the same bank on top of the amount (bank payments only).
+            'taxes' => ['nullable', 'array', 'max:10'],
+            'taxes.*.tax_id' => ['required', 'integer', 'distinct', 'exists:taxes,id'],
+            'taxes.*.amount' => ['required', 'numeric', 'gt:0', 'max:9999999999999'],
             'item_description' => [Rule::requiredIf($goods), 'nullable', 'string', 'max:2000'],
             'reference' => ['nullable', 'string', 'max:255'],
             'received_by' => ['nullable', 'string', 'max:255'],
@@ -64,6 +68,10 @@ class PaymentRules
             'supplier_id.required' => 'Choose the supplier.',
             'department_id.required' => 'Choose the department.',
             'item_description.required' => 'Describe what was bought.',
+            'taxes.*.tax_id.required' => 'Choose the tax.',
+            'taxes.*.tax_id.distinct' => 'The same tax is listed twice.',
+            'taxes.*.amount.required' => 'Enter the tax amount.',
+            'taxes.*.amount.gt' => 'Enter the tax amount.',
             'quantity.required_with' => 'Enter the quantity too, or clear the price.',
             'unit_price.required_with' => 'Enter the price too, or clear the quantity.',
             'quantity.decimal' => 'Up to 3 decimal places.',

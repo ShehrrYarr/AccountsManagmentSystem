@@ -15,7 +15,7 @@ class JournalLedgerEntry extends Model
 {
     protected $fillable = [
         'transaction_id', 'ledger_account', 'company_id', 'account_id', 'department_id', 'supplier_id',
-        'counterparty_company_id', 'expense_category_id', 'debit', 'credit', 'memo',
+        'counterparty_company_id', 'expense_category_id', 'tax_id', 'debit', 'credit', 'memo',
     ];
 
     protected function casts(): array
@@ -60,6 +60,11 @@ class JournalLedgerEntry extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ExpenseCategory::class, 'expense_category_id');
+    }
+
+    public function tax(): BelongsTo
+    {
+        return $this->belongsTo(Tax::class);
     }
 
     /** Name of whatever this line is about (account, department, supplier...). */
