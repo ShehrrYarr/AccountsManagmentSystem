@@ -220,4 +220,35 @@ class DepartmentPaymentsTest extends TestCase
             ->assertSee('Counts for')->set('amount', '700')->call('save')->assertHasNoErrors();
         $this->assertSame($this->company->id, \App\Models\Expense::first()->company_id, 'a bank expense is its company\'s');
     }
+
+    public function test_goods_quantity_and_price_fill_the_amount_and_are_kept(): void
+    {
+        $page = $this->page()->set('method', 'goods')->set('company_id', $this->company->id)->set('supplier_id', $this->supplier->id)
+            ->set('item_description', 'Printer paper');
+
+        // Both or neither.
+        $page->set('quantity', '10')->set('amount', '12000')->call('addRow')->assertHasErrors(['unit_price' => 'required_with']);
+
+        // The browser fills the amount with 10 x 1,200; here it was lowered by hand (a discount).
+        $page->set('unit_price', '1200')->set('amount', '11500')->call('addRow')->assertHasNoErrors()
+            ->assertSet('quantity', '')->assertSet('unit_price', '');
+        $row = $page->get('rows')[0];
+        $this->assertSame(['10', '1200.00', '11500.00'], [$row['quantity'], $row['unit_price'], $row['amount']]);
+        $page->assertSee('10 × Rs. 1,200.00');
+
+        // No quantity: a lump sum is fine.
+        $page->set('item_description', 'Toner')->set('amount', '3000')->call('addRow')->assertHasNoErrors();
+
+        $page->call('saveAll')->assertHasNoErrors()->assertCount('rows', 0);
+        $paper = Payment::where('item_description', 'Printer paper')->firstOrFail();
+        $this->assertSame(['10.000', '1200.00', '11500.00'], [$paper->quantity, $paper->unit_price, $paper->amount]);
+        $this->assertStringContainsString('Printer paper (10 × Rs. 1,200.00)', $paper->describe());
+        $this->assertNull(Payment::where('item_description', 'Toner')->value('quantity'));
+
+        // Only goods keep them.
+        $cash = app(PaymentService::class)->savePayment(null, ['method' => 'cash', 'department_id' => $this->dept->id, 'amount' => '500',
+            'date' => now()->toDateString(), 'quantity' => '2', 'unit_price' => '250']);
+        $this->assertNull($cash->fresh()->quantity);
+        $this->assertNull($cash->fresh()->unit_price);
+    }
 }

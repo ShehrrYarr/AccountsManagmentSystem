@@ -26,6 +26,8 @@ class PaymentResource extends ApiResource
             'on_credit' => (bool) $this->on_credit,
             'amount' => self::money($this->amount),
             'description' => $this->item_description,
+            'quantity' => $this->quantity === null ? null : rtrim(rtrim((string) $this->quantity, '0'), '.'),
+            'unit_price' => self::money($this->unit_price),
             'reference' => $this->reference,
             'received_by' => $this->received_by,
             'notes' => $this->notes,

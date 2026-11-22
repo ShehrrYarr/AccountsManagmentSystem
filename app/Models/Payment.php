@@ -34,7 +34,7 @@ class Payment extends Model implements PostsToLedger
 
     protected $fillable = [
         'company_id', 'department_id', 'method', 'account_id', 'supplier_id', 'on_credit', 'amount', 'date',
-        'reference', 'received_by', 'item_description', 'receipt_path', 'notes', 'created_by',
+        'reference', 'received_by', 'item_description', 'quantity', 'unit_price', 'receipt_path', 'notes', 'created_by',
     ];
 
     protected function casts(): array
@@ -43,6 +43,8 @@ class Payment extends Model implements PostsToLedger
             'method' => PaymentMethod::class,
             'on_credit' => 'boolean',
             'amount' => 'decimal:2',
+            'quantity' => 'decimal:3',
+            'unit_price' => 'decimal:2',
             'date' => 'date',
         ];
     }
@@ -101,6 +103,17 @@ class Payment extends Model implements PostsToLedger
         return (bool) $this->account?->isAgentAccount();
     }
 
+    /** Goods: "10 × Rs. 1,200.00" (2.5 shows as 2.5), or null when no quantity and price were given. */
+    public static function quantityLine(mixed $quantity, mixed $unitPrice): ?string
+    {
+        if (! is_numeric($quantity) || ! is_numeric($unitPrice)) {
+            return null;
+        }
+        $qty = rtrim(rtrim(number_format((float) $quantity, 3, '.', ','), '0'), '.');
+
+        return $qty.' × '.money($unitPrice);
+    }
+
     /** One line a person can read in any ledger, e.g. "Bank transfer to Health Dept from HBL — ref IBFT-55". */
     public function describe(): string
     {
@@ -114,6 +127,7 @@ class Payment extends Model implements PostsToLedger
                 : "Bank transfer to {$dept} from {$this->account?->shortLabel()}{$ref}",
             PaymentMethod::Goods => "Goods for {$dept} from {$this->supplier?->name}"
                 .($this->item_description ? ': '.Str::limit($this->item_description, 80) : '')
+                .(($qty = self::quantityLine($this->quantity, $this->unit_price)) ? " ({$qty})" : '')
                 .($this->on_credit ? ' (on credit)' : " (paid from {$this->account?->shortLabel()})").$ref,
         };
     }

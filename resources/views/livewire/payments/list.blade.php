@@ -168,6 +168,7 @@ $clearFilters = function () {
                                 @endunless
                                 @unless ($companyId)<div class="fs-12 text-muted">{{ $p->company?->name ?? 'No company (cash)' }}</div>@endunless
                                 @if ($p->item_description)<div class="text-truncate ams-wrap-sm" title="{{ $p->item_description }}">{{ $p->item_description }}</div>@endif
+                                @if ($qty = \App\Models\Payment::quantityLine($p->quantity, $p->unit_price))<div class="fs-12 text-muted">{{ $qty }}</div>@endif
                                 <div class="fs-12 text-muted">{{ collect([$p->reference ? 'Ref '.$p->reference : null, $p->received_by ? 'received by '.$p->received_by : null])->filter()->implode(' · ') }}</div>
                                 <div class="d-md-none mt-1">
                                     <span class="badge {{ $p->method->badge() }}">{{ $p->method->label() }}</span>

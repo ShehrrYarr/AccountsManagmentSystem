@@ -146,13 +146,13 @@ has_picture, picture_url, received_by, pending_request, latest_request, created_
 |---|---|---|
 | `cash` | no company, no account: paid from the admin's cash in hand | not allowed |
 | `bank_transfer` | `company_id`* + `account_id`* (that company's bank) | `company_id`* (the company it's for) + `account_id`* (**their own bank**). `method` may be left out |
-| `goods` | `company_id`*, `supplier_id`*, `description`* (what was bought), `on_credit` (true → no account; false → `account_id`* that company's bank) | not allowed |
+| `goods` | `company_id`*, `supplier_id`*, `description`* (what was bought), `on_credit` (true → no account; false → `account_id`* that company's bank), optional `quantity` (up to 3 decimals) + `unit_price` (both or neither; the app fills `amount` with quantity × price, which may still be changed, e.g. a discount) | not allowed |
 
 An agent's payment counts straight away and lowers what they hold of that company's money; paying
 more than they hold is allowed (the company then owes the agent).
 
 **Payment object:** `id, date, method, method_label, company (null = cash), department, account,
-supplier, on_credit, amount, description, reference, received_by, notes, summary, has_receipt,
+supplier, on_credit, amount, description, quantity (goods, e.g. "2.5", or null), unit_price (or null), reference, received_by, notes, summary, has_receipt,
 receipt_url, paid_by_agent, created_by, pending_request, latest_request, created_at, updated_at`.
 
 ---

@@ -30,7 +30,7 @@ class PaymentService
 
     private const PAYMENT_FIELDS = [
         'company_id', 'department_id', 'method', 'account_id', 'supplier_id', 'on_credit', 'amount', 'date',
-        'reference', 'received_by', 'item_description', 'receipt_path', 'notes',
+        'reference', 'received_by', 'item_description', 'quantity', 'unit_price', 'receipt_path', 'notes',
     ];
 
     public function __construct(private LedgerService $ledger) {}
@@ -111,6 +111,11 @@ class PaymentService
         if (array_key_exists('receipt_path', $fields) && blank($fields['receipt_path'])) {
             unset($fields['receipt_path']); // keep the existing receipt
         }
+        foreach (['quantity', 'unit_price'] as $f) {
+            if (array_key_exists($f, $fields) && ! is_numeric($fields[$f])) {
+                $fields[$f] = null; // blank: no quantity / price
+            }
+        }
         $payment->fill($fields);
         $payment->amount = $this->positiveAmount($payment->amount);
         $payment->item_description = filled($payment->item_description) ? trim($payment->item_description) : null;
@@ -122,6 +127,11 @@ class PaymentService
         }
         if (! $payment->department_id) {
             throw new BusinessRuleException('Choose the department.', 'department_id');
+        }
+        // Quantity and price describe goods, and only together.
+        if ($method !== PaymentMethod::Goods || ! is_numeric($payment->quantity) || ! is_numeric($payment->unit_price)) {
+            $payment->quantity = null;
+            $payment->unit_price = null;
         }
 
         $keep = $payment->getOriginal('account_id');

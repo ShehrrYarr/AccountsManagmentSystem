@@ -18,6 +18,17 @@
         });
     };
 
+    // Goods: quantity × price fills in the amount of the same form (it can still be changed by hand).
+    window.amsQtyTimesPrice = function (el) {
+        const form = el.closest('form');
+        const qty = form?.querySelector('[data-ams-qty]')?.value;
+        const price = form?.querySelector('[data-ams-price]')?.value;
+        const amount = form?.querySelector('[data-ams-amount]');
+        if (! amount || qty === '' || price === '' || isNaN(qty) || isNaN(price)) return;
+        amount.value = (Math.round(parseFloat(qty) * parseFloat(price) * 100) / 100).toFixed(2);
+        amount.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
     window.amsConfirm = function (message, confirmText = 'Yes, continue', icon = 'warning') {
         return Swal.fire({
             title: 'Are you sure?',

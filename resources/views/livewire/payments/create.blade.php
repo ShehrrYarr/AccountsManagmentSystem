@@ -52,7 +52,9 @@ state([
     'supplier_id' => null,
     'on_credit' => '0',
     'department_id' => null,
-    // Item details (cleared after each "Add to table").
+    // Item details (cleared after each "Add to table"). Quantity × price: goods only, fills in the amount.
+    'quantity' => '',
+    'unit_price' => '',
     'amount' => '',
     'item_description' => '',
     'reference' => '',
@@ -185,7 +187,7 @@ $updatedMethod = function () {
         $this->fill(['company_id' => null, 'account_id' => null]);
     }
     if ($this->method !== 'goods') {
-        $this->fill(['supplier_id' => null, 'on_credit' => '0']);
+        $this->fill(['supplier_id' => null, 'on_credit' => '0', 'quantity' => '', 'unit_price' => '']);
     }
     $this->pickAccount();
     $this->resetErrorBag();
@@ -200,7 +202,7 @@ $resetForm = function () {
     $this->fill([
         'date' => now()->toDateString(), 'method' => $this->isAdmin ? 'cash' : 'bank_transfer', 'company_id' => null, 'account_id' => null,
         'supplier_id' => null, 'on_credit' => '0', 'department_id' => null,
-        'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
+        'quantity' => '', 'unit_price' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
         'existingReceipt' => false, 'newDepartment' => '', 'addingDepartment' => false, 'newSupplier' => '', 'addingSupplier' => false,
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null, 'heldBatch' => null, 'changeReason' => '',
     ]);
@@ -259,6 +261,7 @@ on(['payment-edit' => function (int $id) {
         'date' => $p->date->toDateString(), 'method' => $p->method->value, 'company_id' => $p->company_id,
         'account_id' => $p->account_id, 'supplier_id' => $p->supplier_id, 'on_credit' => $p->on_credit ? '1' : '0',
         'department_id' => $p->department_id, 'amount' => $p->amount, 'item_description' => $p->item_description ?? '',
+        'quantity' => $p->quantity === null ? '' : rtrim(rtrim((string) $p->quantity, '0'), '.'), 'unit_price' => $p->unit_price ?? '',
         'reference' => $p->reference ?? '', 'received_by' => $p->received_by ?? '', 'notes' => $p->notes ?? '',
         'existingReceipt' => (bool) $p->receipt_path,
     ]);
@@ -355,6 +358,8 @@ $addRow = function () {
         'on_credit' => $checked->on_credit ? '1' : '0',
         'department_id' => (int) $data['department_id'],
         'amount' => Money::of($data['amount']),
+        'quantity' => $checked->quantity === null ? '' : rtrim(rtrim((string) $checked->quantity, '0'), '.'),
+        'unit_price' => $checked->unit_price ?? '',
         'receipt_path' => $receiptPath,
         'receipt_name' => $receiptName,
     ]);
@@ -373,7 +378,7 @@ $addRow = function () {
 /** Clear only the item fields (the light-blue card). */
 $clearItemFields = function () {
     $this->fill([
-        'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
+        'quantity' => '', 'unit_price' => '', 'amount' => '', 'item_description' => '', 'reference' => '', 'received_by' => '', 'receipt' => null, 'notes' => '',
         'editingRow' => null, 'rowReceiptPath' => null, 'rowReceiptName' => null,
     ]);
     $this->resetErrorBag();
@@ -513,6 +518,8 @@ $restoreDraft = function (array $draft) {
         ];
     };
     $item = fn (array $d) => [
+        'quantity' => $this->draftAmount($d['quantity'] ?? null),
+        'unit_price' => $this->draftAmount($d['unit_price'] ?? null),
         'amount' => $this->draftAmount($d['amount'] ?? null),
         'item_description' => $this->draftText($d['item_description'] ?? ''),
         'reference' => $this->draftText($d['reference'] ?? ''),
@@ -712,14 +719,37 @@ $discardDraft = function () {
 @php($batchFields = ob_get_clean())
 
 @php(ob_start())
+    @if ($method === 'goods')
+        {{-- 5a. Goods: quantity × price fills in the amount (which can still be changed, e.g. a discount) --}}
+        <div class="{{ $colItem }}">
+            <label class="{{ $label }}">Quantity</label>
+            <input type="number" step="any" min="0" class="form-control form-control-sm @error('quantity') is-invalid @enderror" wire:model="quantity" placeholder="e.g. 10"
+                data-ams-qty x-data x-on:input="amsQtyTimesPrice($el)">
+            @error('quantity') <div class="invalid-feedback">{{ $message }}</div> @enderror
+        </div>
+        <div class="{{ $colItem }}">
+            <label class="{{ $label }}">Price (each)</label>
+            <div class="input-group input-group-sm has-validation">
+                <span class="input-group-text">Rs.</span>
+                <input type="number" step="0.01" min="0" class="form-control @error('unit_price') is-invalid @enderror" wire:model="unit_price" placeholder="0.00"
+                    data-ams-price x-data x-on:input="amsQtyTimesPrice($el)">
+                @error('unit_price') <div class="invalid-feedback">{{ $message }}</div> @enderror
+            </div>
+        </div>
+    @endif
+
     {{-- 5. Amount --}}
     <div class="{{ $colItem }}">
         <label class="{{ $label }}">Amount {!! $req !!}</label>
         <div class="input-group input-group-sm has-validation">
             <span class="input-group-text">Rs.</span>
-            <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model.live.debounce.400ms="amount" placeholder="0.00">
+            <input type="number" step="0.01" min="0" class="form-control @error('amount') is-invalid @enderror" wire:model.live.debounce.400ms="amount" placeholder="0.00" data-ams-amount>
             @error('amount') <div class="invalid-feedback">{{ $message }}</div> @enderror
         </div>
+        @if ($method === 'goods' && is_numeric($quantity) && is_numeric($unit_price) && is_numeric($amount)
+            && Money::cmp($product = Money::of(round((float) $quantity * (float) $unit_price, 2)), $amount) !== 0)
+            <div class="form-text fs-11 mt-0 text-warning">Changed by hand: {{ Payment::quantityLine($quantity, $unit_price) }} = {{ money($product) }}</div>
+        @endif
     </div>
 
     {{-- 6. Description --}}
@@ -768,7 +798,7 @@ $discardDraft = function () {
     </div>
 @php($itemFields = ob_get_clean())
 
-<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-department', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id', 'amount', 'item_description', 'reference', 'received_by', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['amount', 'item_description', 'reference', 'received_by', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
+<div @if ($asPage) x-data="amsDraft(@js(['key' => 'ams-draft:'.auth()->id().':pay-department', 'file' => 'receipt', 'fields' => ['date', 'method', 'company_id', 'account_id', 'supplier_id', 'on_credit', 'department_id', 'quantity', 'unit_price', 'amount', 'item_description', 'reference', 'received_by', 'notes', 'rows', 'editingRow', 'rowReceiptPath', 'rowReceiptName', 'heldBatch', 'draftToken'], 'itemFields' => ['quantity', 'unit_price', 'amount', 'item_description', 'reference', 'received_by', 'notes']]))" x-on:draft-saved.window="clear()" x-on:beforeunload.window="if ($wire.rows.length) { $event.preventDefault(); $event.returnValue = ''; }" @endif>
     @if ($asPage)
         @include('layouts.partials.form-draft-notice')
         <form wire:submit="addRow" id="paymentFormPage">
@@ -843,7 +873,9 @@ $discardDraft = function () {
                                 </td>
                                 <td>{{ $this->lookups['departments'][$row['department_id']] ?? '—' }}</td>
                                 <td class="money text-end text-nowrap fw-semibold">{{ money($row['amount']) }}</td>
-                                <td class="text-truncate" style="max-width: 14rem" title="{{ $row['item_description'] }}">{{ $row['item_description'] ?: '—' }}</td>
+                                <td class="text-truncate" style="max-width: 14rem" title="{{ $row['item_description'] }}">{{ $row['item_description'] ?: '—' }}
+                                    @if ($qty = Payment::quantityLine($row['quantity'] ?? null, $row['unit_price'] ?? null))<div class="fs-11 text-muted">{{ $qty }}</div>@endif
+                                </td>
                                 <td class="text-truncate" style="max-width: 12rem" title="{{ trim($row['reference'].' '.$row['received_by'].' '.$row['notes']) }}">
                                     {{ collect([$row['reference'] ? 'Ref '.$row['reference'] : null, $row['received_by'] ? 'by '.$row['received_by'] : null])->filter()->implode(' · ') ?: '—' }}
                                 </td>
