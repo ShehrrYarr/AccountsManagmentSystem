@@ -30,6 +30,8 @@
     };
 
     window.amsConfirm = function (message, confirmText = 'Yes, continue', icon = 'warning') {
+        // The spinner goes on the button that asked (e.g. a table's delete icon), not on the pop-up's button.
+        const origin = window.amsBusy?.pressed();
         return Swal.fire({
             title: 'Are you sure?',
             text: message,
@@ -38,7 +40,10 @@
             confirmButtonText: confirmText,
             customClass: { confirmButton: 'btn btn-primary me-2', cancelButton: 'btn btn-light' },
             buttonsStyling: false,
-        }).then(r => r.isConfirmed);
+        }).then(r => {
+            if (r.isConfirmed) window.amsBusy?.remember(origin);
+            return r.isConfirmed;
+        });
     };
 
     // Alpine logic for the searchable-select Blade component

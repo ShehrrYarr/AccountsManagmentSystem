@@ -56,6 +56,7 @@
 
     @include('partials.vendor-scripts')
     <script src="{{ asset('assets/libs/apexcharts/apexcharts.min.js') }}"></script>
+    @include('layouts.partials.busy-buttons')
     @include('layouts.partials.livewire-glue')
     @livewireScripts
     <script type="module" src="{{ asset('assets/js/app.js') }}"></script>

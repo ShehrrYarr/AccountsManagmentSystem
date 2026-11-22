@@ -26,7 +26,7 @@
     @unless ($forPdf)
         <div class="toolbar">
             <button onclick="window.print()">Print</button>
-            <a href="{{ route('statements.pdf', [$kind, $subject->id] + $query) }}">Download PDF</a>
+            <a data-busy-ms="4000" href="{{ route('statements.pdf', [$kind, $subject->id] + $query) }}">Download PDF</a>
         </div>
     @endunless
 

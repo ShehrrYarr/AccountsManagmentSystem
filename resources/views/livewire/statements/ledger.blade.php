@@ -61,7 +61,7 @@ on(['transaction-updated' => function () {
         <input type="date" class="form-control form-control-sm w-auto" wire:model.live="to" aria-label="To date">
         @php($q = array_filter(['company' => $companyId ?? $filterCompany, 'from' => $from, 'to' => $to], fn ($v) => $v !== null && $v !== ''))
         <a class="btn btn-sm btn-light" target="_blank" href="{{ route('statements.print', [$kind, $subjectId] + $q) }}"><i class="ri-printer-line me-1"></i>Print</a>
-        <a class="btn btn-sm btn-danger" href="{{ route('statements.pdf', [$kind, $subjectId] + $q) }}"><i class="ri-file-pdf-2-line me-1"></i>PDF</a>
+        <a class="btn btn-sm btn-danger" data-busy-ms="4000" href="{{ route('statements.pdf', [$kind, $subjectId] + $q) }}"><i class="ri-file-pdf-2-line me-1"></i>PDF</a>
     </div>
 
     @php($s = $this->statement)

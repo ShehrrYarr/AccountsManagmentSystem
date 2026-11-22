@@ -46,6 +46,7 @@
 
     <script src="{{ asset('assets/libs/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ asset('assets/libs/sweetalert2/sweetalert2.min.js') }}"></script>
+    @include('layouts.partials.busy-buttons')
     @livewireScripts
 </body>
 
