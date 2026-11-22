@@ -300,10 +300,10 @@ class ComponentsTest extends TestCase
         $this->fundBank('50000');
         $this->pay(['method' => 'goods', 'supplier_id' => $this->supplier->id, 'on_credit' => true, 'account_id' => null, 'amount' => '9000', 'item_description' => 'Desks']);
 
-        Volt::test('supplier-payments.manage')
+        Volt::test('supplier-payments.create')
             ->dispatch('supplier-payment-create', companyId: $this->company->id, supplierId: $this->supplier->id)
-            ->set('account_id', $this->bank->id)
-            ->call('payAll')->assertSet('amount', '9000.00')
+            ->assertSet('method', 'bank_transfer')->assertSet('account_id', $this->bank->id) // the company's only bank
+            ->set('amount', '9000')
             ->call('save')->assertHasNoErrors();
         $this->assertSame('0.00', Balances::supplierOwed($this->supplier->id));
 

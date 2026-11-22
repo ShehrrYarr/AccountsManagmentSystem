@@ -62,7 +62,7 @@ Route::prefix('v1')->name('api.')->group(function () {
         Route::get('supplier-payments', [V1\MoneyOutController::class, 'supplierPayments']);
         Route::post('supplier-payments', [V1\MoneyOutController::class, 'storeSupplierPayment']);
         Route::get('supplier-payments/{id}', [V1\MoneyOutController::class, 'showSupplierPayment'])->whereNumber('id');
-        Route::match(['put', 'patch'], 'supplier-payments/{id}', [V1\MoneyOutController::class, 'updateSupplierPayment'])->whereNumber('id');
+        Route::match(['put', 'patch', 'post'], 'supplier-payments/{id}', [V1\MoneyOutController::class, 'updateSupplierPayment'])->whereNumber('id');
         Route::delete('supplier-payments/{id}', [V1\MoneyOutController::class, 'destroySupplierPayment'])->whereNumber('id');
         Route::get('expenses', [V1\MoneyOutController::class, 'expenses']);
         Route::post('expenses', [V1\MoneyOutController::class, 'storeExpense']);
@@ -110,6 +110,6 @@ Route::prefix('v1')->name('api.')->group(function () {
 
         // Pictures and receipts (same access rules as the website)
         Route::get('files/{type}/{id}', [FileController::class, 'show'])
-            ->whereIn('type', ['cheque', 'payment', 'expense', 'cheque-request', 'payment-request'])->whereNumber('id')->name('files.show');
+            ->whereIn('type', ['cheque', 'payment', 'expense', 'supplier-payment', 'cheque-request', 'payment-request'])->whereNumber('id')->name('files.show');
     });
 });

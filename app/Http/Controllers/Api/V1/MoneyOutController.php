@@ -43,7 +43,15 @@ class MoneyOutController extends ApiController
     public function storeSupplierPayment(Request $request): JsonResponse
     {
         $this->requireAdmin($request);
-        $p = $this->payments->saveSupplierPayment(null, $request->validate($this->supplierRules()));
+        $data = $request->validate($this->supplierRules());
+        $data['receipt_path'] = $this->storeUpload($request->file('receipt'), 'receipts');
+
+        try {
+            $p = $this->payments->saveSupplierPayment(null, $data);
+        } catch (\Throwable $ex) {
+            $data['receipt_path'] && Storage::disk('local')->delete($data['receipt_path']);
+            throw $ex;
+        }
 
         return (new MoneyOutResource($p->load(['company', 'supplier', 'account'])))->response()->setStatusCode(201);
     }
@@ -54,8 +62,15 @@ class MoneyOutController extends ApiController
         $model = SupplierPayment::findOrFail($id);
         $data = array_merge($model->only(['supplier_id', 'account_id', 'amount', 'reference', 'notes']) + ['date' => $model->date->toDateString()],
             $request->validate(array_map(fn ($r) => ['sometimes', ...$r], $this->supplierRules())));
+        $data['receipt_path'] = $this->storeUpload($request->file('receipt'), 'receipts');
+        $old = $model->receipt_path;
 
-        return new MoneyOutResource($this->payments->saveSupplierPayment($model, $data)->load(['company', 'supplier', 'account']));
+        $saved = $this->payments->saveSupplierPayment($model, $data);
+        if ($data['receipt_path'] && $old) {
+            Storage::disk('local')->delete($old);
+        }
+
+        return new MoneyOutResource($saved->load(['company', 'supplier', 'account']));
     }
 
     public function destroySupplierPayment(Request $request, int $id): JsonResponse
@@ -141,6 +156,7 @@ class MoneyOutController extends ApiController
             'date' => ['required', 'date', 'before_or_equal:today'],
             'reference' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:2000'],
+            'receipt' => $this->fileRule(),
         ];
     }
 

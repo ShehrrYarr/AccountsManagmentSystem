@@ -31,6 +31,8 @@ class MoneyOutResource extends ApiResource
             'receipt_url' => $this->receipt_path ? route('api.files.show', ['expense', $this->id]) : null,
         ] : [
             'supplier' => self::ref($this->supplier),
+            'has_receipt' => (bool) $this->receipt_path,
+            'receipt_url' => $this->receipt_path ? route('api.files.show', ['supplier-payment', $this->id]) : null,
         ], [
             'created_at' => $this->created_at?->toIso8601String(),
         ]);

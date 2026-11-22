@@ -38,4 +38,5 @@
     </div>
 
     <livewire:payments.create />
+    <livewire:supplier-payments.create />
 @endsection

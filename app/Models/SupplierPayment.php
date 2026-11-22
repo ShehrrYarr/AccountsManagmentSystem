@@ -18,7 +18,7 @@ class SupplierPayment extends Model implements PostsToLedger
 {
     use Auditable, HasTransactions, SoftDeletes;
 
-    protected $fillable = ['company_id', 'supplier_id', 'account_id', 'amount', 'date', 'reference', 'notes', 'created_by'];
+    protected $fillable = ['company_id', 'supplier_id', 'account_id', 'amount', 'date', 'reference', 'notes', 'receipt_path', 'created_by'];
 
     protected function casts(): array
     {

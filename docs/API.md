@@ -195,7 +195,7 @@ the request stays pending.
 
 | Path | Fields |
 |---|---|
-| `/supplier-payments` (GET, POST, GET/PATCH/DELETE `/{id}`) | `supplier_id`*, `account_id`* (company bank → that company's debt; admin cash → no company), `amount`*, `date`*, `reference`, `notes`. Filters: `supplier_id`, `company_id`, `from`, `to`, `search` |
+| `/supplier-payments` (GET, POST, GET/PATCH/POST/DELETE `/{id}`) | `supplier_id`*, `account_id`* (company bank → that company's debt; admin cash → no company), `amount`*, `date`*, `reference`, `notes`, `receipt` (file; the object gives `has_receipt`, `receipt_url`). Paying more than is owed is refused (422). Filters: `supplier_id`, `company_id`, `from`, `to`, `search` |
 | `/expenses` (GET, POST, GET/PATCH/POST/DELETE `/{id}`) | `expense_category_id`*, `account_id`*, `amount`*, `date`*, `description`*, `reference`, `notes`, `receipt` (file). Filters: `category_id`, `company_id`, `from`, `to`, `search` |
 
 The company is never sent: it follows from the account.
@@ -229,7 +229,7 @@ The company is never sent: it follows from the account.
 
 ## 12. Pictures and receipts
 
-`GET /files/{type}/{id}` with the Bearer token — type: `cheque`, `payment`, `expense`,
+`GET /files/{type}/{id}` with the Bearer token — type: `cheque`, `payment`, `expense`, `supplier-payment`,
 `cheque-request`, `payment-request`. The objects give ready-made `picture_url` / `receipt_url`.
 Agents can open only their own.
 

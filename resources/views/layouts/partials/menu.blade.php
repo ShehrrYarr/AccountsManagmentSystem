@@ -35,6 +35,9 @@
         <ul class="slide-menu" role="menu">
             {!! $sub('cheques.create', 'Deposit Cheque') !!}
             {!! $sub('payments.create', 'Pay Department') !!}
+            @if ($isAdmin)
+                {!! $sub('supplier-payments.create', 'Pay Supplier') !!}
+            @endif
         </ul>
     </li>
 
@@ -53,7 +56,7 @@
     @if ($isAdmin)
         <li class="menu-title" role="presentation">Money Out</li>
         {!! $item('payments.index', 'ri-hand-coin-line', 'Department Payments') !!}
-        {!! $item('supplier-payments.index', 'ri-store-2-line', 'Supplier Payments', 'supplier-payments.*') !!}
+        {!! $item('supplier-payments.index', 'ri-store-2-line', 'Supplier Payments') !!}
         {!! $item('expenses.index', 'ri-receipt-line', 'Expenses', 'expenses.*') !!}
         {!! $item('transfers.index', 'ri-arrow-left-right-line', 'Transfers', 'transfers.*') !!}
 

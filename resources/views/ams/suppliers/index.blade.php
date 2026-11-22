@@ -6,5 +6,5 @@
 
 @section('content')
     <livewire:suppliers.list />
-    <livewire:supplier-payments.manage :modal-only="true" />
+    <livewire:supplier-payments.create />
 @endsection

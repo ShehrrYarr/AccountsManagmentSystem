@@ -63,7 +63,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     // Private uploads (cheque scans, receipts); access is checked per file
     Route::get('/files/{type}/{id}', [FileController::class, 'show'])
-        ->whereIn('type', ['cheque', 'payment', 'expense', 'cheque-request', 'payment-request'])->whereNumber('id')->name('files.show');
+        ->whereIn('type', ['cheque', 'payment', 'expense', 'supplier-payment', 'cheque-request', 'payment-request'])->whereNumber('id')->name('files.show');
 
     Route::middleware('can:admin')->group(function () {
         Route::view('/dashboard', 'ams.dashboard')->name('dashboard');
@@ -71,6 +71,7 @@ Route::middleware(['auth', 'active'])->group(function () {
 
         // Money out
         Route::view('/supplier-payments', 'ams.supplier-payments.index')->name('supplier-payments.index');
+        Route::view('/supplier-payments/pay', 'ams.supplier-payments.create')->name('supplier-payments.create');
         Route::view('/expenses', 'ams.expenses.index')->name('expenses.index');
         Route::view('/transfers', 'ams.transfers.index')->name('transfers.index');
 

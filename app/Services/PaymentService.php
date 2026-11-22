@@ -71,13 +71,36 @@ class PaymentService
 
     public function saveSupplierPayment(?SupplierPayment $payment, array $data): SupplierPayment
     {
-        $payment ??= new SupplierPayment(['created_by' => auth()->id()]);
-        $payment->fill(Arr::only($data, ['supplier_id', 'account_id', 'amount', 'date', 'reference', 'notes']));
-        $payment->amount = $this->positiveAmount($payment->amount);
-        $account = $this->businessAccount($payment->account_id, null, 'account_id', $payment->getOriginal('account_id'));
-        $payment->company_id = $account->company_id; // none for cash
+        return $this->ledger->record($this->prepareSupplierPayment($payment, $data));
+    }
 
-        return $this->ledger->record($payment);
+    /**
+     * Save several new supplier payments all-or-nothing (the Pay Supplier page). A failing row is
+     * reported as a BusinessRuleException whose field is "rows.<index>".
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, SupplierPayment>
+     */
+    public function saveSupplierPayments(array $rows): array
+    {
+        return $this->ledger->batch(function () use ($rows) {
+            $saved = [];
+            foreach ($rows as $i => $row) {
+                try {
+                    $saved[] = $this->saveSupplierPayment(null, $row);
+                } catch (BusinessRuleException $e) {
+                    throw new BusinessRuleException($e->getMessage(), "rows.{$i}");
+                }
+            }
+
+            return $saved;
+        });
+    }
+
+    /** The checks a save would run on the form, without saving (the page's "Add to table"). */
+    public function checkSupplierPayment(array $data, ?SupplierPayment $payment = null): SupplierPayment
+    {
+        return $this->prepareSupplierPayment($payment ? clone $payment : null, $data);
     }
 
     public function saveExpense(?Expense $expense, array $data): Expense
@@ -101,6 +124,25 @@ class PaymentService
     }
 
     // ---------------------------------------------------------------------
+
+    /** Paid from the cash in hand (no company) or a company bank; a given company_id must match the bank. */
+    private function prepareSupplierPayment(?SupplierPayment $payment, array $data): SupplierPayment
+    {
+        $payment ??= new SupplierPayment(['created_by' => auth()->id()]);
+        $fields = Arr::only($data, ['supplier_id', 'account_id', 'amount', 'date', 'reference', 'notes', 'receipt_path']);
+        if (array_key_exists('receipt_path', $fields) && blank($fields['receipt_path'])) {
+            unset($fields['receipt_path']); // keep the existing receipt
+        }
+        $payment->fill($fields);
+        $payment->amount = $this->positiveAmount($payment->amount);
+        $account = $this->businessAccount($payment->account_id, null, 'account_id', $payment->getOriginal('account_id'));
+        if (! empty($data['company_id']) && $account->company_id && (int) $account->company_id !== (int) $data['company_id']) {
+            throw new BusinessRuleException("{$account->shortLabel()} is not a bank of that company.", 'account_id');
+        }
+        $payment->company_id = $account->company_id; // none for cash
+
+        return $payment;
+    }
 
     private function preparePayment(?Payment $payment, array $data, ?User $by): Payment
     {

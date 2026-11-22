@@ -198,9 +198,9 @@ class DepartmentPaymentsTest extends TestCase
     {
         $this->pay(['method' => 'goods', 'supplier_id' => $this->supplier->id, 'on_credit' => true, 'account_id' => null, 'amount' => '8000', 'item_description' => 'Chairs']);
 
-        Volt::test('supplier-payments.manage')
+        Volt::test('supplier-payments.create')
             ->dispatch('supplier-payment-create', supplierId: $this->supplier->id)
-            ->set('account_id', $this->cash->id)->assertSee('Owed in total')
+            ->assertSet('method', 'cash')->assertSee('Admin cash in hand')
             ->set('amount', '5000')->call('save')->assertHasNoErrors();
         $this->assertSame('3000.00', Balances::supplierOwed($this->supplier->id));
         $this->assertSame('8000.00', Balances::supplierOwed($this->supplier->id, $this->company->id), 'the company still shows its purchase');

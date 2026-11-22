@@ -7,6 +7,7 @@ use App\Models\ChequeChangeRequest;
 use App\Models\Expense;
 use App\Models\Payment;
 use App\Models\PaymentChangeRequest;
+use App\Models\SupplierPayment;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +28,7 @@ class FileController extends Controller
             'payment' => tap(Payment::withTrashed()->findOrFail($id), fn ($p) => abort_unless($user->isAdmin() || $p->created_by === $user->id, 403))->receipt_path,
             'payment-request' => tap(PaymentChangeRequest::findOrFail($id), fn ($r) => abort_unless($user->isAdmin() || $r->requested_by === $user->id, 403))->changes['receipt_path'] ?? null,
             'expense' => tap(Expense::withTrashed()->findOrFail($id), fn () => abort_unless($user->isAdmin(), 403))->receipt_path,
+            'supplier-payment' => tap(SupplierPayment::withTrashed()->findOrFail($id), fn () => abort_unless($user->isAdmin(), 403))->receipt_path,
         };
 
         abort_unless($path && Storage::disk('local')->exists($path), 404);
